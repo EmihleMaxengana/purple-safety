@@ -1,0 +1,119 @@
+import 'package:flutter/material.dart';
+import 'login_screen.dart';
+import 'home/home_screen.dart';
+import 'emergency/emergency_manager.dart';
+import 'emergency/emergency_mode_screen.dart';
+import 'app_header.dart';
+import 'community_screen.dart';
+import 'safety_tools_screen.dart';
+import 'settings_screen.dart';
+import 'user_profile_modal.dart';
+import 'services/user_service.dart';
+
+class MainScreen extends StatefulWidget {
+  const MainScreen({Key? key}) : super(key: key);
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _selectedIndex = 0;
+  bool _isEmergencyMode = false;
+  final EmergencyManager _emergencyManager = EmergencyManager();
+
+  @override
+  void initState() {
+    super.initState();
+    _emergencyManager.emergencyStatusStream.listen((isEmergency) {
+      setState(() {
+        _isEmergencyMode = isEmergency;
+        if (isEmergency) {
+          _selectedIndex = 1;
+        }
+      });
+    });
+    _initTestUser();
+  }
+
+  late final List<Widget> _pages = <Widget>[
+    HomeScreen(
+      onNavigateToTools: _goToToolsTab,
+      onNavigateToEmergency: _goToEmergencyTab,
+    ),
+    const EmergencyModeScreen(),
+    const CommunityScreen(),
+    SafetyToolsScreen(onCallEmergency: _goToEmergencyTab),
+    const SettingsScreen(),
+  ];
+
+  void _goToToolsTab() {
+    setState(() {
+      _selectedIndex = 3; // Tools tab index
+    });
+  }
+
+  void _goToEmergencyTab() {
+    setState(() {
+      _selectedIndex = 1; // Emergency tab index
+    });
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  void _showUserProfileModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const UserProfileModal(),
+    );
+  }
+
+  Future<void> _initTestUser() async {
+    final user = await UserService.getUser();
+    if (user['name'] == null) {
+      await UserService.saveUser(
+        'Emihle Maxengana',
+        'emihle@example.com',
+        '+27 12 345 6789',
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _isEmergencyMode
+          ? const Color(0xFF2D1B47)
+          : Colors.white,
+      appBar: buildAppHeader(onAvatarPressed: _showUserProfileModal),
+      body: IndexedStack(index: _selectedIndex, children: _pages),
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: const Color(0xFF100c1f),
+        selectedItemColor: const Color(0xFFc080ff),
+        unselectedItemColor: const Color(0xFFa078c0),
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.warning),
+            label: 'Emergency',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Community'),
+          BottomNavigationBarItem(icon: Icon(Icons.security), label: 'Tools'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+        ],
+      ),
+    );
+  }
+}
