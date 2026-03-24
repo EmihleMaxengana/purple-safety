@@ -65,7 +65,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
-  // Contacts – only Evile
+  // Contacts – default Evile
   List<Contact> _contacts = [
     Contact(
       id: '1',
@@ -264,6 +264,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadSOSStatus();
     _initLocation();
     _setupDangerZones();
+    // Initialize EmergencyManager with initial contacts
+    EmergencyManager().setCurrentContacts(_contacts);
   }
 
   Future<void> _loadSOSStatus() async {
@@ -397,7 +399,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           return;
         }
       }
-      // Start the SOS countdown
       _startSOSCountdown();
       setState(() => _isHolding = false);
     });
@@ -423,10 +424,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _triggerSOS() {
+    // Store current contacts in EmergencyManager so they are available in the tools screen
+    EmergencyManager().setCurrentContacts(_contacts);
     // Navigate to Tools page (emergency mode UI)
     widget.onNavigateToTools?.call();
-    // Optionally also activate the emergency manager (if needed)
-    // EmergencyManager().activateEmergencyMode(context);
     setState(() => _isSosActive = false);
   }
 
@@ -454,6 +455,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         onDelete: (id) {
           setState(() {
             _contacts.removeWhere((c) => c.id == id);
+            // Update EmergencyManager after deletion
+            EmergencyManager().setCurrentContacts(_contacts);
           });
         },
       ),
@@ -467,6 +470,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         onAdd: (newContact) {
           setState(() {
             _contacts.add(newContact);
+            // Update EmergencyManager with the new contacts list
+            EmergencyManager().setCurrentContacts(_contacts);
           });
         },
         currentCount: _contacts.length,

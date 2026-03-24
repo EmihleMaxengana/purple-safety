@@ -1,35 +1,45 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../home/home_screen.dart'; // for Contact model
 import 'emergency_mode_screen.dart';
 
 class EmergencyManager {
   static final EmergencyManager _instance = EmergencyManager._internal();
 
-  factory EmergencyManager() {
-    return _instance;
-  }
-
+  factory EmergencyManager() => _instance;
   EmergencyManager._internal();
 
   bool _emergencyActive = false;
   StreamController<bool> _emergencyStatusController =
       StreamController<bool>.broadcast();
 
+  // Store the current trusted contacts for SOS
+  List<Contact> _currentContacts = [];
+
   Stream<bool> get emergencyStatusStream => _emergencyStatusController.stream;
   bool get isEmergencyActive => _emergencyActive;
 
-  void activateEmergencyMode(BuildContext context) {
+  // Get the stored contacts
+  List<Contact> getCurrentContacts() => _currentContacts;
+
+  // Set contacts (call this when SOS is activated or contacts change)
+  void setCurrentContacts(List<Contact> contacts) {
+    _currentContacts = contacts;
+  }
+
+  void activateEmergencyMode(BuildContext context, {List<Contact>? contacts}) {
     if (!_emergencyActive) {
       _emergencyActive = true;
+      if (contacts != null) {
+        _currentContacts = contacts;
+      }
       _emergencyStatusController.add(true);
 
-      // Navigate to emergency mode screen
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const EmergencyModeScreen()),
       );
 
-      // Simulate emergency processes
       _simulateEmergencyProcesses(context);
     }
   }
@@ -38,14 +48,13 @@ class EmergencyManager {
     if (_emergencyActive) {
       _emergencyActive = false;
       _emergencyStatusController.add(false);
-      // Add any cleanup logic here
+      // Clear contacts or keep them – your choice
+      // _currentContacts.clear();
     }
   }
 
   void _simulateEmergencyProcesses(BuildContext context) {
-    // Simulate sending alerts
     Future.delayed(const Duration(seconds: 2), () {
-      // This could be replaced with actual API calls
       debugPrint('Emergency alerts sent');
     });
   }

@@ -48,11 +48,16 @@
 	<!-- Fixed description -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to authenticate you and enable SOS emergency features.</string>
+	<!-- Camera and Microphone Usage Descriptions -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses the camera to record video evidence during emergencies.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app uses the microphone to record audio evidence during emergencies.</string>
 	<key>io.flutter.embedded_views_preview</key>
 	<string>YES</string>
 	<key>LSApplicationQueriesSchemes</key>
-<array>
-    <string>whatsapp</string>
-</array>
+	<array>
+		<string>whatsapp</string>
+	</array>
 </dict>
 </plist>
