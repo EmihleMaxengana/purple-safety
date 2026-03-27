@@ -8,7 +8,6 @@ import 'community_screen.dart';
 import 'safety_tools_screen.dart';
 import 'settings_screen.dart';
 import 'user_profile_modal.dart';
-import 'services/user_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -33,7 +32,6 @@ class _MainScreenState extends State<MainScreen> {
         }
       });
     });
-    _initTestUser();
   }
 
   late final List<Widget> _pages = <Widget>[
@@ -49,13 +47,13 @@ class _MainScreenState extends State<MainScreen> {
 
   void _goToToolsTab() {
     setState(() {
-      _selectedIndex = 3; // Tools tab index
+      _selectedIndex = 3;
     });
   }
 
   void _goToEmergencyTab() {
     setState(() {
-      _selectedIndex = 1; // Emergency tab index
+      _selectedIndex = 1;
     });
   }
 
@@ -72,17 +70,6 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => const UserProfileModal(),
     );
-  }
-
-  Future<void> _initTestUser() async {
-    final user = await UserService.getUser();
-    if (user['name'] == null) {
-      await UserService.saveUser(
-        'Emihle Maxengana',
-        'emihle@example.com',
-        '+27 12 345 6789',
-      );
-    }
   }
 
   @override

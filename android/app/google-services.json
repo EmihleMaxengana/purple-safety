@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "911099565128",
+    "project_id": "purple-safety-d27b0",
+    "storage_bucket": "purple-safety-d27b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911099565128:android:20fb59b5e2782525ec747d",
+        "android_client_info": {
+          "package_name": "com.emihle.purplesafety"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbBd_uGEp2pN8crJ-jXHsWHnHBnVlFPZE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

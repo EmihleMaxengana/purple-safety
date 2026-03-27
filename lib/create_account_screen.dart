@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:ui'; // for ImageFilter
-import 'otp_verification_screen.dart'; // <-- added
-import 'package:purple_safety/services/user_service.dart';
+import 'dart:ui';
+import 'otp_verification_screen.dart';
+import 'package:purple_safety/services/auth_service.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({Key? key}) : super(key: key);
@@ -116,7 +116,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 25),
 
                           // Full Name
@@ -164,12 +163,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please enter your full name';
-                              }
-                              if (value.split(' ').length < 2) {
-                                return 'Please enter your full name (first and last)';
-                              }
+                              if (value.split(' ').length < 2)
+                                return 'Please enter your full name ';
                               return null;
                             },
                           ),
@@ -221,14 +218,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please enter your email';
-                              }
                               if (!RegExp(
                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                              ).hasMatch(value)) {
+                              ).hasMatch(value))
                                 return 'Please enter a valid email';
-                              }
                               return null;
                             },
                           ),
@@ -298,12 +293,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please confirm your email';
-                              }
-                              if (value != _emailController.text) {
+                              if (value != _emailController.text)
                                 return 'Emails do not match';
-                              }
                               return null;
                             },
                           ),
@@ -362,22 +355,20 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               prefixStyle: const TextStyle(color: Colors.white),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please enter your phone number';
-                              }
                               final digits = value.replaceAll(
                                 RegExp(r'\D'),
                                 '',
                               );
-                              if (digits.length != 9) {
+                              if (digits.length != 9)
                                 return 'Please enter a valid 9-digit SA number';
-                              }
                               return null;
                             },
                           ),
                           const SizedBox(height: 20),
 
-                          // Password
+                          // Password!!!!!!
                           const Text(
                             'Password *',
                             style: TextStyle(
@@ -436,34 +427,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       : Icons.visibility,
                                   color: const Color(0xFFBF7DCB),
                                 ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please create a password';
-                              }
-                              if (value.length < 8) {
+                              if (value.length < 8)
                                 return 'Password must be at least 8 characters';
-                              }
-                              if (!RegExp(r'[A-Z]').hasMatch(value)) {
+                              if (!RegExp(r'[A-Z]').hasMatch(value))
                                 return 'Include at least one uppercase letter';
-                              }
-                              if (!RegExp(r'[a-z]').hasMatch(value)) {
+                              if (!RegExp(r'[a-z]').hasMatch(value))
                                 return 'Include at least one lowercase letter';
-                              }
-                              if (!RegExp(r'[0-9]').hasMatch(value)) {
+                              if (!RegExp(r'[0-9]').hasMatch(value))
                                 return 'Include at least one number';
-                              }
                               if (!RegExp(
                                 r'[!@#$%^&*(),.?":{}|<>]',
-                              ).hasMatch(value)) {
+                              ).hasMatch(value))
                                 return 'Include at least one special character';
-                              }
                               return null;
                             },
                           ),
@@ -584,48 +567,63 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       : Icons.visibility,
                                   color: const Color(0xFFBF7DCB),
                                 ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscureConfirmPassword =
-                                        !_obscureConfirmPassword;
-                                  });
-                                },
+                                onPressed: () => setState(
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                                ),
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              if (value == null || value.isEmpty)
                                 return 'Please confirm your password';
-                              }
-                              if (value != _passwordController.text) {
+                              if (value != _passwordController.text)
                                 return 'Passwords do not match';
-                              }
                               return null;
                             },
                           ),
                           const SizedBox(height: 30),
 
-                          // Continue Button (UPDATED)
+                          // Continue Button
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (_formKey.currentState!.validate()) {
-                                  // Save user data
-                                  UserService.saveUser(
+                                  final auth = AuthService();
+                                  final user = await auth.registerWithEmail(
                                     _nameController.text,
                                     _emailController.text,
+                                    _passwordController.text,
                                     _phoneController.text,
                                   );
-                                  // Navigate to OTP verification
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) =>
-                                          OTPVerificationScreen(
-                                            phoneNumber: _phoneController.text,
-                                          ),
-                                    ),
-                                  );
+                                  if (user != null) {
+                                    // Format phone number for Firebase SMS verification: +271 23456789
+                                    final phoneDigits = _phoneController.text
+                                        .replaceAll(RegExp(r'\D'), '');
+                                    final formattedPhone = '+27$phoneDigits';
+                                    print(
+                                      'Navigating to OTP with phone: $formattedPhone',
+                                    );
+                                    Navigator.pushReplacement(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            OTPVerificationScreen(
+                                              phoneNumber: formattedPhone,
+                                            ),
+                                      ),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Registration failed. Please try again.',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: Duration(seconds: 4),
+                                      ),
+                                    );
+                                  }
                                 }
                               },
                               style: ElevatedButton.styleFrom(
@@ -655,7 +653,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 20),
 
                           // Security Tips
@@ -762,7 +759,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
   PasswordStrength _calculatePasswordStrength(String password) {
     if (password.isEmpty) return PasswordStrength.weak;
-
     int score = 0;
     if (password.length >= 8) score++;
     if (password.length >= 12) score++;
@@ -770,7 +766,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     if (RegExp(r'[a-z]').hasMatch(password)) score++;
     if (RegExp(r'[0-9]').hasMatch(password)) score++;
     if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)) score++;
-
     if (score <= 2) return PasswordStrength.weak;
     if (score <= 4) return PasswordStrength.medium;
     return PasswordStrength.strong;
@@ -801,7 +796,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
 
 enum PasswordStrength { weak, medium, strong }
 
-// Custom formatter to insert spaces after 2 and 5 digits: +27 XX XXX XXXX
 class _SouthAfricanPhoneFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
@@ -810,13 +804,11 @@ class _SouthAfricanPhoneFormatter extends TextInputFormatter {
   ) {
     final text = newValue.text.replaceAll(' ', '');
     if (text.isEmpty) return newValue.copyWith(text: '');
-
     final buffer = StringBuffer();
     for (int i = 0; i < text.length; i++) {
       if (i == 2 || i == 5) buffer.write(' ');
       buffer.write(text[i]);
     }
-
     final formatted = buffer.toString();
     return newValue.copyWith(
       text: formatted,

@@ -16,6 +16,7 @@ class OTPVerificationScreen extends StatefulWidget {
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -24,9 +25,47 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   Future<void> _sendOtp() async {
-    setState(() => _isLoading = true);
-    await OTPService.sendOtp(widget.phoneNumber);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    final success = await OTPService.sendOtp(widget.phoneNumber);
     setState(() => _isLoading = false);
+    if (success) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('OTP sent successfully!')));
+    } else {
+      setState(() => _errorMessage = 'Failed to send OTP. Please try again.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to send OTP'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _resendOtp() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    final success = await OTPService.resendOtp(widget.phoneNumber);
+    setState(() => _isLoading = false);
+    if (success) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('OTP resent successfully!')));
+    } else {
+      setState(() => _errorMessage = 'Failed to resend OTP.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to resend OTP'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _verifyOtp() async {
@@ -40,7 +79,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
     final isValid = await OTPService.verifyOtp(_otpController.text);
     setState(() => _isLoading = false);
 
@@ -50,6 +92,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         MaterialPageRoute(builder: (context) => const FingerprintSetupScreen()),
       );
     } else {
+      setState(() => _errorMessage = 'Invalid OTP. Please try again.');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Invalid OTP. Please try again.'),
@@ -128,6 +171,17 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ),
                         ),
                       ),
+                      if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            _errorMessage,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 20),
                       if (_isLoading)
                         const CircularProgressIndicator()
@@ -151,7 +205,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: _sendOtp,
+                        onPressed: _resendOtp,
                         child: const Text(
                           'Resend Code',
                           style: TextStyle(color: Color(0xFFCCCCFF)),

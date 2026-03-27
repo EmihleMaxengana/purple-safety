@@ -41,7 +41,6 @@ class _AddContactModalState extends State<AddContactModal> {
 
   @override
   Widget build(BuildContext context) {
-    // Max contacts check
     if (widget.currentCount >= 6) {
       return Dialog(
         backgroundColor: Colors.transparent,

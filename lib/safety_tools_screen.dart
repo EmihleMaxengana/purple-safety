@@ -7,12 +7,16 @@ import 'package:local_auth/local_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:camera/camera.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
-import 'home/home_screen.dart';
-import 'services/location_sharing_service.dart';
-import 'services/sos_alert_service.dart';
-import 'emergency/emergency_manager.dart';
+import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/services/location_sharing_service.dart';
+import 'package:purple_safety/services/sos_alert_service.dart';
+import 'package:purple_safety/emergency/emergency_manager.dart';
+import 'package:purple_safety/discreet_mode_screen.dart';
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
@@ -23,37 +27,106 @@ class SafetyToolsScreen extends StatefulWidget {
   State<SafetyToolsScreen> createState() => _SafetyToolsScreenState();
 }
 
-class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
-  // Emergency state
-  bool _isEmergencyActive = true;
+class _SafetyToolsScreenState extends State<SafetyToolsScreen>
+    with WidgetsBindingObserver {
+  bool _isEmergencyActive = false;
   bool _isSilentMode = false;
   bool _isRecordingAudio = false;
   bool _isRecordingVideo = false;
-  bool _isFlashlightStrobe = false;
-  bool _autoShareRecordings = true;
-  Timer? _flashlightTimer;
+  bool _autoShareRecordings = false;
 
   // Audio recording
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
 
-  // Location
+  // Live streaming
+  bool _isLiveStreaming = false;
+  CameraController? _cameraController;
+  String? _streamUrl;
+  String? _liveStreamRoomId;
+
   location.Location _location = location.Location();
   GoogleMapController? _mapController;
   LatLng? _currentPosition;
   StreamSubscription<location.LocationData>? _locationSubscription;
   bool _locationEnabled = false;
 
-  // Contacts
   List<Contact> _contacts = [];
-  String _securityNumber = '10111'; // Police
+  String _securityNumber = '10111';
+
+  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
 
   @override
   void initState() {
     super.initState();
+    _loadAutoSharePreference();
+    _listenToEmergencyStatus();
     _loadContacts();
     _initLocation();
     _sendInitialAlerts();
+    _initNotifications();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  Future<void> _loadAutoSharePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoShareRecordings = prefs.getBool('autoShareRecordings') ?? false;
+    });
+  }
+
+  Future<void> _saveAutoSharePreference(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('autoShareRecordings', value);
+  }
+
+  void _listenToEmergencyStatus() {
+    EmergencyManager().emergencyStatusStream.listen((isEmergency) {
+      if (mounted) {
+        setState(() {
+          _isEmergencyActive = isEmergency;
+        });
+      }
+    });
+    setState(() {
+      _isEmergencyActive = EmergencyManager().isEmergencyActive;
+    });
+  }
+
+  @override
+  void dispose() {
+    _stopLiveStreaming();
+    _locationSubscription?.cancel();
+    _audioRecorder.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused && _cameraController != null) {
+      _cameraController!.dispose();
+      _cameraController = null;
+    }
+  }
+
+  Future<void> _initNotifications() async {
+    await _requestNotificationPermission();
+    String? token = await _firebaseMessaging.getToken();
+    debugPrint('FCM Token: $token');
+    await _firebaseMessaging.subscribeToTopic('emergency_alerts');
+    debugPrint('Subscribed to topic: emergency_alerts');
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    if (Platform.isAndroid) {
+      final status = await Permission.notification.request();
+      if (status.isGranted) {
+        debugPrint('Notification permission granted');
+      } else {
+        debugPrint('Notification permission denied');
+      }
+    }
   }
 
   Future<void> _loadContacts() async {
@@ -70,13 +143,35 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
     serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please enable location services to use this feature.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
     }
 
     permissionGranted = await _location.hasPermission();
     if (permissionGranted == location.PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
-      if (permissionGranted != location.PermissionStatus.granted) return;
+      if (permissionGranted != location.PermissionStatus.granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location permission is required. Please grant it in settings.',
+              ),
+            ),
+          );
+        }
+        return;
+      }
     }
 
     setState(() => _locationEnabled = true);
@@ -106,7 +201,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
       final link =
           'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
       await SOSAlertService.sendAlerts(_contacts, link);
-      debugPrint('Initial SOS alerts resent');
+      debugPrint('Initial SOS alerts sent');
     }
   }
 
@@ -134,39 +229,100 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
     }
   }
 
-  void _triggerLoudAlarm() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('🔊 Loud alarm triggered!')));
-    debugPrint('Loud alarm');
+  // ---------- Helper to trigger SOS if not active ----------
+  Future<bool> _ensureSosActive() async {
+    if (_isEmergencyActive) return true;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Trigger SOS?'),
+        content: const Text(
+          'This action will automatically trigger the SOS button and alert all app users.\n\n'
+          'Do you want to proceed?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Trigger SOS'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      EmergencyManager().activateEmergencyModeLight(contacts: _contacts);
+      await Future.delayed(const Duration(milliseconds: 500));
+      return true;
+    }
+    return false;
   }
 
-  void _toggleFlashlightStrobe() async {
-    setState(() {
-      _isFlashlightStrobe = !_isFlashlightStrobe;
-    });
-    if (_isFlashlightStrobe) {
-      _flashlightTimer = Timer.periodic(const Duration(milliseconds: 200), (
-        timer,
-      ) {
-        debugPrint('Flashlight strobe');
+  // ---------- Audio Recording ----------
+  Future<void> _startAudioRecording() async {
+    if (!await _ensureSosActive()) return;
+
+    final micStatus = await Permission.microphone.request();
+    if (!micStatus.isGranted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Microphone permission denied')),
+      );
+      return;
+    }
+
+    if (await _audioRecorder.hasPermission()) {
+      final dir = Directory.systemTemp;
+      final path =
+          '${dir.path}/safety_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _audioRecorder.start(
+        RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
+      setState(() {
+        _isRecordingAudio = true;
+        _audioPath = path;
       });
+      debugPrint('Audio recording started at: $path');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('🔴 Audio recording started')),
+      );
     } else {
-      _flashlightTimer?.cancel();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cannot access microphone')));
     }
   }
 
-  void _fakeCall() {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('📞 Fake call started!')));
-    debugPrint('Fake call');
+  Future<void> _stopAudioRecording() async {
+    if (_isRecordingAudio && await _audioRecorder.isRecording()) {
+      final path = await _audioRecorder.stop();
+      setState(() => _isRecordingAudio = false);
+
+      if (path != null) {
+        debugPrint('Audio recording saved at: $path');
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Audio recording saved')));
+
+        // Share audio with everyone
+        await _shareFile(path, 'audio');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to save audio recording')),
+        );
+      }
+    }
   }
 
-  // -------------------------------------------------------------------
-  // Video recording using camera with share option
-  // -------------------------------------------------------------------
+  // ---------- Video Recording ----------
   Future<void> _recordVideo() async {
+    if (!await _ensureSosActive()) return;
+
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
       ScaffoldMessenger.of(
@@ -194,13 +350,21 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
           await _shareFile(video.path, 'video');
         }
       }
+      setState(() => _isRecordingVideo = false);
     }
   }
 
-  // -------------------------------------------------------------------
-  // Audio recording (in‑app) with share option
-  // -------------------------------------------------------------------
-  Future<void> _startAudioRecording() async {
+  // ---------- Live Streaming ----------
+  Future<void> _startLiveStreaming() async {
+    if (!await _ensureSosActive()) return;
+
+    final cameraStatus = await Permission.camera.request();
+    if (!cameraStatus.isGranted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Camera permission denied')));
+      return;
+    }
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -209,59 +373,67 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
       return;
     }
 
-    if (await _audioRecorder.hasPermission()) {
-      final dir = Directory.systemTemp;
-      final path =
-          '${dir.path}/safety_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _audioRecorder.start(
-        RecordConfig(encoder: AudioEncoder.aacLc),
-        path: path,
-      );
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No camera available')));
+      return;
+    }
+
+    final camera = cameras.firstWhere(
+      (cam) => cam.lensDirection == CameraLensDirection.front,
+      orElse: () => cameras.first,
+    );
+    _cameraController = CameraController(camera, ResolutionPreset.medium);
+    try {
+      await _cameraController!.initialize();
+      await _cameraController!.startImageStream((CameraImage image) {});
       setState(() {
-        _isRecordingAudio = true;
-        _audioPath = path;
+        _isLiveStreaming = true;
       });
-      debugPrint('Audio recording started at: $path');
+      debugPrint('Live streaming started');
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Audio recording started')));
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cannot access microphone')));
-    }
-  }
+      ).showSnackBar(const SnackBar(content: Text('Live stream started')));
 
-  Future<void> _stopAudioRecording() async {
-    if (_isRecordingAudio && await _audioRecorder.isRecording()) {
-      final path = await _audioRecorder.stop();
-      setState(() => _isRecordingAudio = false);
+      _liveStreamRoomId = DateTime.now().millisecondsSinceEpoch.toString();
+      _streamUrl = 'https://live.purplesafety.com/room/$_liveStreamRoomId';
 
-      if (path != null) {
-        debugPrint('Audio recording saved at: $path');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Audio recording saved')));
-
-        if (_autoShareRecordings) {
-          await _shareFile(path, 'audio');
-        } else {
-          final shouldShare = await _showSharePrompt('Audio');
-          if (shouldShare) {
-            await _shareFile(path, 'audio');
-          }
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save audio recording')),
-        );
+      // Send live stream link to everyone via SOSAlertService (global)
+      if (_streamUrl != null) {
+        await SOSAlertService.sendAlerts(_contacts, _streamUrl!);
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Stream link sent to all users')),
+      );
+    } catch (e) {
+      debugPrint('Failed to start camera: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to start live stream')),
+      );
+      _cameraController = null;
     }
   }
 
-  // -------------------------------------------------------------------
-  // Share a file with trusted contacts using share_plus
-  // -------------------------------------------------------------------
+  Future<void> _stopLiveStreaming() async {
+    if (_cameraController != null) {
+      await _cameraController!.stopImageStream();
+      await _cameraController!.dispose();
+      _cameraController = null;
+    }
+    setState(() {
+      _isLiveStreaming = false;
+      _streamUrl = null;
+      _liveStreamRoomId = null;
+    });
+    debugPrint('Live stream stopped');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Live stream ended')));
+  }
+
+  // ---------- Sharing ----------
   Future<void> _shareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -287,9 +459,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             title: Text('$type recorded'),
-            content: const Text(
-              'Do you want to share it with your trusted contacts?',
-            ),
+            content: const Text('Do you want to share it with all users?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -305,19 +475,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
         false;
   }
 
-  // -------------------------------------------------------------------
-  // I'm Safe functionality
-  // -------------------------------------------------------------------
   Future<void> _imSafe() async {
     bool authenticated = false;
     try {
       final localAuth = LocalAuthentication();
       authenticated = await localAuth.authenticate(
         localizedReason: 'Confirm you are safe to deactivate SOS',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
       );
     } catch (e) {
       debugPrint('Auth error: $e');
@@ -379,7 +542,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
     if (_isRecordingAudio) {
       _stopAudioRecording();
     }
-    _flashlightTimer?.cancel();
+    if (_isLiveStreaming) {
+      _stopLiveStreaming();
+    }
   }
 
   Future<void> _sendSafeMessage() async {
@@ -395,17 +560,15 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _locationSubscription?.cancel();
-    _flashlightTimer?.cancel();
-    _audioRecorder.dispose();
-    super.dispose();
+  // ---------- Action: Discreet Mode ----------
+  void _openDiscreetMode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const DiscreetModeScreen()),
+    );
   }
 
-  // -------------------------------------------------------------------
-  // UI Build
-  // -------------------------------------------------------------------
+  // ---------- Build UI ----------
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -422,35 +585,23 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Status Indicator
-              _buildStatusIndicator(),
+              if (_isEmergencyActive) _buildStatusIndicator(),
               const SizedBox(height: 24),
-
-              // Recording Controls
               _buildRecordingControls(),
               const SizedBox(height: 16),
-
-              // Auto‑share Toggle
               _buildAutoShareToggle(),
               const SizedBox(height: 24),
-
-              // Live Location Map
+              if (_isLiveStreaming && _cameraController != null)
+                _buildLivePreview(),
+              const SizedBox(height: 24),
               _buildLocationMap(),
               const SizedBox(height: 24),
-
-              // Quick Call Buttons
               _buildQuickCallButtons(),
               const SizedBox(height: 24),
-
-              // Attention Tools
               _buildAttentionTools(),
               const SizedBox(height: 24),
-
-              // Silent Mode Toggle
               _buildSilentModeToggle(),
               const SizedBox(height: 24),
-
-              // I'm Safe Button
               _buildImSafeButton(),
               const SizedBox(height: 40),
             ],
@@ -490,6 +641,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
           _buildStatusRow(Icons.notifications_active, 'Alert sent', true),
           _buildStatusRow(Icons.videocam, 'Video recording', _isRecordingVideo),
           _buildStatusRow(Icons.mic, 'Audio recording', _isRecordingAudio),
+          _buildStatusRow(Icons.live_tv, 'Live streaming', _isLiveStreaming),
         ],
       ),
     );
@@ -532,7 +684,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Record Evidence',
+            'Record & Stream',
             style: TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.bold,
@@ -540,19 +692,27 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          Column(
             children: [
-              _buildRecordButton(
+              _buildMediaButton(
+                icon: _isLiveStreaming ? Icons.stop_circle : Icons.live_tv,
+                label: _isLiveStreaming ? 'Stop Live' : 'Go Live',
+                onTap: _isLiveStreaming
+                    ? _stopLiveStreaming
+                    : _startLiveStreaming,
+                color: _isLiveStreaming ? Colors.red : Colors.purple,
+              ),
+              const SizedBox(height: 12),
+              _buildMediaButton(
                 icon: Icons.videocam,
-                label: 'Video',
+                label: 'Record Video',
                 onTap: _recordVideo,
                 color: Colors.blue,
               ),
-              const SizedBox(width: 16),
-              _buildRecordButton(
-                icon: Icons.mic,
-                label: _isRecordingAudio ? 'Stop Audio' : 'Audio',
+              const SizedBox(height: 12),
+              _buildMediaButton(
+                icon: _isRecordingAudio ? Icons.stop : Icons.mic,
+                label: _isRecordingAudio ? 'Stop Audio' : 'Record Audio',
                 onTap: _isRecordingAudio
                     ? _stopAudioRecording
                     : _startAudioRecording,
@@ -560,55 +720,57 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
               ),
             ],
           ),
-          if (_isRecordingAudio) ...[
-            const SizedBox(height: 8),
-            Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.fiber_manual_record,
-                    color: Colors.red,
-                    size: 12,
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    'Recording audio...',
-                    style: TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildRecordButton({
+  Widget _buildMediaButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
     required Color color,
   }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.5)),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 28),
-              const SizedBox(height: 4),
-              Text(label, style: TextStyle(color: color, fontSize: 14)),
-            ],
-          ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: color.withOpacity(0.5)),
         ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLivePreview() {
+    return Container(
+      height: 200,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: CameraPreview(_cameraController!),
       ),
     );
   }
@@ -642,7 +804,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
           ),
           Switch(
             value: _autoShareRecordings,
-            onChanged: (value) => setState(() => _autoShareRecordings = value),
+            onChanged: (value) async {
+              setState(() {
+                _autoShareRecordings = value;
+              });
+              await _saveAutoSharePreference(value);
+            },
             activeColor: const Color(0xFF6A1B9A),
           ),
         ],
@@ -728,9 +895,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
         ),
       ),
     );
-    while (buttons.length < 3) {
-      buttons.add(const Expanded(child: SizedBox()));
-    }
+    while (buttons.length < 3) buttons.add(const Expanded(child: SizedBox()));
     return Row(children: buttons);
   }
 
@@ -773,67 +938,42 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.purple.withOpacity(0.3)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Attention Tools',
-            style: TextStyle(
-              color: Colors.white70,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildAttentionButton(
-                icon: Icons.volume_up,
-                label: 'Loud Alarm',
-                onTap: _triggerLoudAlarm,
-                color: Colors.orange,
-              ),
-              _buildAttentionButton(
-                icon: Icons.flash_on,
-                label: 'Flashlight Strobe',
-                onTap: _toggleFlashlightStrobe,
-                color: Colors.yellow,
-                isActive: _isFlashlightStrobe,
-              ),
-              _buildAttentionButton(
-                icon: Icons.phone_iphone,
-                label: 'Fake Call',
-                onTap: _fakeCall,
-                color: Colors.blue,
-              ),
-            ],
-          ),
-        ],
+      child: Center(
+        child: _buildActionButton(
+          icon: Icons.calculate,
+          label: 'Discreet Mode',
+          onTap: _openDiscreetMode,
+          color: Colors.teal,
+        ),
       ),
     );
   }
 
-  Widget _buildAttentionButton({
+  Widget _buildActionButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
     required Color color,
-    bool isActive = false,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        width: 160,
+        padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isActive ? color.withOpacity(0.3) : color.withOpacity(0.1),
+          color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(isActive ? 0.8 : 0.3)),
+          border: Border.all(color: color.withOpacity(0.5)),
         ),
         child: Column(
           children: [
             Icon(icon, color: color, size: 28),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(color: color, fontSize: 12)),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),

@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:purple_safety/services/user_service.dart';
-import 'package:purple_safety/home/home_screen.dart'; // for Contact model (temporary)
+import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/home/home_screen.dart'; // for Contact model
 
 class UserProfileModal extends StatefulWidget {
-  // Optional: pass contacts from HomeScreen later
   final List<Contact>? contacts;
 
   const UserProfileModal({Key? key, this.contacts}) : super(key: key);
@@ -15,7 +14,7 @@ class UserProfileModal extends StatefulWidget {
 }
 
 class _UserProfileModalState extends State<UserProfileModal> {
-  Map<String, String?> _userData = {};
+  Map<String, dynamic> _userData = {};
   bool _isLoading = true;
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
@@ -40,12 +39,9 @@ class _UserProfileModalState extends State<UserProfileModal> {
     ),
   ];
 
-  // Panic trigger settings
   bool _fingerprintTrigger = true;
   bool _powerButtonTrigger = false;
   bool _shakeTrigger = false;
-
-  // Privacy settings
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
@@ -56,11 +52,18 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Future<void> _loadUser() async {
-    final data = await UserService.getUser();
-    setState(() {
-      _userData = data;
-      _isLoading = false;
-    });
+    final user = AuthService().getCurrentUser();
+    if (user != null) {
+      final data = await AuthService().getUserData(user.uid);
+      setState(() {
+        _userData = data ?? {};
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -141,7 +144,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Drag handle
                       Center(
                         child: Container(
                           width: 40,
@@ -153,26 +155,17 @@ class _UserProfileModalState extends State<UserProfileModal> {
                           ),
                         ),
                       ),
-                      // Profile header with image picker
                       _buildProfileHeader(),
                       const SizedBox(height: 24),
-
-                      // Emergency Contacts (no "Add" button)
                       _buildSectionTitle('Emergency Contacts'),
                       _buildEmergencyContacts(),
                       const SizedBox(height: 24),
-
-                      // Panic Trigger Setup
                       _buildSectionTitle('Panic Trigger Setup'),
                       _buildTriggerSetup(),
                       const SizedBox(height: 24),
-
-                      // Privacy & Security
                       _buildSectionTitle('Privacy & Security'),
                       _buildPrivacySecurity(),
                       const SizedBox(height: 24),
-
-                      // Logout button (simple text button)
                       _buildLogoutButton(),
                       const SizedBox(height: 20),
                     ],
@@ -252,7 +245,7 @@ class _UserProfileModalState extends State<UserProfileModal> {
                   ),
                   if (_userData['email'] != null)
                     Text(
-                      _userData['email']!,
+                      _userData['email'],
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 14,
@@ -288,7 +281,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Widget _buildEmergencyContacts() {
-    // Use passed contacts if available, otherwise dummy
     final displayContacts = widget.contacts ?? _dummyContacts;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -463,10 +455,9 @@ class _UserProfileModalState extends State<UserProfileModal> {
     return Center(
       child: TextButton(
         onPressed: () async {
-          await UserService.clearUser();
+          await AuthService().logout();
           if (context.mounted) {
-            Navigator.pop(context); // close modal
-            Navigator.pushReplacementNamed(context, '/login');
+            Navigator.pop(context);
           }
         },
         style: TextButton.styleFrom(foregroundColor: Colors.red),

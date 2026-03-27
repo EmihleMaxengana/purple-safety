@@ -9,7 +9,6 @@ class BiometricService {
 
   static const String _sosFingerprintEnabledKey = 'sos_fingerprint_enabled';
 
-  // Check if fingerprint hardware is available AND enrolled
   static Future<bool> isFingerprintAvailable() async {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
@@ -17,8 +16,6 @@ class BiometricService {
 
       final List<BiometricType> availableTypes = await _auth
           .getAvailableBiometrics();
-
-      // Check if fingerprint (Touch ID on iOS, fingerprint on Android) is available
       return availableTypes.contains(BiometricType.fingerprint);
     } on PlatformException catch (e) {
       print('Error checking biometrics: $e');
@@ -26,7 +23,6 @@ class BiometricService {
     }
   }
 
-  // Check if any biometric is available (fallback for info)
   static Future<bool> hasAnyBiometrics() async {
     try {
       return await _auth.canCheckBiometrics || await _auth.isDeviceSupported();
@@ -35,15 +31,10 @@ class BiometricService {
     }
   }
 
-  // Authenticate with fingerprint (biometric only)
   static Future<bool> authenticate({required String reason}) async {
     try {
       final bool authenticated = await _auth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
       );
       return authenticated;
     } catch (e) {
@@ -52,7 +43,6 @@ class BiometricService {
     }
   }
 
-  // Enable SOS fingerprint trigger
   static Future<bool> enableSOSFingerprint() async {
     final available = await isFingerprintAvailable();
     if (!available) return false;
@@ -68,15 +58,12 @@ class BiometricService {
     return false;
   }
 
-  // Check if SOS fingerprint is enabled
   static Future<bool> isSOSFingerprintEnabled() async {
     final String? value = await _storage.read(key: _sosFingerprintEnabledKey);
     return value == 'true';
   }
 
-  // Trigger SOS with fingerprint
   static Future<bool> triggerSOSWithFingerprint() async {
-    // Check if SOS fingerprint is enabled first
     final enabled = await isSOSFingerprintEnabled();
     if (!enabled) return false;
 

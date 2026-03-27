@@ -3,15 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:permission_handler/permission_handler.dart' as permission;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/manage_contacts_modal.dart';
 import 'package:purple_safety/add_contact_modal.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
-import 'package:purple_safety/services/user_service.dart';
+import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/safety_alerts_screen.dart';
 
-// Contact model
+// Contact model with Firestore methods
 class Contact {
   final String id;
   String name;
@@ -32,6 +35,32 @@ class Contact {
     this.relationship,
     this.socialLinks = const {},
   });
+
+  factory Contact.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Contact(
+      id: doc.id,
+      name: data['name'],
+      initials: data['initials'],
+      color: Color(data['color']),
+      active: data['active'],
+      phone: data['phone'],
+      relationship: data['relationship'],
+      socialLinks: Map<String, String>.from(data['socialLinks'] ?? {}),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'initials': initials,
+      'color': color.value,
+      'active': active,
+      'phone': phone,
+      'relationship': relationship,
+      'socialLinks': socialLinks,
+    };
+  }
 }
 
 class HomeScreen extends StatefulWidget {
@@ -61,201 +90,145 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   location.Location _location = location.Location();
   bool _locationEnabled = false;
+  bool _isLocationLoading = false;
   LatLng? _currentPosition;
   Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
-  // Contacts – default Evile
-  List<Contact> _contacts = [
-    Contact(
-      id: '1',
-      name: 'Evile',
-      initials: 'E',
-      color: Colors.purple,
-      active: true,
-      phone: '+27 62 140 1847',
-      relationship: 'Friend',
-    ),
-  ];
-
-  // Location sharing state
+  // Contacts
+  List<Contact> _contacts = [];
   bool _isSharingLocation = false;
 
+  // Firestore
+  final FirestoreService _firestoreService = FirestoreService();
+  StreamSubscription? _contactsSubscription;
+  StreamSubscription? _alertsSubscription;
+  int _unreadAlertsCount = 0;
+
+  // Default map position (center of South Africa)
+  static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
+
+  // Custom map style – matches the dark/purple look from your screenshot
   final String _mapStyle = '''
-  [
-    {
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#1d2c4d"}
-      ]
-    },
-    {
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#8ec3b9"}
-      ]
-    },
-    {
-      "elementType": "labels.text.stroke",
-      "stylers": [
-        {"color": "#1a3646"}
-      ]
-    },
-    {
-      "featureType": "administrative.country",
-      "elementType": "geometry.stroke",
-      "stylers": [
-        {"color": "#4b6e8c"}
-      ]
-    },
-    {
-      "featureType": "administrative.land_parcel",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#64779e"}
-      ]
-    },
-    {
-      "featureType": "administrative.province",
-      "elementType": "geometry.stroke",
-      "stylers": [
-        {"color": "#4b6e8c"}
-      ]
-    },
-    {
-      "featureType": "landscape.man_made",
-      "elementType": "geometry.stroke",
-      "stylers": [
-        {"color": "#334e87"}
-      ]
-    },
-    {
-      "featureType": "landscape.natural",
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#023e58"}
-      ]
-    },
-    {
-      "featureType": "poi",
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#283d6a"}
-      ]
-    },
-    {
-      "featureType": "poi",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#6f9ba5"}
-      ]
-    },
-    {
-      "featureType": "poi",
-      "elementType": "labels.text.stroke",
-      "stylers": [
-        {"color": "#1d2c4d"}
-      ]
-    },
-    {
-      "featureType": "road",
-      "elementType": "geometry.fill",
-      "stylers": [
-        {"color": "#304a7d"}
-      ]
-    },
-    {
-      "featureType": "road",
-      "elementType": "geometry.stroke",
-      "stylers": [
-        {"color": "#1d2c4d"}
-      ]
-    },
-    {
-      "featureType": "road",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#98a5be"}
-      ]
-    },
-    {
-      "featureType": "road",
-      "elementType": "labels.text.stroke",
-      "stylers": [
-        {"color": "#1d2c4d"}
-      ]
-    },
-    {
-      "featureType": "road.highway",
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#2c6675"}
-      ]
-    },
-    {
-      "featureType": "road.highway",
-      "elementType": "geometry.stroke",
-      "stylers": [
-        {"color": "#255868"}
-      ]
-    },
-    {
-      "featureType": "road.highway",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#b0d5ce"}
-      ]
-    },
-    {
-      "featureType": "road.highway",
-      "elementType": "labels.text.stroke",
-      "stylers": [
-        {"color": "#023e58"}
-      ]
-    },
-    {
-      "featureType": "transit",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#98a5be"}
-      ]
-    },
-    {
-      "featureType": "transit",
-      "elementType": "labels.text.stroke",
-      "stylers": [
-        {"color": "#1d2c4d"}
-      ]
-    },
-    {
-      "featureType": "transit.line",
-      "elementType": "geometry.fill",
-      "stylers": [
-        {"color": "#283d6a"}
-      ]
-    },
-    {
-      "featureType": "transit.station",
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#3a4762"}
-      ]
-    },
-    {
-      "featureType": "water",
-      "elementType": "geometry",
-      "stylers": [
-        {"color": "#0e1626"}
-      ]
-    },
-    {
-      "featureType": "water",
-      "elementType": "labels.text.fill",
-      "stylers": [
-        {"color": "#4e6d70"}
-      ]
-    }
-  ]
+[
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#1d2c3d"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8ec3b0"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#1a3646"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.country",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#4b2e6b"
+      },
+      {
+        "weight": 1.5
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.land_parcel",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#b9daa4"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8ec3b0"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2a5c4a"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#3c2b4f"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d4bfff"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#5a3e7a"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#f3d9ff"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#b9daa4"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2e5c8a"
+      }
+    ]
+  }
+]
   ''';
 
   @override
@@ -264,8 +237,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _loadSOSStatus();
     _initLocation();
     _setupDangerZones();
-    // Initialize EmergencyManager with initial contacts
-    EmergencyManager().setCurrentContacts(_contacts);
+    _listenToContacts();
+    _listenToAlerts();
+  }
+
+  Future<void> _listenToContacts() async {
+    final user = AuthService().getCurrentUser();
+    if (user != null) {
+      _contactsSubscription = _firestoreService
+          .getContactsStream(user.uid)
+          .listen((contacts) {
+            setState(() {
+              _contacts = contacts;
+              EmergencyManager().setCurrentContacts(_contacts);
+            });
+          });
+    } else {
+      setState(() {
+        _contacts = [];
+      });
+    }
+  }
+
+  void _listenToAlerts() async {
+    final user = AuthService().getCurrentUser();
+    if (user != null) {
+      _alertsSubscription = _firestoreService.getAlertsStream(user.uid).listen((
+        alerts,
+      ) {
+        setState(() {
+          _unreadAlertsCount = alerts.where((a) => !a.read).length;
+        });
+      });
+    }
   }
 
   Future<void> _loadSOSStatus() async {
@@ -274,37 +278,70 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _initLocation() async {
+    setState(() => _isLocationLoading = true);
     bool serviceEnabled;
     location.PermissionStatus permissionGranted;
 
     serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please enable location services to see your location.',
+              ),
+            ),
+          );
+        }
+        setState(() {
+          _locationEnabled = false;
+          _isLocationLoading = false;
+        });
+        return;
+      }
     }
 
     permissionGranted = await _location.hasPermission();
     if (permissionGranted == location.PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
-      if (permissionGranted != location.PermissionStatus.granted) return;
+      if (permissionGranted != location.PermissionStatus.granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Location permission is required. Please grant it in settings.',
+              ),
+            ),
+          );
+        }
+        setState(() {
+          _locationEnabled = false;
+          _isLocationLoading = false;
+        });
+        return;
+      }
     }
 
     setState(() => _locationEnabled = true);
 
-    _locationSubscription = _location.onLocationChanged.listen((
-      location.LocationData currentLocation,
-    ) {
-      if (currentLocation.latitude != null &&
-          currentLocation.longitude != null) {
+    _locationSubscription = _location.onLocationChanged.listen((event) {
+      if (event.latitude != null && event.longitude != null) {
         setState(() {
-          _currentPosition = LatLng(
-            currentLocation.latitude!,
-            currentLocation.longitude!,
-          );
+          _currentPosition = LatLng(event.latitude!, event.longitude!);
+          _isLocationLoading = false;
         });
-        _checkDangerZone(_currentPosition!);
+        // Do NOT auto-center the map on every location update.
       }
     });
+  }
+
+  Future<void> _retryLocation() async {
+    setState(() => _isLocationLoading = true);
+    await _locationSubscription?.cancel();
+    _locationSubscription = null;
+    await _initLocation();
   }
 
   void _setupDangerZones() {
@@ -380,6 +417,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
+
+    if (_currentPosition != null) {
+      controller.moveCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _currentPosition!, zoom: 5.5),
+        ),
+      );
+    }
   }
 
   void _handleSOSPress() {
@@ -424,9 +469,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _triggerSOS() {
-    // Store current contacts in EmergencyManager so they are available in the tools screen
     EmergencyManager().setCurrentContacts(_contacts);
-    // Navigate to Tools page (emergency mode UI)
     widget.onNavigateToTools?.call();
     setState(() => _isSosActive = false);
   }
@@ -439,7 +482,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  // Navigation
   void _openFullMap() {
     Navigator.push(
       context,
@@ -447,39 +489,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showManageContactsModal() {
-    showDialog(
-      context: context,
-      builder: (context) => ManageContactsModal(
-        contacts: _contacts,
-        onDelete: (id) {
-          setState(() {
-            _contacts.removeWhere((c) => c.id == id);
-            // Update EmergencyManager after deletion
-            EmergencyManager().setCurrentContacts(_contacts);
-          });
-        },
-      ),
-    );
-  }
-
   void _showAddContactModal() {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+
     showDialog(
       context: context,
       builder: (context) => AddContactModal(
-        onAdd: (newContact) {
-          setState(() {
-            _contacts.add(newContact);
-            // Update EmergencyManager with the new contacts list
-            EmergencyManager().setCurrentContacts(_contacts);
-          });
+        onAdd: (newContact) async {
+          await _firestoreService.addContact(user.uid, newContact);
         },
         currentCount: _contacts.length,
       ),
     );
   }
 
-  // Quick action handlers
+  void _showManageContactsModal() {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+
+    showDialog(
+      context: context,
+      builder: (context) => ManageContactsModal(
+        contacts: _contacts,
+        onDelete: (id) async {
+          await _firestoreService.deleteContact(user.uid, id);
+        },
+      ),
+    );
+  }
+
   (double?, double?) _getCoordinates() {
     return (_currentPosition?.latitude, _currentPosition?.longitude);
   }
@@ -506,8 +545,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    final user = await UserService.getUser();
-    final userName = user['name'] ?? 'User';
+    final user = AuthService().getCurrentUser();
+    String userName = 'User';
+    if (user != null) {
+      final userData = await AuthService().getUserData(user.uid);
+      userName = userData?['name'] ?? 'User';
+    }
+
     if (_isSharingLocation) {
       LocationSharingService.stopSharing();
       setState(() => _isSharingLocation = false);
@@ -546,6 +590,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _countdownTimer?.cancel();
     _locationSubscription?.cancel();
     _mapController?.dispose();
+    _contactsSubscription?.cancel();
+    _alertsSubscription?.cancel();
     super.dispose();
   }
 
@@ -568,85 +614,47 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  // Header
+                  // Only the notification icon (removed title and "Protected" badge)
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      const Text(
-                        'Purple Safety',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Syne',
-                        ),
-                      ),
-                      Row(
+                      Stack(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                          IconButton(
+                            icon: const Icon(
+                              Icons.notifications,
+                              color: Colors.white70,
                             ),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: Colors.green.withOpacity(0.3),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.green,
-                                    shape: BoxShape.circle,
-                                  ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const SafetyAlertsScreen(),
                                 ),
-                                const SizedBox(width: 4),
-                                const Text(
-                                  'Protected',
-                                  style: TextStyle(
-                                    color: Colors.green,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                          const SizedBox(width: 8),
-                          Stack(
-                            children: [
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.notifications,
-                                  color: Colors.white70,
-                                ),
-                                onPressed: () {},
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
+                          if (_unreadAlertsCount > 0)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
                         ],
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
 
-                  // SOS Button
+                  // SOS button (centered)
                   Center(
                     child: GestureDetector(
                       onTapDown: (_) => _handleSOSPress(),
@@ -720,7 +728,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 24),
 
-                  // Live Location Map
+                  // LIVE LOCATION section
                   SectionHeader(
                     title: 'LIVE LOCATION',
                     action: 'Full Map →',
@@ -737,41 +745,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),
-                      child: _locationEnabled
-                          ? GoogleMap(
-                              onMapCreated: _onMapCreated,
-                              initialCameraPosition: const CameraPosition(
-                                target: LatLng(-30.5595, 22.9375),
-                                zoom: 5.0,
-                              ),
-                              myLocationEnabled: true,
-                              myLocationButtonEnabled: false,
-                              zoomControlsEnabled: false,
-                              polygons: _dangerZones,
-                              markers: _currentPosition != null
-                                  ? {
-                                      Marker(
-                                        markerId: const MarkerId('current'),
-                                        position: _currentPosition!,
-                                        icon:
-                                            BitmapDescriptor.defaultMarkerWithHue(
-                                              BitmapDescriptor.hueViolet,
-                                            ),
-                                      ),
-                                    }
-                                  : {},
-                            )
-                          : const Center(
-                              child: Text(
-                                'Location not available',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            ),
+                      child: _buildMapContent(),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // Quick Actions
                   const SectionHeader(title: 'QUICK ACTIONS'),
                   const SizedBox(height: 8),
                   GridView.count(
@@ -812,7 +790,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 16),
 
-                  // Trusted Contacts
                   SectionHeader(
                     title: 'TRUSTED CONTACTS',
                     action: 'Manage →',
@@ -838,21 +815,97 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 16),
 
-                  // Safety Alerts
-                  const SectionHeader(title: 'SAFETY ALERTS', action: 'All →'),
-                  const SizedBox(height: 8),
-                  _buildAlert(
-                    type: 'warning',
-                    icon: Icons.warning,
-                    message: 'Incident reported 0.3mi NE',
-                    time: '2m ago',
+                  // SAFETY ALERTS section with dynamic content
+                  SectionHeader(
+                    title: 'SAFETY ALERTS',
+                    action: 'All →',
+                    onActionTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SafetyAlertsScreen(),
+                        ),
+                      );
+                    },
                   ),
-                  const SizedBox(height: 4),
-                  _buildAlert(
-                    type: 'info',
-                    icon: Icons.info,
-                    message: 'Safe zone: Central Park active',
-                    time: '15m ago',
+                  const SizedBox(height: 8),
+                  StreamBuilder<List<Alert>>(
+                    stream: _firestoreService.getAlertsStream(
+                      AuthService().getCurrentUser()?.uid ?? '',
+                    ),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 100,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: Text(
+                              'No alerts yet',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ),
+                        );
+                      }
+                      final alerts = snapshot.data!;
+                      final recentAlerts = alerts.take(2).toList();
+                      return Column(
+                        children: recentAlerts.map((alert) {
+                          Color color = alert.type == 'warning'
+                              ? Colors.red
+                              : Colors.blue;
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.05),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: color.withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    alert.type == 'warning'
+                                        ? Icons.warning
+                                        : Icons.info,
+                                    color: color,
+                                    size: 16,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    alert.message,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  _formatTime(alert.timestamp),
+                                  style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      );
+                    },
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -860,7 +913,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
-        // SOS Overlay
         if (_isSosActive)
           Container(
             color: const Color(0xFF500032).withOpacity(0.97),
@@ -926,7 +978,103 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // Helper methods
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final diff = now.difference(time);
+    if (diff.inDays > 0) {
+      return '${diff.inDays}d ago';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours}h ago';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes}m ago';
+    } else {
+      return 'Just now';
+    }
+  }
+
+  Widget _buildMapContent() {
+    // Always show the map, even if location is not ready.
+    final LatLng targetPosition = _currentPosition ?? _defaultPosition;
+    final bool hasLocation = _currentPosition != null;
+
+    if (_isLocationLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: Colors.white70),
+            SizedBox(height: 8),
+            Text(
+              'Getting location...',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_locationEnabled) {
+      return Stack(
+        children: [
+          GoogleMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: _defaultPosition,
+              zoom: 5.5,
+            ),
+            myLocationEnabled: false,
+            zoomControlsEnabled: false,
+          ),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Location services disabled',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (!hasLocation) {
+      return GoogleMap(
+        onMapCreated: _onMapCreated,
+        initialCameraPosition: CameraPosition(
+          target: _defaultPosition,
+          zoom: 5.5,
+        ),
+        myLocationEnabled: true,
+        myLocationButtonEnabled: false,
+        zoomControlsEnabled: false,
+        polygons: _dangerZones,
+      );
+    }
+
+    return GoogleMap(
+      onMapCreated: _onMapCreated,
+      initialCameraPosition: CameraPosition(target: targetPosition, zoom: 5.5),
+      myLocationEnabled: true,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      polygons: _dangerZones,
+      markers: {
+        Marker(
+          markerId: const MarkerId('current'),
+          position: targetPosition,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueViolet,
+          ),
+        ),
+      },
+    );
+  }
+
   Widget _buildQuickAction(
     IconData icon,
     String label,
@@ -1041,47 +1189,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildAlert({
-    required String type,
-    required IconData icon,
-    required String message,
-    required String time,
-  }) {
-    Color color = type == 'warning' ? Colors.red : Colors.blue;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ),
-          Text(
-            time,
-            style: const TextStyle(color: Colors.white38, fontSize: 10),
-          ),
-        ],
       ),
     );
   }

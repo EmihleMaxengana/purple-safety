@@ -1,4 +1,4 @@
-package com.example.purple_safety
+package com.emihle.purplesafety
 
 import android.Manifest
 import android.content.pm.PackageManager
