@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'home/home_screen.dart';
+import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/services/biometric_services.dart';
 
 class ManageContactsModal extends StatelessWidget {
   final List<Contact> contacts;
@@ -10,6 +11,31 @@ class ManageContactsModal extends StatelessWidget {
     required this.contacts,
     required this.onDelete,
   }) : super(key: key);
+
+  Future<void> _deleteWithFingerprint(
+    BuildContext context,
+    String contactId,
+  ) async {
+    // First ask for fingerprint
+    final authenticated = await BiometricService.authenticate(
+      reason: 'Authenticate to delete this contact',
+    );
+    if (authenticated) {
+      // If successful, perform deletion
+      onDelete(contactId);
+      Navigator.pop(context); // Close the modal after deletion
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Contact deleted')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed. Contact not deleted.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +157,8 @@ class ManageContactsModal extends StatelessWidget {
                           ),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              onDelete(c.id);
-                              Navigator.pop(context);
-                            },
+                            onPressed: () =>
+                                _deleteWithFingerprint(context, c.id),
                           ),
                         );
                       },

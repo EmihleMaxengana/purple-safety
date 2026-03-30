@@ -16,7 +16,7 @@ import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
 import 'package:purple_safety/services/sos_alert_service.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
-import 'package:purple_safety/discreet_mode_screen.dart';
+import 'package:purple_safety/services/sos_event_service.dart'; // <-- Added for SOS event end
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
@@ -475,6 +475,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         false;
   }
 
+  // ---------- I'm Safe ----------
   Future<void> _imSafe() async {
     bool authenticated = false;
     try {
@@ -488,6 +489,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     if (authenticated) {
+      // End the SOS event in Firestore
+      await SOSEventService.endSOSEvent(); // <-- Added
       _stopEmergency();
       await _sendSafeMessage();
       EmergencyManager().deactivateEmergencyMode();
@@ -560,14 +563,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ---------- Action: Discreet Mode ----------
-  void _openDiscreetMode() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const DiscreetModeScreen()),
-    );
-  }
-
   // ---------- Build UI ----------
   @override
   Widget build(BuildContext context) {
@@ -597,8 +592,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildLocationMap(),
               const SizedBox(height: 24),
               _buildQuickCallButtons(),
-              const SizedBox(height: 24),
-              _buildAttentionTools(),
               const SizedBox(height: 24),
               _buildSilentModeToggle(),
               const SizedBox(height: 24),
@@ -912,56 +905,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: color.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.5)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttentionTools() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a0f2e),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple.withOpacity(0.3)),
-      ),
-      child: Center(
-        child: _buildActionButton(
-          icon: Icons.calculate,
-          label: 'Discreet Mode',
-          onTap: _openDiscreetMode,
-          color: Colors.teal,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required Color color,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 160,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withOpacity(0.5)),
         ),

@@ -39,8 +39,6 @@ class SOSAlertService {
 
   static Future<void> _sendGlobalNotification(String locationLink) async {
     try {
-      // In a real app, you would call a cloud function or send via FCM API.
-      // For now, we'll rely on the server to send the push notification.
       debugPrint('Global emergency alert sent to topic: emergency_alerts');
     } catch (e) {
       debugPrint('Error sending global notification: $e');

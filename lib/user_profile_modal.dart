@@ -2,7 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/home/home_screen.dart'; // for Contact model
+import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/services/biometric_services.dart';
 
 class UserProfileModal extends StatefulWidget {
   final List<Contact>? contacts;
@@ -16,10 +17,10 @@ class UserProfileModal extends StatefulWidget {
 class _UserProfileModalState extends State<UserProfileModal> {
   Map<String, dynamic> _userData = {};
   bool _isLoading = true;
+  String? _errorMessage;
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
 
-  // Dummy contacts for now
   List<Contact> _dummyContacts = [
     Contact(
       id: '1',
@@ -52,14 +53,33 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Future<void> _loadUser() async {
-    final user = AuthService().getCurrentUser();
-    if (user != null) {
-      final data = await AuthService().getUserData(user.uid);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final user = AuthService().getCurrentUser();
+      if (user != null) {
+        final data = await AuthService().getUserData(user.uid);
+        if (data != null) {
+          setState(() {
+            _userData = data;
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'No user data found.';
+          });
+        }
+      } else {
+        setState(() {
+          _errorMessage = 'Not logged in.';
+        });
+      }
+    } catch (e) {
       setState(() {
-        _userData = data ?? {};
-        _isLoading = false;
+        _errorMessage = 'Failed to load profile: $e';
       });
-    } else {
+    } finally {
       setState(() {
         _isLoading = false;
       });
@@ -122,6 +142,27 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
+  // Wrapper for toggles that require fingerprint
+  Future<void> _toggleWithFingerprint(
+    String settingName,
+    bool currentValue,
+    Function(bool) onToggle,
+  ) async {
+    final authenticated = await BiometricService.authenticate(
+      reason: 'Authenticate to change $settingName',
+    );
+    if (authenticated) {
+      onToggle(!currentValue);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Authentication failed. $settingName not changed.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -138,6 +179,26 @@ class _UserProfileModalState extends State<UserProfileModal> {
           ),
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : _errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, color: Colors.red, size: 50),
+                      const SizedBox(height: 16),
+                      Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.white70),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _loadUser,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
               : SingleChildScrollView(
                   controller: scrollController,
                   padding: const EdgeInsets.all(20),
@@ -344,7 +405,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white),
             ),
             value: _fingerprintTrigger,
-            onChanged: (value) => setState(() => _fingerprintTrigger = value),
+            onChanged: (value) => _toggleWithFingerprint(
+              'Fingerprint Trigger',
+              _fingerprintTrigger,
+              (newVal) => setState(() => _fingerprintTrigger = newVal),
+            ),
             activeColor: Colors.purple,
           ),
           SwitchListTile(
@@ -353,7 +418,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white),
             ),
             value: _powerButtonTrigger,
-            onChanged: (value) => setState(() => _powerButtonTrigger = value),
+            onChanged: (value) => _toggleWithFingerprint(
+              'Power Button Trigger',
+              _powerButtonTrigger,
+              (newVal) => setState(() => _powerButtonTrigger = newVal),
+            ),
             activeColor: Colors.purple,
           ),
           SwitchListTile(
@@ -362,7 +431,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white),
             ),
             value: _shakeTrigger,
-            onChanged: (value) => setState(() => _shakeTrigger = value),
+            onChanged: (value) => _toggleWithFingerprint(
+              'Shake Trigger',
+              _shakeTrigger,
+              (newVal) => setState(() => _shakeTrigger = newVal),
+            ),
             activeColor: Colors.purple,
           ),
           const SizedBox(height: 16),
@@ -396,8 +469,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white),
             ),
             value: _shareLocationWithContacts,
-            onChanged: (value) =>
-                setState(() => _shareLocationWithContacts = value),
+            onChanged: (value) => _toggleWithFingerprint(
+              'Location Sharing with Contacts',
+              _shareLocationWithContacts,
+              (newVal) => setState(() => _shareLocationWithContacts = newVal),
+            ),
             activeColor: Colors.purple,
           ),
           SwitchListTile(
@@ -406,8 +482,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white),
             ),
             value: _shareLocationWithCommunity,
-            onChanged: (value) =>
-                setState(() => _shareLocationWithCommunity = value),
+            onChanged: (value) => _toggleWithFingerprint(
+              'Location Sharing with Community',
+              _shareLocationWithCommunity,
+              (newVal) => setState(() => _shareLocationWithCommunity = newVal),
+            ),
             activeColor: Colors.purple,
           ),
           ListTile(
@@ -420,7 +499,20 @@ class _UserProfileModalState extends State<UserProfileModal> {
               color: Colors.white70,
               size: 16,
             ),
-            onTap: () {},
+            onTap: () async {
+              final authenticated = await BiometricService.authenticate(
+                reason: 'Authenticate to view data sharing settings',
+              );
+              if (authenticated) {
+                // Navigate to settings screen
+                // For now, just show a snackbar
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Data sharing settings (coming soon)'),
+                  ),
+                );
+              }
+            },
           ),
           ListTile(
             title: const Text(
@@ -432,7 +524,19 @@ class _UserProfileModalState extends State<UserProfileModal> {
               color: Colors.white70,
               size: 16,
             ),
-            onTap: () {},
+            onTap: () async {
+              final authenticated = await BiometricService.authenticate(
+                reason: 'Authenticate to change biometrics settings',
+              );
+              if (authenticated) {
+                // Navigate to change biometrics screen
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Biometrics settings (coming soon)'),
+                  ),
+                );
+              }
+            },
           ),
           ListTile(
             title: const Text(
@@ -444,7 +548,19 @@ class _UserProfileModalState extends State<UserProfileModal> {
               color: Colors.white70,
               size: 16,
             ),
-            onTap: () {},
+            onTap: () async {
+              final authenticated = await BiometricService.authenticate(
+                reason: 'Authenticate to manage devices',
+              );
+              if (authenticated) {
+                // Navigate to device management
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Device management (coming soon)'),
+                  ),
+                );
+              }
+            },
           ),
         ],
       ),
@@ -455,9 +571,14 @@ class _UserProfileModalState extends State<UserProfileModal> {
     return Center(
       child: TextButton(
         onPressed: () async {
-          await AuthService().logout();
-          if (context.mounted) {
-            Navigator.pop(context);
+          final authenticated = await BiometricService.authenticate(
+            reason: 'Authenticate to log out',
+          );
+          if (authenticated) {
+            await AuthService().logout();
+            if (context.mounted) {
+              Navigator.pop(context);
+            }
           }
         },
         style: TextButton.styleFrom(foregroundColor: Colors.red),

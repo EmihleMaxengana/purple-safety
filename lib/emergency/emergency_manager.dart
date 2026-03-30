@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../home/home_screen.dart';
 import 'emergency_mode_screen.dart';
+import '../services/sos_event_service.dart';
+import '../services/auth_service.dart';
+import 'package:geolocator/geolocator.dart';
 
 class EmergencyManager {
   static final EmergencyManager _instance = EmergencyManager._internal();
@@ -42,20 +45,38 @@ class EmergencyManager {
   }
 
   // Light activation – only sets the flag, no navigation
-  void activateEmergencyModeLight({List<Contact>? contacts}) {
+  void activateEmergencyModeLight({List<Contact>? contacts}) async {
     if (!_emergencyActive) {
       _emergencyActive = true;
       if (contacts != null) {
         _currentContacts = contacts;
       }
       _emergencyStatusController.add(true);
+
+      // --- Store SOS event in Firestore
+      final user = AuthService().getCurrentUser();
+      if (user != null) {
+        try {
+          final position = await Geolocator.getCurrentPosition();
+          final userData = await AuthService().getUserData(user.uid);
+          final userName = userData?['name'] ?? 'User';
+          await SOSEventService.createSOSEvent(
+            location: position,
+            userId: user.uid,
+            userName: userName,
+          );
+        } catch (e) {
+          debugPrint('Failed to create SOS event: $e');
+        }
+      }
     }
   }
 
-  void deactivateEmergencyMode() {
+  void deactivateEmergencyMode() async {
     if (_emergencyActive) {
       _emergencyActive = false;
       _emergencyStatusController.add(false);
+      await SOSEventService.endSOSEvent();
     }
   }
 

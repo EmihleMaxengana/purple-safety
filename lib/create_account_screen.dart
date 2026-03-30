@@ -368,7 +368,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Password!!!!!!
+                          // Password
                           const Text(
                             'Password *',
                             style: TextStyle(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'login_screen.dart';
 import 'home/home_screen.dart';
 import 'emergency/emergency_manager.dart';
@@ -21,6 +22,9 @@ class _MainScreenState extends State<MainScreen> {
   bool _isEmergencyMode = false;
   final EmergencyManager _emergencyManager = EmergencyManager();
 
+  // Method channel for background SOS trigger (Android only)
+  static const MethodChannel _channel = MethodChannel('sos_trigger');
+
   @override
   void initState() {
     super.initState();
@@ -28,10 +32,31 @@ class _MainScreenState extends State<MainScreen> {
       setState(() {
         _isEmergencyMode = isEmergency;
         if (isEmergency) {
-          _selectedIndex = 1;
+          _selectedIndex = 1; // Emergency tab
         }
       });
     });
+    _checkSosTrigger();
+  }
+
+  Future<void> _checkSosTrigger() async {
+    try {
+      final triggered = await _channel.invokeMethod('getTriggerStatus');
+      if (triggered == true) {
+        // Navigate to Tools tab (index 3)
+        setState(() {
+          _selectedIndex = 3;
+        });
+        // Optional: show a snackbar or notification
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('SOS triggered from background!')),
+          );
+        }
+      }
+    } catch (e) {
+      // Method not available on iOS, ignore
+    }
   }
 
   late final List<Widget> _pages = <Widget>[

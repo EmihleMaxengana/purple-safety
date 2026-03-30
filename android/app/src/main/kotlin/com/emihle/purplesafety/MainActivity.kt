@@ -1,45 +1,58 @@
 package com.emihle.purplesafety
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.telephony.SmsManager
-import androidx.core.app.ActivityCompat
+import android.content.Intent
+import android.os.Bundle
+import android.util.Log
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.emihle.purplesafety.services.PowerButtonService
+import com.emihle.purplesafety.services.ShakeDetectorService
 
 class MainActivity : FlutterActivity() {
-    private val CHANNEL = "sms_sender"
+    private val CHANNEL = "sos_trigger"
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Check if launched from background trigger
+        if (intent.getBooleanExtra("trigger_sos", false)) {
+            // We'll send the trigger status to Flutter later via method channel
+        }
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "sendSms") {
-                val phoneNumber = call.argument<String>("phoneNumber")
-                val message = call.argument<String>("message")
-
-                if (phoneNumber != null && message != null) {
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
-                        == PackageManager.PERMISSION_GRANTED
-                    ) {
-                        try {
-                            val smsManager = SmsManager.getDefault()
-                            smsManager.sendTextMessage(phoneNumber, null, message, null, null)
-                            result.success(true)
-                        } catch (e: Exception) {
-                            result.error("SMS_FAILED", e.message, null)
-                        }
-                    } else {
-                        result.error("PERMISSION_DENIED", "SEND_SMS permission not granted", null)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getTriggerStatus" -> {
+                        val triggered = intent.getBooleanExtra("trigger_sos", false)
+                        result.success(triggered)
+                        // Clear the flag after reading so it doesn't trigger again
+                        intent.removeExtra("trigger_sos")
                     }
-                } else {
-                    result.error("INVALID_ARGUMENTS", "Phone number or message missing", null)
+                    "setTriggerSettings" -> {
+                        val powerButton = call.argument<Boolean>("powerButton") ?: false
+                        val shake = call.argument<Boolean>("shake") ?: false
+
+                        if (powerButton) {
+                            ContextCompat.startForegroundService(this, Intent(this, PowerButtonService::class.java))
+                        } else {
+                            stopService(Intent(this, PowerButtonService::class.java))
+                        }
+
+                        if (shake) {
+                            ContextCompat.startForegroundService(this, Intent(this, ShakeDetectorService::class.java))
+                        } else {
+                            stopService(Intent(this, ShakeDetectorService::class.java))
+                        }
+                        result.success(true)
+                    }
+                    else -> result.notImplemented()
                 }
-            } else {
-                result.notImplemented()
             }
-        }
     }
 }

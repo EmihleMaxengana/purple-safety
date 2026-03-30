@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:purple_safety/services/biometric_services.dart';
-import 'dart:ui'; // for ImageFilter
+import 'dart:ui';
 import 'main_screen.dart';
 
 class FingerprintSetupScreen extends StatefulWidget {
@@ -203,7 +203,7 @@ class _FingerprintSetupScreenState extends State<FingerprintSetupScreen> {
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              // TODO: Open fingerprint settings (optional)
+              // Optional: open device fingerprint settings
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Go to Settings'),
