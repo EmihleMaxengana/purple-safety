@@ -2,9 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
-import 'package:permission_handler/permission_handler.dart' as permission;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/manage_contacts_modal.dart';
@@ -84,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _countdownTimer;
   Timer? _holdTimer;
   bool _isHolding = false;
-  bool _sosFingerprintEnabled = false;
 
   // Map state
   GoogleMapController? _mapController;
@@ -108,7 +105,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
-  // Custom map style – matches the dark/purple look from your screenshot
+  // Custom map style
   final String _mapStyle = '''
 [
   {
@@ -234,7 +231,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _loadSOSStatus();
     _initLocation();
     _setupDangerZones();
     _listenToContacts();
@@ -270,11 +266,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
       });
     }
-  }
-
-  Future<void> _loadSOSStatus() async {
-    final enabled = await BiometricService.isSOSFingerprintEnabled();
-    setState(() => _sosFingerprintEnabled = enabled);
   }
 
   Future<void> _initLocation() async {
@@ -332,16 +323,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _currentPosition = LatLng(event.latitude!, event.longitude!);
           _isLocationLoading = false;
         });
-        // Do NOT auto-center the map on every location update.
       }
     });
-  }
-
-  Future<void> _retryLocation() async {
-    setState(() => _isLocationLoading = true);
-    await _locationSubscription?.cancel();
-    _locationSubscription = null;
-    await _initLocation();
   }
 
   void _setupDangerZones() {
@@ -363,57 +346,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     };
   }
 
-  void _checkDangerZone(LatLng position) {
-    bool inside = false;
-    for (Polygon polygon in _dangerZones) {
-      if (_pointInPolygon(position, polygon.points.toList())) {
-        inside = true;
-        break;
-      }
-    }
-    if (inside) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⚠️ You are entering a danger zone! Stay alert.'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-        ),
-      );
-    }
-  }
-
-  bool _pointInPolygon(LatLng point, List<LatLng> polygon) {
-    int intersectCount = 0;
-    for (int i = 0; i < polygon.length - 1; i++) {
-      if (_rayCastIntersect(point, polygon[i], polygon[i + 1])) {
-        intersectCount++;
-      }
-    }
-    return (intersectCount % 2) == 1;
-  }
-
-  bool _rayCastIntersect(LatLng point, LatLng vertA, LatLng vertB) {
-    double aY = vertA.latitude;
-    double bY = vertB.latitude;
-    double aX = vertA.longitude;
-    double bX = vertB.longitude;
-
-    if (aY > bY) {
-      double temp = aY;
-      aY = bY;
-      bY = temp;
-      temp = aX;
-      aX = bX;
-      bX = temp;
-    }
-
-    if (point.latitude == aY || point.latitude == bY) return true;
-    if (point.latitude < aY || point.latitude > bY) return false;
-    if (point.longitude > (aX + (point.latitude - aY) / (bY - aY) * (bX - aX)))
-      return true;
-    return false;
-  }
-
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
@@ -429,21 +361,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _handleSOSPress() {
     setState(() => _isHolding = true);
-    _holdTimer = Timer(const Duration(milliseconds: 800), () async {
-      if (_sosFingerprintEnabled) {
-        final authenticated =
-            await BiometricService.triggerSOSWithFingerprint();
-        if (!authenticated) {
-          setState(() => _isHolding = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Fingerprint authentication failed.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
-      }
+    _holdTimer = Timer(const Duration(milliseconds: 800), () {
       _startSOSCountdown();
       setState(() => _isHolding = false);
     });
@@ -534,17 +452,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    final smsStatus = await permission.Permission.sms.request();
-    if (!smsStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('SMS permission required to share location'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     final user = AuthService().getCurrentUser();
     String userName = 'User';
     if (user != null) {
@@ -614,7 +521,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: 8),
-                  // Only the notification icon (removed title and "Protected" badge)
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -654,7 +560,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 16),
 
-                  // SOS button (centered)
+                  // SOS button
                   Center(
                     child: GestureDetector(
                       onTapDown: (_) => _handleSOSPress(),
@@ -728,7 +634,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 24),
 
-                  // LIVE LOCATION section
                   SectionHeader(
                     title: 'LIVE LOCATION',
                     action: 'Full Map →',
@@ -815,7 +720,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 16),
 
-                  // SAFETY ALERTS section with dynamic content
                   SectionHeader(
                     title: 'SAFETY ALERTS',
                     action: 'All →',
@@ -993,7 +897,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMapContent() {
-    // Always show the map, even if location is not ready.
     final LatLng targetPosition = _currentPosition ?? _defaultPosition;
     final bool hasLocation = _currentPosition != null;
 

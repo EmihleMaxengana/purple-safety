@@ -8,6 +8,7 @@ class BiometricService {
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   static const String _sosFingerprintEnabledKey = 'sos_fingerprint_enabled';
+  static const String _userPinKey = 'user_pin';
 
   static Future<bool> isFingerprintAvailable() async {
     try {
@@ -41,6 +42,133 @@ class BiometricService {
       print('Authentication error: $e');
       return false;
     }
+  }
+
+  static Future<bool> authenticateWithPinFallback({
+    required BuildContext context,
+    required String reason,
+  }) async {
+    try {
+      final bool authenticated = await _auth.authenticate(
+        localizedReason: reason,
+      );
+      if (authenticated) return true;
+    } catch (e) {
+      print('Biometric error: $e');
+    }
+    
+    return await _showPinDialog(context, reason);
+  }
+
+  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
+    String enteredPin = '';
+    bool isFirstTime = await _isFirstTimePinSetup();
+    
+    return await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text(isFirstTime ? 'Set Up PIN' : 'Enter PIN'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!isFirstTime)
+              Text(
+                reason,
+                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+            const SizedBox(height: 16),
+            TextField(
+              obscureText: true,
+              maxLength: 6,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 24, letterSpacing: 8),
+              decoration: InputDecoration(
+                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                counterText: '',
+              ),
+              onChanged: (value) {
+                enteredPin = value;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (enteredPin.length != 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a 6-digit PIN'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              if (isFirstTime) {
+                await _savePin(enteredPin);
+                Navigator.pop(context, true);
+              } else {
+                final isValid = await _verifyPin(enteredPin);
+                if (isValid) {
+                  Navigator.pop(context, true);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Invalid PIN. Please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: Text(isFirstTime ? 'Set PIN' : 'Verify'),
+          ),
+        ],
+      ),
+    ).then((value) => value ?? false);
+  }
+
+  static Future<bool> _isFirstTimePinSetup() async {
+    final String? pin = await _storage.read(key: _userPinKey);
+    return pin == null;
+  }
+
+  static Future<void> _savePin(String pin) async {
+    await _storage.write(key: _userPinKey, value: pin);
+  }
+
+  static Future<bool> _verifyPin(String enteredPin) async {
+    final String? storedPin = await _storage.read(key: _userPinKey);
+    return storedPin == enteredPin;
+  }
+
+  static Future<bool> isPinSetup() async {
+    final String? pin = await _storage.read(key: _userPinKey);
+    return pin != null;
+  }
+
+  static Future<bool> resetPin(BuildContext context) async {
+    final authenticated = await authenticateWithPinFallback(
+      context: context,
+      reason: 'Authenticate to change your PIN',
+    );
+    
+    if (authenticated) {
+      await _storage.delete(key: _userPinKey);
+      return await _showPinDialog(context, 'Set up your new PIN');
+    }
+    return false;
   }
 
   static Future<bool> enableSOSFingerprint() async {

@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'login_screen.dart';
-import 'home/home_screen.dart';
-import 'emergency/emergency_manager.dart';
-import 'emergency/emergency_mode_screen.dart';
-import 'app_header.dart';
-import 'community_screen.dart';
-import 'safety_tools_screen.dart';
-import 'settings_screen.dart';
-import 'user_profile_modal.dart';
+import 'package:purple_safety/login_screen.dart';
+import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/emergency/emergency_manager.dart';
+import 'package:purple_safety/emergency/emergency_mode_screen.dart';
+import 'package:purple_safety/app_header.dart';
+import 'package:purple_safety/community_screen.dart';
+import 'package:purple_safety/safety_tools_screen.dart';
+import 'package:purple_safety/settings_screen.dart';
+import 'package:purple_safety/user_profile_modal.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -22,9 +21,6 @@ class _MainScreenState extends State<MainScreen> {
   bool _isEmergencyMode = false;
   final EmergencyManager _emergencyManager = EmergencyManager();
 
-  // Method channel for background SOS trigger (Android only)
-  static const MethodChannel _channel = MethodChannel('sos_trigger');
-
   @override
   void initState() {
     super.initState();
@@ -32,31 +28,10 @@ class _MainScreenState extends State<MainScreen> {
       setState(() {
         _isEmergencyMode = isEmergency;
         if (isEmergency) {
-          _selectedIndex = 1; // Emergency tab
+          _selectedIndex = 1;
         }
       });
     });
-    _checkSosTrigger();
-  }
-
-  Future<void> _checkSosTrigger() async {
-    try {
-      final triggered = await _channel.invokeMethod('getTriggerStatus');
-      if (triggered == true) {
-        // Navigate to Tools tab (index 3)
-        setState(() {
-          _selectedIndex = 3;
-        });
-        // Optional: show a snackbar or notification
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('SOS triggered from background!')),
-          );
-        }
-      }
-    } catch (e) {
-      // Method not available on iOS, ignore
-    }
   }
 
   late final List<Widget> _pages = <Widget>[

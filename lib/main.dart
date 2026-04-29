@@ -4,18 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:purple_safety/login_screen.dart';
 import 'package:purple_safety/main_screen.dart';
-import 'package:purple_safety/services/shake_trigger.dart';
-import 'package:purple_safety/services/presence_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-
-  // Start shake detection (if enabled in settings)
-  await ShakeTrigger.start();
-
-  // Set up lifecycle observer for presence
-  WidgetsBinding.instance.addObserver(_AppLifecycleObserver());
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const PurpleSafetyApp());
@@ -48,16 +40,5 @@ class PurpleSafetyApp extends StatelessWidget {
         },
       ),
     );
-  }
-}
-
-class _AppLifecycleObserver extends WidgetsBindingObserver {
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      PresenceService.setOnline(true);
-    } else if (state == AppLifecycleState.paused) {
-      PresenceService.setOnline(false);
-    }
   }
 }

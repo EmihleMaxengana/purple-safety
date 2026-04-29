@@ -1,22 +1,17 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:local_auth/local_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
-import 'dart:io';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/services/location_sharing_service.dart';
-import 'package:purple_safety/services/sos_alert_service.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
-import 'package:purple_safety/services/sos_event_service.dart'; // <-- Added for SOS event end
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
@@ -54,8 +49,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   List<Contact> _contacts = [];
   String _securityNumber = '10111';
 
-  final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
-
   @override
   void initState() {
     super.initState();
@@ -63,8 +56,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _listenToEmergencyStatus();
     _loadContacts();
     _initLocation();
-    _sendInitialAlerts();
-    _initNotifications();
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -107,25 +98,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     if (state == AppLifecycleState.paused && _cameraController != null) {
       _cameraController!.dispose();
       _cameraController = null;
-    }
-  }
-
-  Future<void> _initNotifications() async {
-    await _requestNotificationPermission();
-    String? token = await _firebaseMessaging.getToken();
-    debugPrint('FCM Token: $token');
-    await _firebaseMessaging.subscribeToTopic('emergency_alerts');
-    debugPrint('Subscribed to topic: emergency_alerts');
-  }
-
-  Future<void> _requestNotificationPermission() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.notification.request();
-      if (status.isGranted) {
-        debugPrint('Notification permission granted');
-      } else {
-        debugPrint('Notification permission denied');
-      }
     }
   }
 
@@ -196,22 +168,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  void _sendInitialAlerts() async {
-    if (_contacts.isNotEmpty && _currentPosition != null) {
-      final link =
-          'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
-      await SOSAlertService.sendAlerts(_contacts, link);
-      debugPrint('Initial SOS alerts sent');
-    }
-  }
-
   Future<void> _resendLocation() async {
     if (_currentPosition != null && _contacts.isNotEmpty) {
       final link =
           'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
-      await SOSAlertService.sendAlerts(_contacts, link);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location resent to contacts')),
+        const SnackBar(content: Text('Location link ready to share')),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,44 +191,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ---------- Helper to trigger SOS if not active ----------
-  Future<bool> _ensureSosActive() async {
-    if (_isEmergencyActive) return true;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Trigger SOS?'),
-        content: const Text(
-          'This action will automatically trigger the SOS button and alert all app users.\n\n'
-          'Do you want to proceed?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Trigger SOS'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      EmergencyManager().activateEmergencyModeLight(contacts: _contacts);
-      await Future.delayed(const Duration(milliseconds: 500));
-      return true;
-    }
-    return false;
-  }
-
   // ---------- Audio Recording ----------
   Future<void> _startAudioRecording() async {
-    if (!await _ensureSosActive()) return;
-
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -309,7 +235,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           context,
         ).showSnackBar(const SnackBar(content: Text('Audio recording saved')));
 
-        // Share audio with everyone
         await _shareFile(path, 'audio');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -321,8 +246,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   // ---------- Video Recording ----------
   Future<void> _recordVideo() async {
-    if (!await _ensureSosActive()) return;
-
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
       ScaffoldMessenger.of(
@@ -356,8 +279,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   // ---------- Live Streaming ----------
   Future<void> _startLiveStreaming() async {
-    if (!await _ensureSosActive()) return;
-
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
       ScaffoldMessenger.of(
@@ -400,12 +321,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _liveStreamRoomId = DateTime.now().millisecondsSinceEpoch.toString();
       _streamUrl = 'https://live.purplesafety.com/room/$_liveStreamRoomId';
 
-      // Send live stream link to everyone via SOSAlertService (global)
-      if (_streamUrl != null) {
-        await SOSAlertService.sendAlerts(_contacts, _streamUrl!);
-      }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stream link sent to all users')),
+        const SnackBar(content: Text('Stream ready to share')),
       );
     } catch (e) {
       debugPrint('Failed to start camera: $e');
@@ -443,13 +360,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     final time = DateTime.now().toLocal().toString();
     final message =
-        '🚨 Emergency evidence: $type recording from $time\n\n'
+        '🚨 Safety recording: $type recording from $time\n\n'
         'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}';
 
     await Share.shareXFiles(
       [XFile(filePath)],
       text: message,
-      subject: 'Purple Safety - Emergency Evidence',
+      subject: 'Purple Safety - Recording',
     );
   }
 
@@ -459,7 +376,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           barrierDismissible: false,
           builder: (context) => AlertDialog(
             title: Text('$type recorded'),
-            content: const Text('Do you want to share it with all users?'),
+            content: const Text('Do you want to share it?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -475,91 +392,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         false;
   }
 
-  // ---------- I'm Safe ----------
-  Future<void> _imSafe() async {
-    bool authenticated = false;
-    try {
-      final localAuth = LocalAuthentication();
-      authenticated = await localAuth.authenticate(
-        localizedReason: 'Confirm you are safe to deactivate SOS',
-      );
-    } catch (e) {
-      debugPrint('Auth error: $e');
-      authenticated = await _showPinDialog();
-    }
-
-    if (authenticated) {
-      // End the SOS event in Firestore
-      await SOSEventService.endSOSEvent(); // <-- Added
-      _stopEmergency();
-      await _sendSafeMessage();
-      EmergencyManager().deactivateEmergencyMode();
-      setState(() {
-        _isEmergencyActive = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ You are marked safe. SOS deactivated.'),
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. SOS remains active.'),
-        ),
-      );
-    }
-  }
-
-  Future<bool> _showPinDialog() async {
-    String? pin;
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Enter PIN to confirm safe'),
-        content: TextField(
-          obscureText: true,
-          maxLength: 4,
-          keyboardType: TextInputType.number,
-          onChanged: (value) => pin = value,
-          decoration: const InputDecoration(hintText: '1234'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, pin == '1234'),
-            child: const Text('Confirm'),
-          ),
-        ],
-      ),
-    );
-    return pin == '1234';
-  }
-
   void _stopEmergency() {
-    LocationSharingService.stopSharing();
     if (_isRecordingAudio) {
       _stopAudioRecording();
     }
     if (_isLiveStreaming) {
       _stopLiveStreaming();
-    }
-  }
-
-  Future<void> _sendSafeMessage() async {
-    if (_contacts.isNotEmpty) {
-      final message = 'I am safe now. SOS deactivated.';
-      for (var contact in _contacts) {
-        await SOSAlertService.sendSMS(contact.phone!, message);
-        if (contact.socialLinks.containsKey('whatsapp')) {
-          await SOSAlertService.sendWhatsApp(contact, message);
-        }
-      }
-      debugPrint('Safe message sent to contacts');
     }
   }
 
@@ -595,7 +433,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               const SizedBox(height: 24),
               _buildSilentModeToggle(),
               const SizedBox(height: 24),
-              _buildImSafeButton(),
+              _buildCallEmergencyButton(),
               const SizedBox(height: 40),
             ],
           ),
@@ -631,7 +469,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           ),
           const SizedBox(height: 12),
           _buildStatusRow(Icons.location_on, 'Location is being shared', true),
-          _buildStatusRow(Icons.notifications_active, 'Alert sent', true),
           _buildStatusRow(Icons.videocam, 'Video recording', _isRecordingVideo),
           _buildStatusRow(Icons.mic, 'Audio recording', _isRecordingAudio),
           _buildStatusRow(Icons.live_tv, 'Live streaming', _isLiveStreaming),
@@ -790,7 +627,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                 ),
               ),
               Text(
-                'Send video/audio to contacts automatically',
+                'Send video/audio automatically',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
@@ -963,22 +800,23 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  Widget _buildImSafeButton() {
+  Widget _buildCallEmergencyButton() {
     return Center(
-      child: ElevatedButton(
-        onPressed: _imSafe,
+      child: ElevatedButton.icon(
+        onPressed: widget.onCallEmergency,
+        icon: const Icon(Icons.phone, color: Colors.white),
+        label: const Text(
+          'Call Emergency Services',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
+          backgroundColor: Colors.red,
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(30),
           ),
         ),
-        child: const Text(
-          'I\'m Safe ✓',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
       ),
-    );
+    );    
   }
 }

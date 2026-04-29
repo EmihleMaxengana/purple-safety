@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -17,34 +18,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
-  // Trigger settings
-  bool _powerButtonTrigger = false;
-  bool _shakeTrigger = false;
-  bool _isAndroid = false;
-  bool _platformChecked = false; // flag to avoid multiple checks
-
   @override
   void initState() {
     super.initState();
     _loadUserData();
-    _loadTriggerSettings();
-    // platform detection moved to didChangeDependencies
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Access Theme only after dependencies are ready
-    if (!_platformChecked) {
-      _platformChecked = true;
-      _checkPlatform();
-    }
-  }
-
-  void _checkPlatform() {
-    _isAndroid = Theme.of(context).platform == TargetPlatform.android;
-    // Force rebuild to show Android‑only UI if needed
-    setState(() {});
   }
 
   Future<void> _loadUserData() async {
@@ -60,39 +37,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = false);
   }
 
-  Future<void> _loadTriggerSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _powerButtonTrigger = prefs.getBool('power_button_trigger') ?? false;
-      _shakeTrigger = prefs.getBool('shake_trigger') ?? false;
-    });
-  }
-
-  Future<void> _saveTriggerSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('power_button_trigger', _powerButtonTrigger);
-    await prefs.setBool('shake_trigger', _shakeTrigger);
-
-    // Communicate with native service to start/stop background services
-    if (_isAndroid) {
-      final platform = MethodChannel('sos_trigger');
-      try {
-        await platform.invokeMethod('setTriggerSettings', {
-          'powerButton': _powerButtonTrigger,
-          'shake': _shakeTrigger,
-        });
-      } catch (e) {
-        debugPrint('Failed to update native services: $e');
-      }
-    }
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Trigger settings saved')));
-  }
-
   Future<void> _saveUserData() async {
-    final authenticated = await BiometricService.authenticate(
+    final authenticated = await BiometricService.authenticateWithPinFallback(
+      context: context,
       reason: 'Authenticate to update your profile',
     );
     if (!authenticated) {
@@ -126,9 +73,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<bool> _requireFingerprint() async {
-    return await BiometricService.authenticate(
-      reason: 'Authenticate to access this setting',
+  Future<bool> _requireAuthentication(String action) async {
+    return await BiometricService.authenticateWithPinFallback(
+      context: context,
+      reason: 'Authenticate to $action',
     );
   }
 
@@ -207,6 +155,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _confirmDeleteAccount() async {
+    final authenticated = await _requireAuthentication('delete your account');
+    if (!authenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed. Account not deleted.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -226,12 +185,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+    
     if (confirm == true) {
       // Delete user from Firebase Auth and Firestore
-      await _auth.logout(); // For now just logout
+      await _auth.logout();
       if (context.mounted) {
-        Navigator.pop(context);
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
       }
+    }
+  }
+
+  Future<void> _logout() async {
+    final authenticated = await _requireAuthentication('log out');
+    if (authenticated) {
+      await _auth.logout();
+      if (context.mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed. Logout cancelled.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -289,98 +274,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 32),
 
-              // SOS Triggers section
-              _buildSectionTitle('SOS Triggers (Android only)'),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1a0f2e),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.purple.withOpacity(0.3)),
-                ),
-                child: Column(
-                  children: [
-                    if (!_isAndroid)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.warning, color: Colors.orange),
-                            SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Background triggers are only available on Android devices.',
-                                style: TextStyle(color: Colors.white70),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    SwitchListTile(
-                      title: const Text(
-                        'Power Button (5 presses)',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      subtitle: const Text(
-                        'Press power button 5 times quickly to trigger SOS',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                      value: _powerButtonTrigger && _isAndroid,
-                      onChanged: _isAndroid
-                          ? (value) {
-                              setState(() => _powerButtonTrigger = value);
-                              _saveTriggerSettings();
-                            }
-                          : null,
-                      activeColor: Colors.red,
-                    ),
-                    SwitchListTile(
-                      title: const Text(
-                        'Shake Phone Hard',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                      subtitle: const Text(
-                        'Shake your phone vigorously to trigger SOS',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                      value: _shakeTrigger && _isAndroid,
-                      onChanged: _isAndroid
-                          ? (value) {
-                              setState(() => _shakeTrigger = value);
-                              _saveTriggerSettings();
-                            }
-                          : null,
-                      activeColor: Colors.red,
-                    ),
-                    if (_isAndroid && (_powerButtonTrigger || _shakeTrigger))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16),
-                        child: Text(
-                          'Note: These features will run a background service.\n'
-                          'Make sure to allow "Ignore battery optimizations" for this app in system settings.',
-                          style: TextStyle(color: Colors.white38, fontSize: 12),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Other settings (protected by fingerprint)
+              // Security section
               _buildSectionTitle('Security'),
               const SizedBox(height: 8),
               _buildSettingTile(
                 icon: Icons.lock,
                 title: 'Change Password',
                 onTap: () async {
-                  if (await _requireFingerprint()) {
+                  if (await _requireAuthentication('change your password')) {
                     _showChangePasswordDialog();
                   }
                 },
@@ -389,7 +290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.fingerprint,
                 title: 'Manage Biometrics',
                 onTap: () async {
-                  if (await _requireFingerprint()) {
+                  if (await _requireAuthentication('manage biometrics')) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Biometrics management (coming soon)'),
@@ -402,21 +303,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.privacy_tip,
                 title: 'Privacy Policy',
                 onTap: () async {
-                  if (await _requireFingerprint()) {
+                  if (await _requireAuthentication('view privacy policy')) {
                     _showPrivacyPolicy();
                   }
                 },
               ),
-              _buildSettingTile(
-                icon: Icons.delete_forever,
-                title: 'Delete Account',
-                color: Colors.red,
-                onTap: () async {
-                  if (await _requireFingerprint()) {
-                    _confirmDeleteAccount();
-                  }
-                },
+
+              const SizedBox(height: 24),
+
+              // Account Actions Row (Logout & Delete Account side by side)
+              _buildSectionTitle('Account Actions'),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildActionButton(
+                      icon: Icons.logout,
+                      label: 'Log Out',
+                      color: Colors.orange,
+                      onTap: _logout,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildActionButton(
+                      icon: Icons.delete_forever,
+                      label: 'Delete Account',
+                      color: Colors.red,
+                      onTap: _confirmDeleteAccount,
+                    ),
+                  ),
+                ],
               ),
+
               const SizedBox(height: 20),
             ],
           ),
@@ -481,6 +400,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           size: 16,
         ),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, color: Colors.white, size: 20),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 2,
       ),
     );
   }
