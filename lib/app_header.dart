@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
-AppBar buildAppHeader({VoidCallback? onAvatarPressed}) {
+AppBar buildAppHeader({
+  VoidCallback? onAvatarPressed,
+  int unreadAlertsCount = 0,
+  VoidCallback? onNotificationPressed,
+}) {
   return AppBar(
     backgroundColor: const Color(0xFF6A1B9A),
     elevation: 0,
@@ -63,6 +67,30 @@ AppBar buildAppHeader({VoidCallback? onAvatarPressed}) {
       ),
     ),
     actions: [
+      // Notification Icon
+      if (onNotificationPressed != null)
+        Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications, color: Colors.white),
+              onPressed: onNotificationPressed,
+            ),
+            if (unreadAlertsCount > 0)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      // User Avatar
       if (onAvatarPressed != null)
         InkWell(
           onTap: onAvatarPressed,

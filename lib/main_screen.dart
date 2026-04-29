@@ -8,6 +8,9 @@ import 'package:purple_safety/community_screen.dart';
 import 'package:purple_safety/safety_tools_screen.dart';
 import 'package:purple_safety/settings_screen.dart';
 import 'package:purple_safety/user_profile_modal.dart';
+import 'package:purple_safety/safety_alerts_screen.dart';
+import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/services/auth_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({Key? key}) : super(key: key);
@@ -20,6 +23,8 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   bool _isEmergencyMode = false;
   final EmergencyManager _emergencyManager = EmergencyManager();
+  final FirestoreService _firestoreService = FirestoreService();
+  int _unreadAlertsCount = 0;
 
   @override
   void initState() {
@@ -32,6 +37,18 @@ class _MainScreenState extends State<MainScreen> {
         }
       });
     });
+    _listenToAlerts();
+  }
+
+  void _listenToAlerts() async {
+    final user = AuthService().getCurrentUser();
+    if (user != null) {
+      _firestoreService.getAlertsStream(user.uid).listen((alerts) {
+        setState(() {
+          _unreadAlertsCount = alerts.where((a) => !a.read).length;
+        });
+      });
+    }
   }
 
   late final List<Widget> _pages = <Widget>[
@@ -72,13 +89,24 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
+  void _openSafetyAlerts() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SafetyAlertsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _isEmergencyMode
           ? const Color(0xFF2D1B47)
           : Colors.white,
-      appBar: buildAppHeader(onAvatarPressed: _showUserProfileModal),
+      appBar: buildAppHeader(
+        onAvatarPressed: _showUserProfileModal,
+        unreadAlertsCount: _unreadAlertsCount,
+        onNotificationPressed: _openSafetyAlerts,
+      ),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,

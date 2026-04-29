@@ -10,7 +10,6 @@ import 'package:purple_safety/add_contact_modal.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
-import 'package:purple_safety/safety_alerts_screen.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -99,8 +98,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Firestore
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _contactsSubscription;
-  StreamSubscription? _alertsSubscription;
-  int _unreadAlertsCount = 0;
 
   // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
@@ -227,6 +224,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 ]
   ''';
+  
+  // Track if map has been centered initially
+  bool _hasCenteredMap = false;
 
   @override
   void initState() {
@@ -234,7 +234,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initLocation();
     _setupDangerZones();
     _listenToContacts();
-    _listenToAlerts();
   }
 
   Future<void> _listenToContacts() async {
@@ -251,19 +250,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } else {
       setState(() {
         _contacts = [];
-      });
-    }
-  }
-
-  void _listenToAlerts() async {
-    final user = AuthService().getCurrentUser();
-    if (user != null) {
-      _alertsSubscription = _firestoreService.getAlertsStream(user.uid).listen((
-        alerts,
-      ) {
-        setState(() {
-          _unreadAlertsCount = alerts.where((a) => !a.read).length;
-        });
       });
     }
   }
@@ -323,6 +309,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _currentPosition = LatLng(event.latitude!, event.longitude!);
           _isLocationLoading = false;
         });
+        // Center map on first location fix only
+        if (!_hasCenteredMap && _mapController != null) {
+          _hasCenteredMap = true;
+          _mapController!.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(target: _currentPosition!, zoom: 14),
+            ),
+          );
+        }
       }
     });
   }
@@ -349,11 +344,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
-
-    if (_currentPosition != null) {
+    
+    // If we already have a position, center the map
+    if (_currentPosition != null && !_hasCenteredMap) {
+      _hasCenteredMap = true;
       controller.moveCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 5.5),
+          CameraPosition(target: _currentPosition!, zoom: 14),
         ),
       );
     }
@@ -498,7 +495,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _locationSubscription?.cancel();
     _mapController?.dispose();
     _contactsSubscription?.cancel();
-    _alertsSubscription?.cancel();
     super.dispose();
   }
 
@@ -520,47 +516,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Stack(
-                        children: [
-                          IconButton(
-                            icon: const Icon(
-                              Icons.notifications,
-                              color: Colors.white70,
-                            ),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const SafetyAlertsScreen(),
-                                ),
-                              );
-                            },
-                          ),
-                          if (_unreadAlertsCount > 0)
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: Container(
-                                width: 8,
-                                height: 8,
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
                   const SizedBox(height: 16),
 
-                  // SOS button
+                  // SOS button (centered) - ONLY TEXT, NO ICON
                   Center(
                     child: GestureDetector(
                       onTapDown: (_) => _handleSOSPress(),
@@ -611,21 +569,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                   },
                                 ),
                               ),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.sos, color: Colors.white, size: 28),
-                                SizedBox(height: 4),
-                                Text(
-                                  'SOS',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                              ],
+                            const Text(
+                              'SOS',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 4,
+                              ),
                             ),
                           ],
                         ),
@@ -634,6 +585,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 24),
 
+                  // LIVE LOCATION section
                   SectionHeader(
                     title: 'LIVE LOCATION',
                     action: 'Full Map →',
@@ -719,99 +671,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  SectionHeader(
-                    title: 'SAFETY ALERTS',
-                    action: 'All →',
-                    onActionTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SafetyAlertsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  StreamBuilder<List<Alert>>(
-                    stream: _firestoreService.getAlertsStream(
-                      AuthService().getCurrentUser()?.uid ?? '',
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const SizedBox(
-                          height: 100,
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 20),
-                          child: Center(
-                            child: Text(
-                              'No alerts yet',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          ),
-                        );
-                      }
-                      final alerts = snapshot.data!;
-                      final recentAlerts = alerts.take(2).toList();
-                      return Column(
-                        children: recentAlerts.map((alert) {
-                          Color color = alert.type == 'warning'
-                              ? Colors.red
-                              : Colors.blue;
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: color.withOpacity(0.05),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: color.withOpacity(0.2)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: color.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    alert.type == 'warning'
-                                        ? Icons.warning
-                                        : Icons.info,
-                                    color: color,
-                                    size: 16,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    alert.message,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                                Text(
-                                  _formatTime(alert.timestamp),
-                                  style: const TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -882,20 +741,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final diff = now.difference(time);
-    if (diff.inDays > 0) {
-      return '${diff.inDays}d ago';
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h ago';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m ago';
-    } else {
-      return 'Just now';
-    }
-  }
-
   Widget _buildMapContent() {
     final LatLng targetPosition = _currentPosition ?? _defaultPosition;
     final bool hasLocation = _currentPosition != null;
@@ -961,7 +806,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return GoogleMap(
       onMapCreated: _onMapCreated,
-      initialCameraPosition: CameraPosition(target: targetPosition, zoom: 5.5),
+      initialCameraPosition: CameraPosition(target: targetPosition, zoom: 14),
       myLocationEnabled: true,
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,

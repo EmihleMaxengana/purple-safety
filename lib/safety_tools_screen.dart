@@ -10,8 +10,14 @@ import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
+import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/services/location_sharing_service.dart';
+import 'package:purple_safety/services/sos_alert_service.dart';
+import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/services/firestore_service.dart';
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
@@ -48,6 +54,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   List<Contact> _contacts = [];
   String _securityNumber = '10111';
+  
+  final FirestoreService _firestoreService = FirestoreService();
 
   @override
   void initState() {
@@ -189,6 +197,136 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     } else {
       debugPrint('Could not call $number');
     }
+  }
+
+  // ---------- I'm Safe Function ----------
+  Future<void> _imSafe() async {
+    // Require authentication for safety
+    final authenticated = await BiometricService.authenticateWithPinFallback(
+      context: context,
+      reason: 'Confirm you are safe to deactivate SOS',
+    );
+
+    if (!authenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed. SOS remains active.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Get current user info
+    final user = AuthService().getCurrentUser();
+    String userName = 'Someone';
+    if (user != null) {
+      final userData = await AuthService().getUserData(user.uid);
+      userName = userData?['name'] ?? 'A user';
+    }
+
+    // Stop location sharing if active
+    if (LocationSharingService.isSharing) {
+      LocationSharingService.stopSharing();
+    }
+
+    // Stop any ongoing recordings
+    if (_isRecordingAudio) {
+      await _stopAudioRecording();
+    }
+    if (_isLiveStreaming) {
+      await _stopLiveStreaming();
+    }
+
+    // Send in-app safe alert to ALL users
+    await _sendGlobalSafeAlert(userName);
+
+    // Send SMS to trusted contacts
+    await _sendSafeMessageToContacts();
+
+    // Deactivate emergency mode
+    EmergencyManager().deactivateEmergencyMode();
+
+    setState(() {
+      _isEmergencyActive = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('✅ You are marked safe. All users have been notified.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  // Send in-app alert to ALL users (like SOS alert)
+  Future<void> _sendGlobalSafeAlert(String userName) async {
+    try {
+      final locationLink = _currentPosition != null
+          ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
+          : 'Location unavailable';
+      
+      final message = '✅ SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
+      
+      // Save to global_alerts collection for all users to see
+      await FirebaseFirestore.instance.collection('global_alerts').add({
+        'timestamp': FieldValue.serverTimestamp(),
+        'message': message,
+        'type': 'safe', // Different from 'emergency' type
+        'userName': userName,
+        'locationLink': locationLink,
+      });
+      
+      // Also add to each user's personal alerts collection
+      // Get all users and add alert to their collections
+      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final batch = FirebaseFirestore.instance.batch();
+      
+      for (var userDoc in usersSnapshot.docs) {
+        final alertRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('alerts')
+            .doc();
+        
+        batch.set(alertRef, {
+          'message': message,
+          'type': 'safe',
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+      
+      await batch.commit();
+      debugPrint('Global safe alert sent to all ${usersSnapshot.docs.length} users');
+      
+    } catch (e) {
+      debugPrint('Error sending global safe alert: $e');
+    }
+  }
+
+  // Send SMS to trusted contacts only
+  Future<void> _sendSafeMessageToContacts() async {
+    if (_contacts.isEmpty) return;
+
+    final message = 'I am safe now. SOS has been deactivated.';
+    final locationLink = _currentPosition != null
+        ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
+        : 'Location unavailable';
+
+    final fullMessage = '$message\nFinal location: $locationLink';
+
+    for (var contact in _contacts) {
+      // Send SMS
+      if (contact.phone != null && contact.phone!.isNotEmpty) {
+        await SOSAlertService.sendSMS(contact.phone!, fullMessage);
+      }
+      // Send WhatsApp if available
+      if (contact.socialLinks.containsKey('whatsapp')) {
+        await SOSAlertService.sendWhatsApp(contact, fullMessage);
+      }
+    }
+    debugPrint('Safe message sent to ${_contacts.length} contacts');
   }
 
   // ---------- Audio Recording ----------
@@ -433,7 +571,18 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               const SizedBox(height: 24),
               _buildSilentModeToggle(),
               const SizedBox(height: 24),
-              _buildCallEmergencyButton(),
+              // Action Buttons Row: Call Emergency & I'm Safe
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildCallEmergencyButton(),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildImSafeButton(),
+                  ),
+                ],
+              ),
               const SizedBox(height: 40),
             ],
           ),
@@ -801,22 +950,48 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   Widget _buildCallEmergencyButton() {
-    return Center(
-      child: ElevatedButton.icon(
-        onPressed: widget.onCallEmergency,
-        icon: const Icon(Icons.phone, color: Colors.white),
-        label: const Text(
-          'Call Emergency Services',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-          ),
+    return ElevatedButton.icon(
+      onPressed: widget.onCallEmergency,
+      icon: const Icon(Icons.phone, color: Colors.white, size: 20),
+      label: const Text(
+        'Call Emergency',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
         ),
       ),
-    );    
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.red,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 2,
+      ),
+    );
+  }
+
+  Widget _buildImSafeButton() {
+    return ElevatedButton.icon(
+      onPressed: _imSafe,
+      icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
+      label: const Text(
+        "I'm Safe ✓",
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        elevation: 2,
+      ),
+    );
   }
 }
