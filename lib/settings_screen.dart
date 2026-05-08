@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/login_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -22,6 +24,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _phoneController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadUserData() async {
@@ -97,11 +106,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               obscureText: true,
               decoration: const InputDecoration(labelText: 'Current Password'),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: newPasswordController,
               obscureText: true,
               decoration: const InputDecoration(labelText: 'New Password'),
             ),
+            const SizedBox(height: 12),
             TextField(
               controller: confirmController,
               obscureText: true,
@@ -118,13 +129,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              // Implement password change via Firebase Auth (requires re-authentication)
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Password change feature coming soon'),
-                ),
-              );
-              Navigator.pop(context);
+              if (newPasswordController.text != confirmController.text) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Passwords do not match'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              if (newPasswordController.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Password must be at least 6 characters'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              try {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user != null && user.email != null) {
+                  // Show loading
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (context) => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                  
+                  // Re-authenticate first
+                  final credential = EmailAuthProvider.credential(
+                    email: user.email!,
+                    password: currentPasswordController.text,
+                  );
+                  await user.reauthenticateWithCredential(credential);
+                  
+                  // Update password
+                  await user.updatePassword(newPasswordController.text);
+                  
+                  // Close loading dialog
+                  Navigator.pop(context);
+                  
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Password changed successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  Navigator.pop(context);
+                }
+              } on FirebaseAuthException catch (e) {
+                // Close loading dialog if open
+                if (Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: ${e.message}'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             child: const Text('Change'),
           ),
@@ -171,7 +240,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Delete Account'),
         content: const Text(
-          'This action is permanent and cannot be undone. Are you sure?',
+          '⚠️ WARNING: This action is PERMANENT and CANNOT be undone.\n\n'
+          'All your data will be deleted:\n'
+          '• Your profile information\n'
+          '• Your trusted contacts\n'
+          '• Your safety alerts\n'
+          '• Your account credentials\n\n'
+          'You will need to create a new account to use the app again.\n\n'
+          'Are you absolutely sure?',
         ),
         actions: [
           TextButton(
@@ -180,22 +256,259 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete Permanently'),
           ),
         ],
       ),
     );
     
     if (confirm == true) {
-      // Delete user from Firebase Auth and Firestore
-      await _auth.logout();
-      if (context.mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (route) => false,
+      await _deleteAccount();
+    }
+  }
+
+  Future<String?> _showPasswordDialog() async {
+    String password = '';
+    
+    return await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Confirm Deletion'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.warning_amber, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'WARNING: This action is permanent!',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'All your data will be permanently deleted.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    obscureText: true,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Enter your password to confirm',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock),
+                    ),
+                    onChanged: (value) {
+                      password = value;
+                      // This rebuilds the dialog to enable/disable the button
+                      setState(() {});
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: password.isEmpty 
+                      ? null 
+                      : () => Navigator.pop(context, password),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                  child: const Text('Delete Forever'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteAccount() async {
+    setState(() => _isLoading = true);
+    
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      
+      if (user != null && user.email != null) {
+        // Show password dialog for re-authentication
+        final password = await _showPasswordDialog();
+        
+        if (password == null) {
+          setState(() => _isLoading = false);
+          return;
+        }
+        
+        // Show loading indicator
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
+                  Text(
+                    'Deleting account...',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        
+        // Re-authenticate user with password
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        
+        await user.reauthenticateWithCredential(credential);
+        
+        // 1. Delete user data from Firestore
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+        
+        // 2. Delete all contacts subcollection
+        final contactsSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('contacts')
+            .get();
+        
+        if (contactsSnapshot.docs.isNotEmpty) {
+          final batch = FirebaseFirestore.instance.batch();
+          for (var doc in contactsSnapshot.docs) {
+            batch.delete(doc.reference);
+          }
+          await batch.commit();
+        }
+        
+        // 3. Delete all alerts subcollection
+        final alertsSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('alerts')
+            .get();
+        
+        if (alertsSnapshot.docs.isNotEmpty) {
+          final alertsBatch = FirebaseFirestore.instance.batch();
+          for (var doc in alertsSnapshot.docs) {
+            alertsBatch.delete(doc.reference);
+          }
+          await alertsBatch.commit();
+        }
+        
+        // 4. Clear all local storage (SharedPreferences)
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+        
+        // 5. Delete the Firebase Auth user account - THIS IS WHAT PREVENTS LOGIN
+        await user.delete();
+        
+        // Close loading dialog
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account permanently deleted'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        
+        // Navigate to login with animation
+        if (mounted) {
+          await _navigateToLoginWithAnimation();
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+      
+      // Close loading dialog if open
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      if (e.code == 'wrong-password') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Incorrect password. Account not deleted.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else if (e.code == 'requires-recent-login') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please log out and log in again before deleting your account'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 4),
+          ),
+        );
+      } else if (e.code == 'user-not-found') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account already deleted or not found'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        await _navigateToLoginWithAnimation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      
+      // Close loading dialog if open
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _navigateToLoginWithAnimation() async {
+    if (mounted) {
+      // Animated transition to login screen
+      Navigator.pushAndRemoveUntil(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(1.0, 0.0);
+            const end = Offset.zero;
+            const curve = Curves.easeInOut;
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var offsetAnimation = animation.drive(tween);
+            return SlideTransition(position: offsetAnimation, child: child);
+          },
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+        (route) => false,
+      );
     }
   }
 
@@ -206,7 +519,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (context.mounted) {
         Navigator.pushAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 1.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOut;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
+          ),
           (route) => false,
         );
       }
@@ -231,113 +554,141 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Settings',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Settings',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Profile section
-              _buildSectionTitle('Profile Information'),
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _emailController,
-                label: 'Email',
-                icon: Icons.email,
-              ),
-              const SizedBox(height: 12),
-              _buildTextField(
-                controller: _phoneController,
-                label: 'Phone Number',
-                icon: Icons.phone,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isLoading ? null : _saveUserData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF6A1B9A),
-                  minimumSize: const Size(double.infinity, 48),
+                // Profile section
+                _buildSectionTitle('Profile Information'),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _emailController,
+                  label: 'Email',
+                  icon: Icons.email,
                 ),
-                child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('Save Changes'),
-              ),
+                const SizedBox(height: 12),
+                _buildTextField(
+                  controller: _phoneController,
+                  label: 'Phone Number',
+                  icon: Icons.phone,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _saveUserData,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6A1B9A),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator()
+                      : const Text('Save Changes'),
+                ),
 
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // Security section
-              _buildSectionTitle('Security'),
-              const SizedBox(height: 8),
-              _buildSettingTile(
-                icon: Icons.lock,
-                title: 'Change Password',
-                onTap: () async {
-                  if (await _requireAuthentication('change your password')) {
-                    _showChangePasswordDialog();
-                  }
-                },
-              ),
-              _buildSettingTile(
-                icon: Icons.fingerprint,
-                title: 'Manage Biometrics',
-                onTap: () async {
-                  if (await _requireAuthentication('manage biometrics')) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Biometrics management (coming soon)'),
+                // Security section
+                _buildSectionTitle('Security'),
+                const SizedBox(height: 8),
+                _buildSettingTile(
+                  icon: Icons.lock,
+                  title: 'Change Password',
+                  onTap: () async {
+                    if (await _requireAuthentication('change your password')) {
+                      _showChangePasswordDialog();
+                    }
+                  },
+                ),
+                _buildSettingTile(
+                  icon: Icons.fingerprint,
+                  title: 'Manage Biometrics',
+                  onTap: () async {
+                    if (await _requireAuthentication('manage biometrics')) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Biometrics management (coming soon)'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                _buildSettingTile(
+                  icon: Icons.privacy_tip,
+                  title: 'Privacy Policy',
+                  onTap: () async {
+                    if (await _requireAuthentication('view privacy policy')) {
+                      _showPrivacyPolicy();
+                    }
+                  },
+                ),
+
+                const SizedBox(height: 24),
+
+                // Account Actions Row (Logout & Delete Account side by side)
+                _buildSectionTitle('Account Actions'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildActionButton(
+                        icon: Icons.logout,
+                        label: 'Log Out',
+                        color: Colors.orange,
+                        onTap: _logout,
                       ),
-                    );
-                  }
-                },
-              ),
-              _buildSettingTile(
-                icon: Icons.privacy_tip,
-                title: 'Privacy Policy',
-                onTap: () async {
-                  if (await _requireAuthentication('view privacy policy')) {
-                    _showPrivacyPolicy();
-                  }
-                },
-              ),
-
-              const SizedBox(height: 24),
-
-              // Account Actions Row (Logout & Delete Account side by side)
-              _buildSectionTitle('Account Actions'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.logout,
-                      label: 'Log Out',
-                      color: Colors.orange,
-                      onTap: _logout,
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.delete_forever,
-                      label: 'Delete Account',
-                      color: Colors.red,
-                      onTap: _confirmDeleteAccount,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildActionButton(
+                        icon: Icons.delete_forever,
+                        label: 'Delete Account',
+                        color: Colors.red,
+                        onTap: _confirmDeleteAccount,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
 
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+                
+                // Warning note about account deletion
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Deleting your account is permanent. All your data will be lost and you will need to create a new account.',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

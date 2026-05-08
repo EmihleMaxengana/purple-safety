@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:purple_safety/services/sos_event_service.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// import 'package:geolocator/geolocator.dart';
+import 'package:share_plus/share_plus.dart';
+import 'models/incident_model.dart';
+import 'services/incident_service.dart';
+import 'incidents/incident_detail_screen.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);
@@ -14,138 +13,16 @@ class CommunityScreen extends StatefulWidget {
 }
 
 class _CommunityScreenState extends State<CommunityScreen> {
-  final TextEditingController _messageController = TextEditingController();
-  GoogleMapController? _mapController;
-  bool _isLoading = false;
-
-  // Data
-  DocumentSnapshot? _activeSOS;
-  List<QueryDocumentSnapshot> _activeMembers = [];
-  List<dynamic> _policeStations = [];
-  List<Map<String, dynamic>> _chatMessages = [];
-
-  // Markers
-  final Set<Marker> _markers = {};
-
-  // Google Places API key – replace with your own
-  static const String _placesApiKey = 'AIzaSyBKIeas0psJ9fDlQD18EXW9mtKSBKIi78k';
-
-  @override
-  void initState() {
-    super.initState();
-    _listenToSOS();
-  }
-
-  void _listenToSOS() {
-    SOSEventService.getActiveSOS().listen((sos) {
-      setState(() {
-        _activeSOS = sos;
-        if (sos != null) {
-          _loadPoliceStations(sos);
-          _listenToActiveMembers();
-          _listenToChat(sos.id);
-        } else {
-          _activeMembers = [];
-          _policeStations = [];
-          _chatMessages = [];
-          _markers.clear();
-        }
-      });
-    });
-  }
-
-  void _listenToActiveMembers() {
-    SOSEventService.getActiveMembers().listen((members) {
-      setState(() {
-        _activeMembers = members;
-        _updateMarkers();
-      });
-    });
-  }
-
-  void _listenToChat(String sosEventId) {
-    SOSEventService.getChatMessages(sosEventId).listen((messages) {
-      setState(() {
-        _chatMessages = messages;
-      });
-    });
-  }
-
-  Future<void> _loadPoliceStations(DocumentSnapshot sos) async {
-    final data = sos.data() as Map<String, dynamic>;
-    final location = data['location'] as GeoPoint;
-    final lat = location.latitude;
-    final lng = location.longitude;
-
-    final results = await SOSEventService.fetchNearbyPoliceStations(
-      lat,
-      lng,
-      _placesApiKey,
-    );
-    setState(() {
-      _policeStations = results;
-      _updateMarkers();
-    });
-  }
-
-  void _updateMarkers() {
-    if (_activeSOS == null) return;
-
-    final markers = <Marker>{};
-
-    // SOS user (purple)
-    final sosData = _activeSOS!.data() as Map<String, dynamic>;
-    final sosLoc = sosData['location'] as GeoPoint;
-    markers.add(
-      Marker(
-        markerId: const MarkerId('sos_user'),
-        position: LatLng(sosLoc.latitude, sosLoc.longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-        infoWindow: const InfoWindow(title: 'SOS Triggered'),
-      ),
-    );
-
-    // Active members (green)
-    for (var member in _activeMembers) {
-      final memberData = member.data() as Map<String, dynamic>;
-      final loc = memberData['currentLocation'] as GeoPoint?;
-      if (loc != null) {
-        markers.add(
-          Marker(
-            markerId: MarkerId(member.id),
-            position: LatLng(loc.latitude, loc.longitude),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueGreen,
-            ),
-            infoWindow: InfoWindow(
-              title: memberData['name'] ?? 'Active Member',
-            ),
-          ),
-        );
-      }
-    }
-
-    // Police stations (blue)
-    for (var station in _policeStations) {
-      final loc = station['geometry']['location'];
-      final name = station['name'];
-      markers.add(
-        Marker(
-          markerId: MarkerId(name),
-          position: LatLng(loc['lat'], loc['lng']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueAzure,
-          ),
-          infoWindow: InfoWindow(title: name),
-        ),
-      );
-    }
-
-    setState(() {
-      _markers.clear();
-      _markers.addAll(markers);
-    });
-  }
+  final IncidentService _incidentService = IncidentService();
+  String _selectedFilter = 'all';
+  
+  final Map<String, String> _filterLabels = {
+    'all': 'All',
+    'missingPerson': 'Missing',
+    'harassment': 'Harassment',
+    'crime': 'Crime',
+    'accident': 'Accident',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -157,135 +34,315 @@ class _CommunityScreenState extends State<CommunityScreen> {
           colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
         ),
       ),
-      child: _activeSOS == null
-          ? const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.public, color: Colors.white70, size: 80),
-                  SizedBox(height: 20),
-                  Text(
-                    'No active SOS',
-                    style: TextStyle(color: Colors.white70, fontSize: 18),
-                  ),
-                  Text(
-                    'When an SOS is triggered, you can see the location and chat here.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white54, fontSize: 14),
-                  ),
-                ],
-              ),
-            )
-          : Column(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: GoogleMap(
-                    onMapCreated: (ctrl) => _mapController = ctrl,
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(
-                        (_activeSOS!.data() as Map<String, dynamic>)['location']
-                            .latitude,
-                        (_activeSOS!.data() as Map<String, dynamic>)['location']
-                            .longitude,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          title: const Text('Community Reports'),
+          backgroundColor: const Color(0xFF6A1B9A),
+          foregroundColor: Colors.white,
+        ),
+        body: Column(
+          children: [
+            Container(
+              height: 50,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: _filterLabels.entries.map((entry) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: FilterChip(
+                      label: Text(entry.value),
+                      selected: _selectedFilter == entry.key,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = entry.key;
+                        });
+                      },
+                      backgroundColor: Colors.white.withOpacity(0.1),
+                      selectedColor: const Color(0xFF6A1B9A),
+                      labelStyle: TextStyle(
+                        color: _selectedFilter == entry.key ? Colors.white : Colors.white70,
                       ),
-                      zoom: 13,
                     ),
-                    markers: _markers,
-                    myLocationEnabled: true,
-                    zoomControlsEnabled: true,
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Container(
-                    color: Colors.black54,
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: ListView.builder(
-                            reverse: true,
-                            itemCount: _chatMessages.length,
-                            itemBuilder: (context, index) {
-                              final msg = _chatMessages[index];
-                              return ListTile(
-                                title: Text(
-                                  msg['userName'],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  msg['message'],
-                                  style: const TextStyle(color: Colors.white70),
-                                ),
-                                trailing: Text(
-                                  _formatTime(msg['timestamp']),
-                                  style: const TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1a0f2e),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _messageController,
-                                  style: const TextStyle(color: Colors.white),
-                                  decoration: InputDecoration(
-                                    hintText: 'Write a comment...',
-                                    hintStyle: const TextStyle(
-                                      color: Colors.white38,
-                                    ),
-                                    border: InputBorder.none,
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.send,
-                                  color: Colors.white70,
-                                ),
-                                onPressed: _sendMessage,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+                  );
+                }).toList(),
+              ),
             ),
+            Expanded(
+              child: StreamBuilder<List<Incident>>(
+                stream: _selectedFilter == 'all'
+                    ? _incidentService.getAllIncidents()
+                    : _incidentService.getIncidentsByType(
+                        IncidentType.values.firstWhere(
+                          (e) => e.toString() == 'IncidentType.$_selectedFilter',
+                          orElse: () => IncidentType.other,
+                        ),
+                      ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.report, size: 64, color: Colors.white38),
+                          SizedBox(height: 16),
+                          Text(
+                            'No reports yet',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Tap the + button to report an incident',
+                            style: TextStyle(color: Colors.white38),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  
+                  final incidents = snapshot.data!;
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(8),
+                    itemCount: incidents.length,
+                    itemBuilder: (context, index) {
+                      final incident = incidents[index];
+                      return _buildIncidentCard(incident);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) return;
-    final msg = _messageController.text.trim();
-    await SOSEventService.sendMessage(_activeSOS!.id, msg);
-    _messageController.clear();
+  Widget _buildIncidentCard(Incident incident) {
+    Color typeColor = _getTypeColor(incident.type);
+    
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: const Color(0xFF1a0f2e),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => IncidentDetailScreen(incident: incident),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: typeColor.withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      _getTypeLabel(incident.type),
+                      style: TextStyle(color: typeColor, fontSize: 10),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    _formatTime(incident.timestamp),
+                    style: const TextStyle(color: Colors.white38, fontSize: 10),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              Text(
+                incident.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              
+              Text(
+                incident.description.length > 100
+                    ? '${incident.description.substring(0, 100)}...'
+                    : incident.description,
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              
+              if (incident.type == IncidentType.missingPerson && incident.missingPersonName != null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.person_search, color: Colors.orange, size: 16),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'MISSING: ${incident.missingPersonName}',
+                          style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 8),
+              
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.white54, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      incident.location,
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              Row(
+                children: [
+                  const Icon(Icons.person, color: Colors.white54, size: 12),
+                  const SizedBox(width: 4),
+                  Text(
+                    incident.isAnonymous ? 'Anonymous' : (incident.userName ?? 'User'),
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              Row(
+                children: [
+                  _buildActionButton(
+                    icon: Icons.comment,
+                    label: '${incident.commentCount}',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => IncidentDetailScreen(incident: incident),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  _buildActionButton(
+                    icon: Icons.share,
+                    label: '${incident.shareCount}',
+                    onTap: () => _shareIncident(incident),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
-  String _formatTime(dynamic timestamp) {
-    if (timestamp == null) return '';
-    final DateTime time = timestamp.toDate();
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFFBF7DCB), size: 18),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getTypeColor(IncidentType type) {
+    switch (type) {
+      case IncidentType.missingPerson:
+        return Colors.orange;
+      case IncidentType.harassment:
+        return Colors.purple;
+      case IncidentType.crime:
+        return Colors.red;
+      case IncidentType.accident:
+        return Colors.yellow;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getTypeLabel(IncidentType type) {
+    switch (type) {
+      case IncidentType.missingPerson:
+        return 'Missing Person';
+      case IncidentType.harassment:
+        return 'Harassment';
+      case IncidentType.crime:
+        return 'Crime';
+      case IncidentType.accident:
+        return 'Accident';
+      default:
+        return 'Other';
+    }
+  }
+
+  String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
     if (diff.inDays > 0) return '${diff.inDays}d ago';
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  Future<void> _shareIncident(Incident incident) async {
+    final message = '''
+🚨 ${incident.title}
+
+${incident.description}
+
+📍 Location: ${incident.location}
+📅 Reported: ${_formatTime(incident.timestamp)}
+👤 Reported by: ${incident.isAnonymous ? 'Anonymous' : incident.userName ?? 'User'}
+
+${incident.type == IncidentType.missingPerson ? '🔍 MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
+Please share to help spread awareness.
+''';
+    
+    await Share.share(message);
+    await _incidentService.shareIncident(incident.id);
+    
+    setState(() {});
   }
 }

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/incidents/incident_detail_screen.dart';
+import 'package:purple_safety/services/incident_service.dart';
 
 class SafetyAlertsScreen extends StatefulWidget {
   const SafetyAlertsScreen({Key? key}) : super(key: key);
@@ -12,6 +14,26 @@ class SafetyAlertsScreen extends StatefulWidget {
 class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
   final FirestoreService _firestoreService = FirestoreService();
   final AuthService _auth = AuthService();
+  final IncidentService _incidentService = IncidentService();
+
+  Future<void> _onAlertTap(Alert alert) async {
+    final user = _auth.getCurrentUser();
+    if (user != null) {
+      await _firestoreService.markAlertAsRead(user.uid, alert.id);
+    }
+    
+    if (alert.type == 'incident' && alert.incidentId != null) {
+      final incident = await _incidentService.getIncident(alert.incidentId!);
+      if (incident != null && mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => IncidentDetailScreen(incident: incident),
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -69,63 +91,77 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                 final alert = alerts[index];
                 Color color = alert.type == 'warning'
                     ? Colors.red
+                    : alert.type == 'incident'
+                    ? Colors.orange
                     : Colors.blue;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: color.withOpacity(0.2)),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          alert.type == 'warning' ? Icons.warning : Icons.info,
-                          color: color,
-                          size: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              alert.message,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _formatTime(alert.timestamp),
-                              style: const TextStyle(
-                                color: Colors.white38,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (!alert.read)
+                
+                IconData icon = alert.type == 'warning'
+                    ? Icons.warning
+                    : alert.type == 'incident'
+                    ? Icons.report
+                    : Icons.info;
+                
+                return GestureDetector(
+                  onTap: () => _onAlertTap(alert),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
                         Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(icon, color: color, size: 16),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                alert.message,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatTime(alert.timestamp),
+                                style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                    ],
+                        if (!alert.read)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        if (alert.type == 'incident')
+                          const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white38,
+                            size: 14,
+                          ),
+                      ],
+                    ),
                   ),
                 );
               },

@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/home/home_screen.dart'; // for Contact model
+import 'package:purple_safety/home/home_screen.dart';
 
 class Alert {
   final String id;
   final String message;
-  final String type; // 'warning', 'info', etc.
+  final String type;
   final DateTime timestamp;
   bool read;
+  final String? incidentId;
+  final String? incidentTitle;
 
   Alert({
     required this.id,
@@ -14,6 +16,8 @@ class Alert {
     required this.type,
     required this.timestamp,
     this.read = false,
+    this.incidentId,
+    this.incidentTitle,
   });
 
   factory Alert.fromFirestore(DocumentSnapshot doc) {
@@ -24,6 +28,8 @@ class Alert {
       type: data['type'],
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       read: data['read'] ?? false,
+      incidentId: data['incidentId'],
+      incidentTitle: data['incidentTitle'],
     );
   }
 
@@ -33,6 +39,8 @@ class Alert {
       'type': type,
       'timestamp': Timestamp.fromDate(timestamp),
       'read': read,
+      'incidentId': incidentId,
+      'incidentTitle': incidentTitle,
     };
   }
 }
@@ -40,7 +48,6 @@ class Alert {
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Contacts subcollection for a user
   Stream<List<Contact>> getContactsStream(String userId) {
     return _firestore
         .collection('users')
@@ -53,7 +60,6 @@ class FirestoreService {
         );
   }
 
-  // Add a contact
   Future<void> addContact(String userId, Contact contact) async {
     await _firestore
         .collection('users')
@@ -63,7 +69,6 @@ class FirestoreService {
         .set(contact.toFirestore());
   }
 
-  // Delete a contact
   Future<void> deleteContact(String userId, String contactId) async {
     await _firestore
         .collection('users')
@@ -73,7 +78,6 @@ class FirestoreService {
         .delete();
   }
 
-  // Update a contact (if needed)
   Future<void> updateContact(String userId, Contact contact) async {
     await _firestore
         .collection('users')
@@ -83,16 +87,6 @@ class FirestoreService {
         .update(contact.toFirestore());
   }
 
-  // Save an SOS alert
-  Future<void> saveAlert(String userId, Map<String, dynamic> alertData) async {
-    await _firestore.collection('alerts').add({
-      'userId': userId,
-      'timestamp': FieldValue.serverTimestamp(),
-      ...alertData,
-    });
-  }
-
-  // NEW: Alerts subcollection for a user
   Stream<List<Alert>> getAlertsStream(String userId) {
     return _firestore
         .collection('users')
@@ -104,6 +98,15 @@ class FirestoreService {
           (snapshot) =>
               snapshot.docs.map((doc) => Alert.fromFirestore(doc)).toList(),
         );
+  }
+
+  Future<void> markAlertAsRead(String userId, String alertId) async {
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('alerts')
+        .doc(alertId)
+        .update({'read': true});
   }
 
   Future<void> markAllAlertsAsRead(String userId) async {
@@ -118,21 +121,5 @@ class FirestoreService {
       batch.update(doc.reference, {'read': true});
     }
     await batch.commit();
-  }
-
-  Future<void> addAlert(String userId, String message, String type) async {
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('alerts')
-        .add(
-          Alert(
-            id: '',
-            message: message,
-            type: type,
-            timestamp: DateTime.now(),
-            read: false,
-          ).toFirestore(),
-        );
   }
 }

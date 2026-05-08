@@ -91,24 +91,37 @@ class LocationSharingService {
         debugPrint('SMS sent to $phoneNumber');
       } catch (e) {
         debugPrint('Failed to send SMS via method channel: $e');
-        // fallback to URL launcher
         final url = 'sms:$phoneNumber?body=${Uri.encodeComponent(message)}';
         await _launchUrl(url);
       }
     } else {
-      // iOS: open SMS app
       final url = 'sms:$phoneNumber?body=${Uri.encodeComponent(message)}';
       await _launchUrl(url);
     }
   }
 
+  // FIXED WhatsApp method
   static Future<void> _sendWhatsApp(Contact contact, String message) async {
     final String? whatsapp = contact.socialLinks['whatsapp'];
     if (whatsapp == null || whatsapp.isEmpty) return;
+    
+    // Extract only digits
     String phone = whatsapp.replaceAll(RegExp(r'\D'), '');
     if (phone.isEmpty) return;
-    final String url =
-        'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
+    
+    // Remove leading zero if present
+    if (phone.startsWith('0')) {
+      phone = phone.substring(1);
+    }
+    
+    // Add South Africa country code if not already there
+    if (!phone.startsWith('27') && phone.length <= 9) {
+      phone = '27$phone';
+    }
+    
+    final String url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
+    debugPrint('WhatsApp URL: $url');
+    
     await _launchUrl(url);
   }
 

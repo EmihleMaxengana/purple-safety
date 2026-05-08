@@ -83,13 +83,30 @@ class SOSAlertService {
     }
   }
 
+  // FIXED WhatsApp method
   static Future<void> sendWhatsApp(Contact contact, String message) async {
     final String? whatsapp = contact.socialLinks['whatsapp'];
     if (whatsapp == null || whatsapp.isEmpty) return;
+    
+    // Extract only digits and ensure proper format
     String phone = whatsapp.replaceAll(RegExp(r'\D'), '');
     if (phone.isEmpty) return;
-    final String url =
-        'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
+    
+    // Remove leading zero if present (ZA numbers start with 0 for local)
+    if (phone.startsWith('0')) {
+      phone = phone.substring(1);
+    }
+    
+    // Add South Africa country code (27) if not already there
+    if (!phone.startsWith('27') && phone.length <= 9) {
+      phone = '27$phone';
+    }
+    
+    // Final format: just numbers, no + or spaces
+    final String url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
+    
+    debugPrint('WhatsApp URL: $url'); // For debugging
+    
     await _launchUrl(url);
   }
 
@@ -99,6 +116,8 @@ class SOSAlertService {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     } else {
       debugPrint('Could not launch $url');
+      // Show user-friendly message
+      // Fallback to SMS if WhatsApp not available
     }
   }
 }

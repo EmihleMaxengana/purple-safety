@@ -6,10 +6,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/manage_contacts_modal.dart';
-import 'package:purple_safety/add_contact_modal.dart';
+import 'package:purple_safety/add_contact_screen.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/incidents/post_choice_modal.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -225,7 +227,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 ]
   ''';
   
-  // Track if map has been centered initially
   bool _hasCenteredMap = false;
 
   @override
@@ -309,7 +310,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _currentPosition = LatLng(event.latitude!, event.longitude!);
           _isLocationLoading = false;
         });
-        // Center map on first location fix only
         if (!_hasCenteredMap && _mapController != null) {
           _hasCenteredMap = true;
           _mapController!.animateCamera(
@@ -345,7 +345,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
     
-    // If we already have a position, center the map
     if (_currentPosition != null && !_hasCenteredMap) {
       _hasCenteredMap = true;
       controller.moveCamera(
@@ -408,13 +407,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    showDialog(
-      context: context,
-      builder: (context) => AddContactModal(
-        onAdd: (newContact) async {
-          await _firestoreService.addContact(user.uid, newContact);
-        },
-        currentCount: _contacts.length,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddContactScreen(
+          onAdd: (newContact) async {
+            await _firestoreService.addContact(user.uid, newContact);
+          },
+          currentCount: _contacts.length,
+        ),
       ),
     );
   }
@@ -428,9 +429,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context) => ManageContactsModal(
         contacts: _contacts,
         onDelete: (id) async {
-          await _firestoreService.deleteContact(user.uid, id);
+          final authenticated = await BiometricService.authenticateWithPinFallback(
+            context: context,
+            reason: 'Authenticate to delete this contact',
+          );
+          if (authenticated) {
+            await _firestoreService.deleteContact(user.uid, id);
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Contact deleted')),
+              );
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Authentication failed. Contact not deleted.'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+        onUpdate: (updatedContact) async {
+          await _firestoreService.updateContact(user.uid, updatedContact);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Contact updated')),
+            );
+          }
         },
       ),
+    );
+  }
+
+  // THIS IS THE METHOD THAT OPENS THE REPORT INCIDENT MODAL
+  void _openReportIncident() {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => const PostChoiceModal(),
     );
   }
 
@@ -518,7 +554,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 children: [
                   const SizedBox(height: 16),
 
-                  // SOS button (centered) - ONLY TEXT, NO ICON
                   Center(
                     child: GestureDetector(
                       onTapDown: (_) => _handleSOSPress(),
@@ -585,7 +620,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 24),
 
-                  // LIVE LOCATION section
                   SectionHeader(
                     title: 'LIVE LOCATION',
                     action: 'Full Map →',
@@ -638,10 +672,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         _openFullMap,
                       ),
                       _buildQuickAction(
-                        Icons.warning,
+                        Icons.report,
                         'Report Incident',
                         const Color(0xFFdcb060),
-                        () {},
+                        _openReportIncident,
                       ),
                     ],
                   ),

@@ -45,24 +45,57 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<!-- Fixed description -->
+	
+	<!-- Face ID Usage Description -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to authenticate you and enable SOS emergency features.</string>
+	
+	<!-- Contacts Permission - ADD THIS -->
+	<key>NSContactsUsageDescription</key>
+	<string>Purple Safety needs access to your contacts so you can easily add trusted emergency contacts without typing their numbers manually.</string>
+	
 	<!-- Camera and Microphone Usage Descriptions -->
 	<key>NSCameraUsageDescription</key>
 	<string>This app uses the camera to record video evidence during emergencies.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>This app uses the microphone to record audio evidence during emergencies.</string>
+	
+	<!-- Photo Library Permission - ADD THIS for saving videos -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>This app needs access to your photo library to save recorded videos and evidence.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app needs access to save recorded videos and evidence to your photo library.</string>
+	
 	<key>io.flutter.embedded_views_preview</key>
 	<string>YES</string>
+	
+	<!-- URL Schemes for WhatsApp -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>whatsapp</string>
+		<string>tel</string>
+		<string>sms</string>
 	</array>
+	
+	<!-- Location Permissions - Improved descriptions -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-<string>This app needs your location to provide safety alerts.</string>
+	<string>Purple Safety needs your location to show your position on the map and share it with your trusted contacts during emergencies.</string>
+	
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>This app needs your location to provide safety alerts even when not in use.</string>
-
+	<string>Purple Safety needs your location to share your position with trusted contacts even when the app is in the background during an active SOS emergency.</string>
+	
+	<!-- Background Modes for location updates -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+	</array>
+	
+	<!-- App Transport Security - Allow all connections -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

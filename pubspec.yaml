@@ -16,6 +16,7 @@ dependencies:
   google_maps_flutter: ^2.5.0
   location: ^8.0.1
   url_launcher: ^6.2.4
+  flutter_native_contact_picker: ^0.0.3  # ADD THIS - REPLACES contacts_service
   permission_handler: ^12.0.1
   shared_preferences: ^2.2.2
   geocoding: ^4.0.0

@@ -1,41 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/edit_contact_screen.dart';
 
 class ManageContactsModal extends StatelessWidget {
   final List<Contact> contacts;
   final Function(String) onDelete;
+  final Function(Contact) onUpdate;
 
   const ManageContactsModal({
     Key? key,
     required this.contacts,
     required this.onDelete,
+    required this.onUpdate,
   }) : super(key: key);
-
-  Future<void> _deleteWithFingerprint(
-    BuildContext context,
-    String contactId,
-  ) async {
-    // First ask for fingerprint
-    final authenticated = await BiometricService.authenticate(
-      reason: 'Authenticate to delete this contact',
-    );
-    if (authenticated) {
-      // If successful, perform deletion
-      onDelete(contactId);
-      Navigator.pop(context); // Close the modal after deletion
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Contact deleted')));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. Contact not deleted.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +22,7 @@ class ManageContactsModal extends StatelessWidget {
       child: Container(
         width: double.infinity,
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.7,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
         ),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -69,7 +46,8 @@ class ManageContactsModal extends StatelessWidget {
               child: contacts.isEmpty
                   ? const Center(
                       child: Text(
-                        'No contacts yet.',
+                        'No contacts yet.\nTap the + button to add one.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white70),
                       ),
                     )
@@ -106,7 +84,7 @@ class ManageContactsModal extends StatelessWidget {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${c.relationship}',
+                                        c.relationship!,
                                         style: const TextStyle(
                                           color: Colors.white70,
                                           fontSize: 12,
@@ -124,7 +102,7 @@ class ManageContactsModal extends StatelessWidget {
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '${c.phone}',
+                                    c.phone ?? 'No phone number',
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -155,10 +133,30 @@ class ManageContactsModal extends StatelessWidget {
                                 ),
                             ],
                           ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () =>
-                                _deleteWithFingerprint(context, c.id),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => EditContactScreen(
+                                        contact: c,
+                                        onUpdate: onUpdate,
+                                        onDelete: () => onDelete(c.id),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, color: Colors.red),
+                                onPressed: () => onDelete(c.id),
+                              ),
+                            ],
                           ),
                         );
                       },
