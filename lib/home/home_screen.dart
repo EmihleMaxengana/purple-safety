@@ -12,6 +12,7 @@ import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
+import 'package:purple_safety/services/sos_alert_service.dart'; // ADD THIS IMPORT
 
 // Contact model with Firestore methods
 class Contact {
@@ -382,8 +383,75 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  void _triggerSOS() {
-    EmergencyManager().setCurrentContacts(_contacts);
+  // ============================================================
+  // UPDATED _triggerSOS METHOD - Sends to ALL app users!
+  // ============================================================
+  void _triggerSOS() async {
+    // Get current user info
+    final user = AuthService().getCurrentUser();
+    String userName = 'Someone';
+    if (user != null) {
+      final userData = await AuthService().getUserData(user.uid);
+      userName = userData?['name'] ?? 'A user';
+    }
+    
+    // Check if location is available
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot get location for SOS. Please enable location.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() => _isSosActive = false);
+      return;
+    }
+    
+    // Show loading indicator
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('🚨 Sending SOS alert to all users...'),
+        backgroundColor: Colors.orange,
+        duration: Duration(seconds: 2),
+      ),
+    );
+    
+    try {
+      // 1. Send to ALL app users (Community SOS)
+      await SOSAlertService.sendCommunitySOSAlert(
+        userId: user?.uid ?? 'anonymous',
+        userName: userName,
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+      );
+      
+      // 2. Also send to trusted contacts via SMS/WhatsApp as backup
+      if (_contacts.isNotEmpty) {
+        final locationLink = 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
+        await SOSAlertService.sendPrivateAlerts(_contacts, locationLink);
+        debugPrint('✅ Backup SMS/WhatsApp sent to ${_contacts.length} trusted contacts');
+      }
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ SOS alert sent! Help is on the way.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      
+    } catch (e) {
+      debugPrint('❌ Error sending SOS: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error sending SOS: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+    
+    // Navigate to emergency tools
     widget.onNavigateToTools?.call();
     setState(() => _isSosActive = false);
   }
@@ -461,7 +529,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  // THIS IS THE METHOD THAT OPENS THE REPORT INCIDENT MODAL
   void _openReportIncident() {
     showDialog(
       context: context,
@@ -744,8 +811,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 16),
                   Text(
                     _sosCountdown > 0
-                        ? 'Alerting trusted contacts & emergency services'
-                        : 'Your trusted contacts have been notified',
+                        ? 'Alerting all users in your area...'
+                        : 'All nearby users have been notified',
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: Color(0xFFf0a0d0),

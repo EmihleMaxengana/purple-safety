@@ -38,6 +38,11 @@ class Incident {
   final int commentCount;
   final int shareCount;
   final bool isResolved;
+  
+  // NEW FIELDS
+  final bool isFound;           // Whether person has been found
+  final DateTime? foundAt;      // When they were marked as found
+  final DateTime? expiresAt;    // When post should be deleted (timestamp + 24h)
 
   Incident({
     required this.id,
@@ -62,6 +67,9 @@ class Incident {
     this.commentCount = 0,
     this.shareCount = 0,
     this.isResolved = false,
+    this.isFound = false,
+    this.foundAt,
+    this.expiresAt,
   });
 
   factory Incident.fromFirestore(DocumentSnapshot doc) {
@@ -92,6 +100,9 @@ class Incident {
       commentCount: data['commentCount'] ?? 0,
       shareCount: data['shareCount'] ?? 0,
       isResolved: data['isResolved'] ?? false,
+      isFound: data['isFound'] ?? false,
+      foundAt: data['foundAt'] != null ? (data['foundAt'] as Timestamp).toDate() : null,
+      expiresAt: data['expiresAt'] != null ? (data['expiresAt'] as Timestamp).toDate() : null,
     );
   }
 
@@ -118,10 +129,16 @@ class Incident {
       'commentCount': commentCount,
       'shareCount': shareCount,
       'isResolved': isResolved,
+      'isFound': isFound,
+      'foundAt': foundAt != null ? Timestamp.fromDate(foundAt!) : null,
+      'expiresAt': expiresAt != null ? Timestamp.fromDate(expiresAt!) : null,
     };
   }
 }
 
+// ============================================================
+// INCIDENT COMMENT CLASS - ADD THIS
+// ============================================================
 class IncidentComment {
   final String id;
   final String incidentId;
