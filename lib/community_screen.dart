@@ -109,10 +109,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
         _incidentMarkers = {};
         
         for (var incident in incidents) {
-          // Only add markers if incident has coordinates
           if (incident.latitude != null && incident.longitude != null) {
             final markerId = MarkerId(incident.id);
-            Color markerColor = _getTypeColor(incident.type);
             
             final marker = Marker(
               markerId: markerId,
@@ -350,17 +348,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
         body: _selectedView == 'map' ? _buildMapView() : _buildListView(),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            showDialog(
-              context: context,
-              barrierDismissible: true,
-              builder: (context) => const PostChoiceModal(),
-            );
-          },
-          backgroundColor: const Color(0xFF6A1B9A),
-          child: const Icon(Icons.add_alert, color: Colors.white),
-        ),
+        // REMOVED: floatingActionButton - No more bell with plus sign
       ),
     );
   }
@@ -430,7 +418,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
               
-              // Legend overlay
+              // Legend overlay - ONLY RED (Removed purple dot)
               Positioned(
                 bottom: 80,
                 right: 8,
@@ -440,14 +428,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     color: Colors.black.withOpacity(0.7),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLegendItem(Colors.red, 'Active SOS'),
-                      const SizedBox(height: 4),
-                      _buildLegendItem(Colors.purple, 'Incident Report'),
-                    ],
-                  ),
+                  child: _buildLegendItem(Colors.red, 'Active SOS'),
                 ),
               ),
             ],
@@ -478,7 +459,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   // ============================================================
-  // LIST VIEW (Incidents list without filter chips)
+  // LIST VIEW (Incidents list)
   // ============================================================
   Widget _buildListView() {
     return Column(
@@ -530,7 +511,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
           ),
         
-        // All incidents list (no filters)
+        // All incidents list
         Expanded(
           child: StreamBuilder<List<Incident>>(
             stream: _incidentService.getAllIncidents(),

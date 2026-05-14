@@ -29,7 +29,6 @@ class SOSAlertService {
     debugPrint('🚨 Sending COMMUNITY SOS alert from $userName at $locationLink');
     
     try {
-      // 1. Create active SOS event in Firestore
       final docRef = _firestore.collection('active_sos_events').doc();
       final sosEventId = docRef.id;
       
@@ -49,7 +48,6 @@ class SOSAlertService {
       
       debugPrint('✅ SOS event created: $sosEventId');
       
-      // 2. Save to global_alerts collection for all users to see
       await _firestore.collection('global_alerts').add({
         'type': 'sos',
         'message': '🚨 EMERGENCY: $userName needs immediate help at their location!',
@@ -63,13 +61,11 @@ class SOSAlertService {
         'sosEventId': sosEventId,
       });
       
-      // 3. Add alert to EVERY user's personal alerts collection
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
       int alertCount = 0;
       
       for (var userDoc in usersSnapshot.docs) {
-        // Don't send alert to the person who triggered SOS
         if (userDoc.id == userId) continue;
         
         final alertRef = _firestore
@@ -107,18 +103,15 @@ class SOSAlertService {
   // ============================================================
   static Future<void> deactivateSOSEvent(String sosEventId, {String? userId}) async {
     try {
-      // Update the SOS event status to 'resolved'
       await _firestore.collection('active_sos_events').doc(sosEventId).update({
         'status': 'resolved',
         'resolvedAt': FieldValue.serverTimestamp(),
       });
       
-      // Get the event details to know who to notify
       final eventDoc = await _firestore.collection('active_sos_events').doc(sosEventId).get();
       final eventData = eventDoc.data();
       final userName = eventData?['userName'] ?? 'Someone';
       
-      // Add to global alerts that this SOS has been resolved
       await _firestore.collection('global_alerts').add({
         'type': 'sos_resolved',
         'message': '✅ $userName is now SAFE. The SOS alert has been resolved.',
@@ -162,7 +155,6 @@ class SOSAlertService {
     required double responderLongitude,
   }) async {
     try {
-      // Add responder to the SOS event's responders subcollection
       await _firestore
           .collection('active_sos_events')
           .doc(sosEventId)
@@ -176,16 +168,13 @@ class SOSAlertService {
             'status': 'en_route',
           });
       
-      // Increment responder count on the main event
       await _firestore.collection('active_sos_events').doc(sosEventId).update({
         'responderCount': FieldValue.increment(1),
       });
       
-      // Get the SOS event owner to notify them
       final sosEvent = await _firestore.collection('active_sos_events').doc(sosEventId).get();
       if (sosEvent.exists) {
         final eventData = sosEvent.data();
-        // Add alert to the SOS originator that someone is coming
         await _firestore
             .collection('users')
             .doc(eventData?['userId'])
@@ -209,7 +198,7 @@ class SOSAlertService {
   }
   
   // ============================================================
-  // LEGACY METHODS - For backward compatibility
+  // SMS ONLY - Send private alerts to trusted contacts (SOS backup)
   // ============================================================
   static Future<void> sendPrivateAlerts(
     List<Contact> contacts,
@@ -217,65 +206,35 @@ class SOSAlertService {
     String? audioPath,
     String? videoPath,
   }) async {
-    debugPrint('📱 Sending private alerts to ${contacts.length} trusted contacts');
+    debugPrint('📱 Sending private SMS alerts to ${contacts.length} trusted contacts');
     
     if (await Permission.sms.request().isGranted) {
       for (var contact in contacts) {
         if (contact.phone != null && contact.phone!.isNotEmpty) {
           await sendSMS(contact.phone!, locationLink);
         }
-        await sendWhatsApp(contact, locationLink);
       }
     }
   }
   
   static Future<void> sendSMS(String phoneNumber, String message) async {
     final String fullMessage = message;
-    if (Platform.isAndroid) {
-      try {
-        const platform = MethodChannel('sms_sender');
-        await platform.invokeMethod('sendSms', {
-          'phoneNumber': phoneNumber,
-          'message': fullMessage,
-        });
-        debugPrint('📱 SMS sent to $phoneNumber');
-      } catch (e) {
-        debugPrint('Failed to send SMS via method channel: $e');
-        final url = 'sms:$phoneNumber?body=${Uri.encodeComponent(fullMessage)}';
-        await _launchUrl(url);
+    try {
+      String cleanNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
+      final Uri smsUri = Uri(
+        scheme: 'sms',
+        path: cleanNumber,
+        query: 'body=${Uri.encodeComponent(fullMessage)}',
+      );
+      
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+        debugPrint('📱 SMS opened for $phoneNumber');
+      } else {
+        debugPrint('Could not open SMS for $phoneNumber');
       }
-    } else {
-      final url = 'sms:$phoneNumber?body=${Uri.encodeComponent(fullMessage)}';
-      await _launchUrl(url);
-    }
-  }
-  
-  static Future<void> sendWhatsApp(Contact contact, String message) async {
-    final String? whatsapp = contact.socialLinks['whatsapp'];
-    if (whatsapp == null || whatsapp.isEmpty) return;
-    
-    String phone = whatsapp.replaceAll(RegExp(r'\D'), '');
-    if (phone.isEmpty) return;
-    
-    if (phone.startsWith('0')) {
-      phone = phone.substring(1);
-    }
-    
-    if (!phone.startsWith('27') && phone.length <= 9) {
-      phone = '27$phone';
-    }
-    
-    final String url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
-    debugPrint('💬 WhatsApp URL: $url');
-    await _launchUrl(url);
-  }
-  
-  static Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      debugPrint('Could not launch $url');
+    } catch (e) {
+      debugPrint('Error sending SMS: $e');
     }
   }
 }

@@ -6,6 +6,8 @@ import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/login_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -82,13 +84,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<bool> _requireAuthentication(String action) async {
-    return await BiometricService.authenticateWithPinFallback(
-      context: context,
-      reason: 'Authenticate to $action',
-    );
-  }
-
+  // ============================================================
+  // SIMPLIFIED CHANGE PASSWORD - Only requires current password
+  // ============================================================
   void _showChangePasswordDialog() {
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
@@ -104,13 +102,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
             TextField(
               controller: currentPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Current Password'),
+              decoration: const InputDecoration(
+                labelText: 'Current Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'New Password'),
+              decoration: const InputDecoration(
+                labelText: 'New Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -118,6 +124,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Confirm New Password',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock_outline),
               ),
             ),
           ],
@@ -127,12 +135,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () async {
+              // Validate passwords
               if (newPasswordController.text != confirmController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Passwords do not match'),
+                    content: Text('New passwords do not match'),
                     backgroundColor: Colors.red,
                   ),
                 );
@@ -149,19 +158,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return;
               }
               
+              if (currentPasswordController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter your current password'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              
+              // Show loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(color: Colors.purple),
+                ),
+              );
+              
               try {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user != null && user.email != null) {
-                  // Show loading
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) => const Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                  
-                  // Re-authenticate first
+                  // Re-authenticate with current password
                   final credential = EmailAuthProvider.credential(
                     email: user.email!,
                     password: currentPasswordController.text,
@@ -173,6 +192,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   
                   // Close loading dialog
                   Navigator.pop(context);
+                  // Close password dialog
+                  Navigator.pop(context);
                   
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -180,51 +201,273 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       backgroundColor: Colors.green,
                     ),
                   );
-                  Navigator.pop(context);
                 }
               } on FirebaseAuthException catch (e) {
-                // Close loading dialog if open
-                if (Navigator.canPop(context)) {
-                  Navigator.pop(context);
+                // Close loading dialog
+                Navigator.pop(context);
+                
+                if (e.code == 'wrong-password') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Current password is incorrect'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.message}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
                 }
+              } catch (e) {
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Error: ${e.message}'),
+                    content: Text('Error: $e'),
                     backgroundColor: Colors.red,
                   ),
                 );
               }
             },
-            child: const Text('Change'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6A1B9A),
+            ),
+            child: const Text('Change Password'),
           ),
         ],
       ),
     );
   }
 
+  // ============================================================
+  // SIMPLIFIED MANAGE BIOMETRICS - Direct to device settings or toggle
+  // ============================================================
+  void _showManageBiometricsDialog() async {
+    final isBiometricAvailable = await BiometricService.isFingerprintAvailable();
+    final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a0f2e),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Biometric Settings',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            
+            // SOS Fingerprint Toggle
+            SwitchListTile(
+              title: const Text(
+                'SOS Fingerprint',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: Text(
+                isBiometricAvailable 
+                    ? 'Use fingerprint to instantly trigger SOS'
+                    : 'Fingerprint not available on this device',
+                style: TextStyle(
+                  color: isBiometricAvailable ? Colors.white70 : Colors.red,
+                  fontSize: 12,
+                ),
+              ),
+              value: isSOSEnabled && isBiometricAvailable,
+              onChanged: isBiometricAvailable ? (value) async {
+                if (value) {
+                  // Enable SOS fingerprint
+                  final success = await BiometricService.enableSOSFingerprint();
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('SOS Fingerprint enabled')),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to enable. Please try again.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } else {
+                  // Disable - would need a method to disable
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Feature coming soon'),
+                    ),
+                  );
+                }
+                Navigator.pop(context);
+                setState(() {});
+              } : null,
+              activeColor: const Color(0xFF6A1B9A),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Open device settings button
+            ListTile(
+              leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
+              title: const Text(
+                'Device Biometric Settings',
+                style: TextStyle(color: Colors.white),
+              ),
+              subtitle: const Text(
+                'Manage fingerprints in system settings',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+              onTap: () {
+                Navigator.pop(context);
+                _openDeviceBiometricSettings();
+              },
+            ),
+            
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Future<void> _openDeviceBiometricSettings() async {
+    // Open device settings - Android and iOS
+    if (Platform.isAndroid) {
+      await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
+    } else if (Platform.isIOS) {
+      await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Open your device settings to manage fingerprints')),
+      );
+    }
+  }
+
+  // ============================================================
+  // SIMPLIFIED PRIVACY POLICY - No authentication, just open/view
+  // ============================================================
   void _showPrivacyPolicy() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Privacy Policy'),
+        title: const Text(
+          'Privacy Policy',
+          style: TextStyle(color: Colors.white),
+        ),
         content: const SingleChildScrollView(
-          child: Text(
-            'Your data is encrypted and stored securely. We never share your personal information without your consent.',
-            style: TextStyle(color: Colors.white70),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Your Privacy Matters',
+                style: TextStyle(
+                  color: Color(0xFFBF7DCB),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Purple Safety is committed to protecting your personal information. '
+                'We collect only the data necessary to provide safety features:',
+                style: TextStyle(color: Colors.white70),
+              ),
+              SizedBox(height: 12),
+              Text(
+                '• Location data (only during active SOS or with your consent)',
+                style: TextStyle(color: Colors.white70),
+              ),
+              Text(
+                '• Contacts (only the ones you manually add as trusted contacts)',
+                style: TextStyle(color: Colors.white70),
+              ),
+              Text(
+                '• Incident reports (anonymously or with your name)',
+                style: TextStyle(color: Colors.white70),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Data Security',
+                style: TextStyle(
+                  color: Color(0xFFBF7DCB),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'All data is encrypted in transit and at rest. '
+                'Your location is never shared without your explicit consent.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Data Retention',
+                style: TextStyle(
+                  color: Color(0xFFBF7DCB),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '• Incident posts are automatically deleted after 24 hours\n'
+                '• Account deletion removes all your data permanently\n'
+                '• You can request data export at any time',
+                style: TextStyle(color: Colors.white70),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Contact Us',
+                style: TextStyle(
+                  color: Color(0xFFBF7DCB),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Email: privacy@purplesafety.com',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Close', style: TextStyle(color: Color(0xFFBF7DCB))),
           ),
         ],
+        backgroundColor: const Color(0xFF1a0f2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+        ),
       ),
     );
   }
 
   void _confirmDeleteAccount() async {
-    final authenticated = await _requireAuthentication('delete your account');
+    final authenticated = await BiometricService.authenticateWithPinFallback(
+      context: context,
+      reason: 'Authenticate to delete your account',
+    );
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -304,7 +547,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     onChanged: (value) {
                       password = value;
-                      // This rebuilds the dialog to enable/disable the button
                       setState(() {});
                     },
                   ),
@@ -339,7 +581,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       
       if (user != null && user.email != null) {
-        // Show password dialog for re-authentication
         final password = await _showPasswordDialog();
         
         if (password == null) {
@@ -347,7 +588,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           return;
         }
         
-        // Show loading indicator
         if (mounted) {
           showDialog(
             context: context,
@@ -368,7 +608,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
         
-        // Re-authenticate user with password
         final credential = EmailAuthProvider.credential(
           email: user.email!,
           password: password,
@@ -376,10 +615,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         
         await user.reauthenticateWithCredential(credential);
         
-        // 1. Delete user data from Firestore
         await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
         
-        // 2. Delete all contacts subcollection
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -394,7 +631,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await batch.commit();
         }
         
-        // 3. Delete all alerts subcollection
         final alertsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -409,16 +645,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await alertsBatch.commit();
         }
         
-        // 4. Clear all local storage (SharedPreferences)
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
         
-        // 5. Delete the Firebase Auth user account - THIS IS WHAT PREVENTS LOGIN
         await user.delete();
         
-        // Close loading dialog
         if (mounted) {
-          Navigator.of(context).pop(); // Close loading dialog
+          Navigator.of(context).pop();
           
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -429,7 +662,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
         
-        // Navigate to login with animation
         if (mounted) {
           await _navigateToLoginWithAnimation();
         }
@@ -437,7 +669,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
       
-      // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -476,7 +707,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       
-      // Close loading dialog if open
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -492,7 +722,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _navigateToLoginWithAnimation() async {
     if (mounted) {
-      // Animated transition to login screen
       Navigator.pushAndRemoveUntil(
         context,
         PageRouteBuilder(
@@ -513,7 +742,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final authenticated = await _requireAuthentication('log out');
+    final authenticated = await BiometricService.authenticateWithPinFallback(
+      context: context,
+      reason: 'Authenticate to log out',
+    );
     if (authenticated) {
       await _auth.logout();
       if (context.mounted) {
@@ -599,44 +831,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                // Security section
+                // Security section - SIMPLIFIED
                 _buildSectionTitle('Security'),
                 const SizedBox(height: 8),
+                
+                // Change Password - NO extra authentication
                 _buildSettingTile(
                   icon: Icons.lock,
                   title: 'Change Password',
-                  onTap: () async {
-                    if (await _requireAuthentication('change your password')) {
-                      _showChangePasswordDialog();
-                    }
-                  },
+                  subtitle: 'Update your password with current password',
+                  onTap: _showChangePasswordDialog,
                 ),
+                
+                // Manage Biometrics - Direct to settings
                 _buildSettingTile(
                   icon: Icons.fingerprint,
                   title: 'Manage Biometrics',
-                  onTap: () async {
-                    if (await _requireAuthentication('manage biometrics')) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Biometrics management (coming soon)'),
-                        ),
-                      );
-                    }
-                  },
+                  subtitle: 'Set up fingerprint for SOS or login',
+                  onTap: _showManageBiometricsDialog,
                 ),
+                
+                // Privacy Policy - NO authentication needed
                 _buildSettingTile(
                   icon: Icons.privacy_tip,
                   title: 'Privacy Policy',
-                  onTap: () async {
-                    if (await _requireAuthentication('view privacy policy')) {
-                      _showPrivacyPolicy();
-                    }
-                  },
+                  subtitle: 'Read how we protect your data',
+                  onTap: _showPrivacyPolicy,
                 ),
 
                 const SizedBox(height: 24),
 
-                // Account Actions Row (Logout & Delete Account side by side)
+                // Account Actions Row
                 _buildSectionTitle('Account Actions'),
                 const SizedBox(height: 12),
                 Row(
@@ -663,7 +888,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 20),
                 
-                // Warning note about account deletion
+                // Warning note
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -732,6 +957,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildSettingTile({
     required IconData icon,
     required String title,
+    required String subtitle,
     required VoidCallback onTap,
     Color color = Colors.white,
   }) {
@@ -743,8 +969,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         side: BorderSide(color: Colors.purple.withOpacity(0.3)),
       ),
       child: ListTile(
-        leading: Icon(icon, color: color),
+        leading: Icon(icon, color: const Color(0xFFBF7DCB)),
         title: Text(title, style: const TextStyle(color: Colors.white)),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
         trailing: const Icon(
           Icons.arrow_forward_ios,
           color: Colors.white70,

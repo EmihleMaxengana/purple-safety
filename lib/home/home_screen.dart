@@ -13,6 +13,7 @@ import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
 import 'package:purple_safety/services/sos_alert_service.dart'; // ADD THIS IMPORT
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Contact model with Firestore methods
 class Contact {

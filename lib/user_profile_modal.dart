@@ -1,9 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/services/firestore_service.dart';
+import 'dart:async';
 
 class UserProfileModal extends StatefulWidget {
   final List<Contact>? contacts;
@@ -20,29 +24,15 @@ class _UserProfileModalState extends State<UserProfileModal> {
   String? _errorMessage;
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
+  
+  // Real contacts from Firestore
+  List<Contact> _realContacts = [];
+  bool _isLoadingContacts = true;
+  
+  final FirestoreService _firestoreService = FirestoreService();
+  StreamSubscription? _contactsSubscription;
 
-  List<Contact> _dummyContacts = [
-    Contact(
-      id: '1',
-      name: 'Oyama',
-      initials: 'O',
-      color: Colors.purple,
-      active: true,
-      phone: '+27 12 345 6789',
-    ),
-    Contact(
-      id: '2',
-      name: 'Likhona',
-      initials: 'L',
-      color: Colors.deepPurple,
-      active: true,
-      phone: '+27 98 765 4321',
-    ),
-  ];
-
-  bool _fingerprintTrigger = true;
-  bool _powerButtonTrigger = false;
-  bool _shakeTrigger = false;
+  // Location sharing preferences
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
@@ -50,6 +40,46 @@ class _UserProfileModalState extends State<UserProfileModal> {
   void initState() {
     super.initState();
     _loadUser();
+    _loadLocationSharingPreferences();
+    _listenToContacts();
+  }
+
+  @override
+  void dispose() {
+    _contactsSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _listenToContacts() {
+    final user = AuthService().getCurrentUser();
+    if (user != null) {
+      _contactsSubscription = _firestoreService
+          .getContactsStream(user.uid)
+          .listen((contacts) {
+        setState(() {
+          _realContacts = contacts;
+          _isLoadingContacts = false;
+        });
+      });
+    } else {
+      setState(() {
+        _isLoadingContacts = false;
+      });
+    }
+  }
+
+  Future<void> _loadLocationSharingPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _shareLocationWithContacts = prefs.getBool('shareLocationWithContacts') ?? true;
+      _shareLocationWithCommunity = prefs.getBool('shareLocationWithCommunity') ?? false;
+    });
+  }
+
+  Future<void> _saveLocationSharingPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('shareLocationWithContacts', _shareLocationWithContacts);
+    await prefs.setBool('shareLocationWithCommunity', _shareLocationWithCommunity);
   }
 
   Future<void> _loadUser() async {
@@ -133,15 +163,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
-  void _testTrigger() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Trigger test: This would activate emergency mode.'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
   // Wrapper for toggles that require fingerprint
   Future<void> _toggleWithFingerprint(
     String settingName,
@@ -220,9 +241,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
                       const SizedBox(height: 24),
                       _buildSectionTitle('Emergency Contacts'),
                       _buildEmergencyContacts(),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle('Panic Trigger Setup'),
-                      _buildTriggerSetup(),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Privacy & Security'),
                       _buildPrivacySecurity(),
@@ -342,7 +360,59 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Widget _buildEmergencyContacts() {
-    final displayContacts = widget.contacts ?? _dummyContacts;
+    // Show loading indicator while fetching contacts
+    if (_isLoadingContacts) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2a1f3e),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Column(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Loading contacts...',
+                style: TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Show real contacts from Firestore
+    if (_realContacts.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2a1f3e),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            const Icon(Icons.people_outline, color: Colors.white38, size: 48),
+            const SizedBox(height: 12),
+            const Text(
+              'No trusted contacts yet',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add contacts from the Home screen',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -352,16 +422,25 @@ class _UserProfileModalState extends State<UserProfileModal> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Your Trusted Contacts',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            children: [
+              const Text(
+                'Your Trusted Contacts',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_realContacts.length} contacts',
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+              ),
+            ],
           ),
-          const Divider(color: Colors.white24),
-          ...displayContacts.map(
+          const Divider(color: Colors.white24, height: 20),
+          ..._realContacts.map(
             (c) => ListTile(
               leading: CircleAvatar(
                 backgroundColor: c.color.withOpacity(0.5),
@@ -371,82 +450,40 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 ),
               ),
               title: Text(c.name, style: const TextStyle(color: Colors.white)),
-              subtitle: Text(
-                c.phone ?? '',
-                style: const TextStyle(color: Colors.white70),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (c.relationship != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        c.relationship!,
+                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                    ),
+                  Text(
+                    c.phone ?? 'No phone number',
+                    style: const TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                ],
               ),
-            ),
-          ),
-          if (displayContacts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Text(
-                'No contacts added yet.',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTriggerSetup() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2a1f3e),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          SwitchListTile(
-            title: const Text(
-              'Fingerprint',
-              style: TextStyle(color: Colors.white),
-            ),
-            value: _fingerprintTrigger,
-            onChanged: (value) => _toggleWithFingerprint(
-              'Fingerprint Trigger',
-              _fingerprintTrigger,
-              (newVal) => setState(() => _fingerprintTrigger = newVal),
-            ),
-            activeColor: Colors.purple,
-          ),
-          SwitchListTile(
-            title: const Text(
-              'Power Button (press 5 times)',
-              style: TextStyle(color: Colors.white),
-            ),
-            value: _powerButtonTrigger,
-            onChanged: (value) => _toggleWithFingerprint(
-              'Power Button Trigger',
-              _powerButtonTrigger,
-              (newVal) => setState(() => _powerButtonTrigger = newVal),
-            ),
-            activeColor: Colors.purple,
-          ),
-          SwitchListTile(
-            title: const Text(
-              'Shake Phone',
-              style: TextStyle(color: Colors.white),
-            ),
-            value: _shakeTrigger,
-            onChanged: (value) => _toggleWithFingerprint(
-              'Shake Trigger',
-              _shakeTrigger,
-              (newVal) => setState(() => _shakeTrigger = newVal),
-            ),
-            activeColor: Colors.purple,
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: ElevatedButton(
-              onPressed: _testTrigger,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Test Trigger'),
+              trailing: c.active
+                  ? Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.green,
+                        shape: BoxShape.circle,
+                      ),
+                    )
+                  : Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
             ),
           ),
         ],
@@ -468,11 +505,33 @@ class _UserProfileModalState extends State<UserProfileModal> {
               'Share location with trusted contacts',
               style: TextStyle(color: Colors.white),
             ),
+            subtitle: const Text(
+              'Send your location to your trusted contacts every 15 minutes',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
             value: _shareLocationWithContacts,
             onChanged: (value) => _toggleWithFingerprint(
               'Location Sharing with Contacts',
               _shareLocationWithContacts,
-              (newVal) => setState(() => _shareLocationWithContacts = newVal),
+              (newVal) async {
+                setState(() => _shareLocationWithContacts = newVal);
+                await _saveLocationSharingPreferences();
+                if (newVal) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Location sharing with contacts enabled'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Location sharing with contacts disabled'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
             ),
             activeColor: Colors.purple,
           ),
@@ -481,18 +540,46 @@ class _UserProfileModalState extends State<UserProfileModal> {
               'Share location with community',
               style: TextStyle(color: Colors.white),
             ),
+            subtitle: const Text(
+              'Share your location with all Purple Safety users',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
             value: _shareLocationWithCommunity,
             onChanged: (value) => _toggleWithFingerprint(
               'Location Sharing with Community',
               _shareLocationWithCommunity,
-              (newVal) => setState(() => _shareLocationWithCommunity = newVal),
+              (newVal) async {
+                setState(() => _shareLocationWithCommunity = newVal);
+                await _saveLocationSharingPreferences();
+                if (newVal) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Location sharing with community enabled'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Location sharing with community disabled'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
             ),
             activeColor: Colors.purple,
           ),
+          const Divider(color: Colors.white24, height: 20),
           ListTile(
+            leading: const Icon(Icons.data_usage, color: Color(0xFFBF7DCB)),
             title: const Text(
               'Data sharing settings',
               style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Manage how your data is used',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             trailing: const Icon(
               Icons.arrow_forward_ios,
@@ -504,8 +591,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 reason: 'Authenticate to view data sharing settings',
               );
               if (authenticated) {
-                // Navigate to settings screen
-                // For now, just show a snackbar
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Data sharing settings (coming soon)'),
@@ -515,9 +600,14 @@ class _UserProfileModalState extends State<UserProfileModal> {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.fingerprint, color: Color(0xFFBF7DCB)),
             title: const Text(
               'Change PIN / Biometrics',
               style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Update your security credentials',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             trailing: const Icon(
               Icons.arrow_forward_ios,
@@ -529,7 +619,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 reason: 'Authenticate to change biometrics settings',
               );
               if (authenticated) {
-                // Navigate to change biometrics screen
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Biometrics settings (coming soon)'),
@@ -539,9 +628,14 @@ class _UserProfileModalState extends State<UserProfileModal> {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.devices, color: Color(0xFFBF7DCB)),
             title: const Text(
               'Device management',
               style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Manage linked devices',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             trailing: const Icon(
               Icons.arrow_forward_ios,
@@ -553,7 +647,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 reason: 'Authenticate to manage devices',
               );
               if (authenticated) {
-                // Navigate to device management
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Device management (coming soon)'),

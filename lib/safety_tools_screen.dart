@@ -192,10 +192,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   // ============================================================
-  // UPDATED: I'm Safe Function - Deactivates SOS
+  // I'm Safe Function - Deactivates SOS (SMS only)
   // ============================================================
   Future<void> _imSafe() async {
-    // Require authentication for safety
     final authenticated = await BiometricService.authenticateWithPinFallback(
       context: context,
       reason: 'Confirm you are safe to deactivate SOS',
@@ -211,7 +210,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       return;
     }
 
-    // Get current user info
     final user = AuthService().getCurrentUser();
     String userName = 'Someone';
     String? userId = user?.uid;
@@ -221,9 +219,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userId = user.uid;
     }
 
-    // ============================================================
-    // DEACTIVATE THE ACTIVE SOS EVENT FOR THIS USER
-    // ============================================================
+    // Deactivate SOS event
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('active_sos_events')
@@ -259,10 +255,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     // Send in-app safe alert to ALL users
     await _sendGlobalSafeAlert(userName);
 
-    // Send SMS to trusted contacts
+    // Send SMS to trusted contacts (WhatsApp removed)
     await _sendSafeMessageToContacts();
 
-    // Deactivate emergency mode
     EmergencyManager().deactivateEmergencyMode();
 
     setState(() {
@@ -319,6 +314,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
+  // SMS ONLY - No WhatsApp
   Future<void> _sendSafeMessageToContacts() async {
     if (_contacts.isEmpty) return;
 
@@ -333,11 +329,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       if (contact.phone != null && contact.phone!.isNotEmpty) {
         await SOSAlertService.sendSMS(contact.phone!, fullMessage);
       }
-      if (contact.socialLinks.containsKey('whatsapp')) {
-        await SOSAlertService.sendWhatsApp(contact, fullMessage);
-      }
     }
-    debugPrint('Safe message sent to ${_contacts.length} contacts');
+    debugPrint('Safe message sent to ${_contacts.length} contacts (SMS only)');
   }
 
   // ============================================================
