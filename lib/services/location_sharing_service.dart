@@ -53,35 +53,32 @@ class LocationSharingService {
     }
     
     String message = await _buildLocationMessage(userName, lat, lng);
-    String locationLink = 'https://www.google.com/maps?q=$lat,$lng';
     
-    // Send to trusted contacts (SMS + WhatsApp)
+    // SMS ONLY - Send to trusted contacts
     if (contacts.isNotEmpty) {
       for (var contact in contacts) {
-        // Send SMS
         if (contact.phone != null && contact.phone!.isNotEmpty) {
           await _sendSMS(contact.phone!, message);
         }
-        // Send WhatsApp (KEPT HERE)
-        await _sendWhatsApp(contact, message);
       }
-      debugPrint('📍 Location shared with ${contacts.length} trusted contacts (SMS + WhatsApp)');
+      debugPrint('📍 Location shared via SMS with ${contacts.length} trusted contacts');
     }
     
-    // Send to community (in-app only, no SMS/WhatsApp)
+    // Send to community (in-app only)
     if (_shareWithCommunity) {
-      await _sendToCommunity(userName, locationLink, lat, lng);
+      await _sendToCommunity(userName, lat, lng);
       debugPrint('📍 Location shared with community (in-app)');
     }
   }
   
   static Future<void> _sendToCommunity(
     String userName,
-    String locationLink,
     double lat,
     double lng,
   ) async {
     try {
+      final locationLink = 'https://www.google.com/maps?q=$lat,$lng';
+      
       await FirebaseFirestore.instance.collection('global_alerts').add({
         'type': 'location_share',
         'message': '📍 $userName is sharing their live location with the community',
@@ -162,67 +159,12 @@ class LocationSharingService {
       
       if (await canLaunchUrl(smsUri)) {
         await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-        debugPrint('SMS opened for $phoneNumber');
+        debugPrint('✅ SMS opened for $phoneNumber');
       } else {
-        debugPrint('Could not open SMS for $phoneNumber');
+        debugPrint('❌ Could not open SMS for $phoneNumber');
       }
     } catch (e) {
-      debugPrint('Error sending SMS: $e');
-    }
-  }
-
-  // ============================================================
-  // WHATSAPP - KEPT ONLY FOR LOCATION SHARING TO TRUSTED CONTACTS
-  // ============================================================
-  static Future<void> _sendWhatsApp(Contact contact, String message) async {
-    final String? whatsapp = contact.socialLinks['whatsapp'];
-    if (whatsapp == null || whatsapp.isEmpty) {
-      debugPrint('No WhatsApp number for ${contact.name}');
-      return;
-    }
-    
-    try {
-      // Extract only digits
-      String phone = whatsapp.replaceAll(RegExp(r'\D'), '');
-      if (phone.isEmpty) {
-        debugPrint('Invalid WhatsApp number for ${contact.name}');
-        return;
-      }
-      
-      // Remove leading zero if present (ZA numbers start with 0 for local)
-      if (phone.startsWith('0')) {
-        phone = phone.substring(1);
-      }
-      
-      // Add South Africa country code (27) if not already there
-      if (!phone.startsWith('27') && phone.length <= 9) {
-        phone = '27$phone';
-      }
-      
-      // Create WhatsApp URL
-      final String url = 'https://wa.me/$phone?text=${Uri.encodeComponent(message)}';
-      debugPrint('WhatsApp URL for ${contact.name}: $url');
-      
-      final Uri uri = Uri.parse(url);
-      
-      // Try to launch - this will open WhatsApp with the message pre-filled
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        debugPrint('WhatsApp opened for ${contact.name}');
-      } else {
-        debugPrint('Could not open WhatsApp for ${contact.name}');
-        // Try alternative format
-        final altUrl = 'whatsapp://send?phone=$phone&text=${Uri.encodeComponent(message)}';
-        final altUri = Uri.parse(altUrl);
-        if (await canLaunchUrl(altUri)) {
-          await launchUrl(altUri, mode: LaunchMode.externalApplication);
-          debugPrint('WhatsApp opened via alternative URL for ${contact.name}');
-        } else {
-          debugPrint('WhatsApp may not be installed for ${contact.name}');
-        }
-      }
-    } catch (e) {
-      debugPrint('Error sending WhatsApp to ${contact.name}: $e');
+      debugPrint('❌ Error sending SMS: $e');
     }
   }
 }

@@ -21,7 +21,6 @@ class EditContactScreen extends StatefulWidget {
 class _EditContactScreenState extends State<EditContactScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  late TextEditingController _whatsappController;
   late String _selectedRelationship;
 
   final List<String> _relationshipOptions = [
@@ -38,9 +37,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.contact.name);
     _phoneController = TextEditingController(text: widget.contact.phone ?? '');
-    _whatsappController = TextEditingController(
-      text: widget.contact.socialLinks['whatsapp'] ?? '',
-    );
     _selectedRelationship = widget.contact.relationship ?? 'Family';
   }
 
@@ -48,24 +44,10 @@ class _EditContactScreenState extends State<EditContactScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _whatsappController.dispose();
     super.dispose();
   }
 
   String _formatPhoneNumber(String rawNumber) {
-    if (rawNumber.isEmpty) return '';
-    String cleaned = rawNumber.replaceAll(RegExp(r'\D'), '');
-    if (cleaned.isEmpty) return '';
-    if (cleaned.startsWith('0')) {
-      cleaned = cleaned.substring(1);
-    }
-    if (!cleaned.startsWith('27') && cleaned.length <= 9) {
-      cleaned = '27$cleaned';
-    }
-    return cleaned;
-  }
-
-  String _formatWhatsAppNumber(String rawNumber) {
     if (rawNumber.isEmpty) return '';
     String cleaned = rawNumber.replaceAll(RegExp(r'\D'), '');
     if (cleaned.isEmpty) return '';
@@ -104,10 +86,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
       active: widget.contact.active,
       phone: _formatPhoneNumber(_phoneController.text.trim()),
       relationship: _selectedRelationship,
-      socialLinks: {
-        if (_whatsappController.text.trim().isNotEmpty)
-          'whatsapp': _formatWhatsAppNumber(_whatsappController.text.trim()),
-      },
+      socialLinks: {}, // WhatsApp removed
     );
 
     widget.onUpdate(updatedContact);
@@ -224,29 +203,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
                   decoration: _inputDecoration(
                     icon: Icons.phone,
                     hint: 'Phone Number (for SMS)',
-                  ).copyWith(
-                    helperText: 'Format: 0712345678 or +27712345678',
-                    helperStyle: const TextStyle(color: Colors.white38, fontSize: 10),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                const Text(
-                  'WhatsApp Number (Optional)',
-                  style: TextStyle(
-                    color: Color(0xFFa078c0),
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _whatsappController,
-                  style: const TextStyle(color: Colors.white),
-                  keyboardType: TextInputType.phone,
-                  decoration: _inputDecoration(
-                    icon: Icons.chat,
-                    hint: 'WhatsApp Number',
                   ).copyWith(
                     helperText: 'Format: 0712345678 or +27712345678',
                     helperStyle: const TextStyle(color: Colors.white38, fontSize: 10),

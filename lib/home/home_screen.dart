@@ -1,19 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/manage_contacts_modal.dart';
 import 'package:purple_safety/add_contact_screen.dart';
-import 'package:purple_safety/services/location_sharing_service.dart';
 import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
-import 'package:purple_safety/services/sos_alert_service.dart'; // ADD THIS IMPORT
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purple_safety/services/sos_alert_service.dart';
+import 'package:purple_safety/services/trip_sharing_service.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -86,6 +88,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _holdTimer;
   bool _isHolding = false;
 
+  // Trip sharing state
+  bool _isSharingTrip = false;
+
   // Map state
   GoogleMapController? _mapController;
   location.Location _location = location.Location();
@@ -97,7 +102,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Contacts
   List<Contact> _contacts = [];
-  bool _isSharingLocation = false;
 
   // Firestore
   final FirestoreService _firestoreService = FirestoreService();
@@ -237,6 +241,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _initLocation();
     _setupDangerZones();
     _listenToContacts();
+    TripSharingService.cleanupExpiredTrips();
   }
 
   Future<void> _listenToContacts() async {
@@ -269,9 +274,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Please enable location services to see your location.',
-              ),
+              content: Text('Please enable location services to see your location.'),
             ),
           );
         }
@@ -290,9 +293,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text(
-                'Location permission is required. Please grant it in settings.',
-              ),
+              content: Text('Location permission is required. Please grant it in settings.'),
             ),
           );
         }
@@ -318,6 +319,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             CameraUpdate.newCameraPosition(
               CameraPosition(target: _currentPosition!, zoom: 14),
             ),
+          );
+        }
+        
+        // Update trip location if sharing
+        if (_isSharingTrip && TripSharingService.isSharing) {
+          TripSharingService.updateLocation(
+            latitude: _currentPosition!.latitude,
+            longitude: _currentPosition!.longitude,
           );
         }
       }
@@ -384,11 +393,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  // ============================================================
-  // UPDATED _triggerSOS METHOD - Sends to ALL app users!
-  // ============================================================
   void _triggerSOS() async {
-    // Get current user info
     final user = AuthService().getCurrentUser();
     String userName = 'Someone';
     if (user != null) {
@@ -396,7 +401,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       userName = userData?['name'] ?? 'A user';
     }
     
-    // Check if location is available
     if (_currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -408,7 +412,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
     
-    // Show loading indicator
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('🚨 Sending SOS alert to all users...'),
@@ -418,7 +421,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
     
     try {
-      // 1. Send to ALL app users (Community SOS)
       await SOSAlertService.sendCommunitySOSAlert(
         userId: user?.uid ?? 'anonymous',
         userName: userName,
@@ -426,14 +428,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude: _currentPosition!.longitude,
       );
       
-      // 2. Also send to trusted contacts via SMS/WhatsApp as backup
       if (_contacts.isNotEmpty) {
         final locationLink = 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
         await SOSAlertService.sendPrivateAlerts(_contacts, locationLink);
-        debugPrint('✅ Backup SMS/WhatsApp sent to ${_contacts.length} trusted contacts');
+        debugPrint('✅ Backup SMS sent to ${_contacts.length} trusted contacts');
       }
       
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ SOS alert sent! Help is on the way.'),
@@ -452,7 +452,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
     
-    // Navigate to emergency tools
     widget.onNavigateToTools?.call();
     setState(() => _isSosActive = false);
   }
@@ -542,12 +541,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return (_currentPosition?.latitude, _currentPosition?.longitude);
   }
 
-  void _handleShareLocation() async {
+  // ============================================================
+  // TRIP SHARING - Uber/Bolt style with deep link
+  // ============================================================
+  void _handleTripSharing() async {
     if (!_locationEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location not available'),
+          content: Text('Location not available. Please enable location.'),
           backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Getting current location... Please wait.'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -560,27 +572,177 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       userName = userData?['name'] ?? 'User';
     }
 
-    if (_isSharingLocation) {
-      LocationSharingService.stopSharing();
-      setState(() => _isSharingLocation = false);
+    if (_isSharingTrip) {
+      // Stop sharing
+      await TripSharingService.stopSharing();
+      setState(() {
+        _isSharingTrip = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location sharing stopped'),
+          content: Text('Trip sharing stopped'),
           backgroundColor: Colors.orange,
         ),
       );
     } else {
-      LocationSharingService.startSharing(_contacts, userName, _getCoordinates);
-      setState(() => _isSharingLocation = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Sharing location with trusted contacts (every 15 min)',
+      // Start sharing
+      try {
+        final tripId = await TripSharingService.startSharing(
+          userName: userName,
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+        );
+        
+        setState(() {
+          _isSharingTrip = true;
+        });
+        
+        // Show share dialog with deep link
+        _showTripShareDialog(tripId, userName);
+        
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting trip share: $e'),
+            backgroundColor: Colors.red,
           ),
-          backgroundColor: Colors.green,
-        ),
-      );
+        );
+      }
     }
+  }
+
+  void _showTripShareDialog(String tripId, String userName) {
+    // Create deep link
+    final deepLink = 'purplesafety://trip/$tripId';
+    final shareMessage = '🔴 $userName is sharing their live location with you!\n\nTap this link to watch their journey on Purple Safety:\n$deepLink\n\n(Download Purple Safety if you don\'t have it)';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a0f2e),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.share_location, color: Colors.green, size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Trip Sharing Active!',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Share this link with friends. When they tap it, the app will open and show your live location.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Trip Link',
+                          style: TextStyle(color: Colors.white54, fontSize: 10),
+                        ),
+                        Text(
+                          deepLink,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.copy, color: Colors.purple, size: 20),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: deepLink));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Link copied!')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.blue, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Trip ID: $tripId',
+                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      Share.share(shareMessage, subject: 'Live Location - Purple Safety');
+                    },
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share Link'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6A1B9A),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    label: const Text('Close'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white70,
+                      side: const BorderSide(color: Colors.white24),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Note: Friend needs Purple Safety app installed',
+              style: TextStyle(color: Colors.white38, fontSize: 10),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _handleCallEmergency() {
@@ -593,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    LocationSharingService.stopSharing();
+    TripSharingService.stopSharing();
     _holdTimer?.cancel();
     _countdownTimer?.cancel();
     _locationSubscription?.cancel();
@@ -720,12 +882,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     childAspectRatio: 3,
                     children: [
                       _buildQuickAction(
-                        Icons.location_on,
-                        _isSharingLocation ? 'Stop Sharing' : 'Share Location',
-                        _isSharingLocation
-                            ? Colors.red
-                            : const Color(0xFF8260dc),
-                        _handleShareLocation,
+                        Icons.share_location,
+                        _isSharingTrip ? 'Stop Sharing Trip' : 'Share Trip',
+                        _isSharingTrip ? Colors.red : const Color(0xFF8260dc),
+                        _handleTripSharing,
                       ),
                       _buildQuickAction(
                         Icons.phone,

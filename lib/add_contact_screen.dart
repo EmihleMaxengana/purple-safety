@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class AddContactScreen extends StatefulWidget {
   final Function(Contact) onAdd;
@@ -23,7 +22,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
   
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _whatsappController = TextEditingController();
   String? _selectedRelationship;
   
   bool _isLoading = false;
@@ -42,7 +40,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-    _whatsappController.dispose();
     super.dispose();
   }
 
@@ -112,14 +109,12 @@ class _AddContactScreenState extends State<AddContactScreen> {
           }
         }
         
+        // Set the phone number and show form
+        _phoneController.text = selectedNumber;
         setState(() {
-          _phoneController.text = selectedNumber;
           _isLoading = false;
           _showForm = true;
         });
-        
-        // Auto-fill WhatsApp number
-        _setWhatsAppNumber(selectedNumber);
         
       } else {
         setState(() {
@@ -183,17 +178,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
     return cleaned.startsWith('27') || (cleaned.length == 9 && !cleaned.startsWith('0'));
   }
 
-  void _setWhatsAppNumber(String phoneNumber) {
-    String whatsappNumber = phoneNumber.replaceAll(RegExp(r'\D'), '');
-    if (whatsappNumber.startsWith('0')) {
-      whatsappNumber = whatsappNumber.substring(1);
-    }
-    if (!whatsappNumber.startsWith('27') && whatsappNumber.length == 9) {
-      whatsappNumber = '27$whatsappNumber';
-    }
-    _whatsappController.text = whatsappNumber;
-  }
-
   void _saveContact() {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -226,7 +210,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
     }
 
     String formattedPhone = _formatPhoneNumber(_phoneController.text);
-    String formattedWhatsApp = _formatPhoneNumber(_whatsappController.text);
 
     final newContact = Contact(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -238,9 +221,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
       active: true,
       phone: formattedPhone,
       relationship: _selectedRelationship,
-      socialLinks: {
-        if (formattedWhatsApp.isNotEmpty) 'whatsapp': formattedWhatsApp,
-      },
+      socialLinks: {},
     );
 
     widget.onAdd(newContact);
@@ -251,14 +232,13 @@ class _AddContactScreenState extends State<AddContactScreen> {
       ),
     );
     
-    _clearForm();
+    // Go back to home screen
     Navigator.pop(context);
   }
 
   void _clearForm() {
     _nameController.clear();
     _phoneController.clear();
-    _whatsappController.clear();
     _selectedRelationship = null;
     setState(() {
       _showForm = false;
@@ -288,7 +268,13 @@ class _AddContactScreenState extends State<AddContactScreen> {
         foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () {
+            if (_showForm) {
+              _clearForm();
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
       ),
       body: Container(
@@ -370,18 +356,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white70),
-            onPressed: () {
-              _clearForm();
-            },
-            alignment: Alignment.centerLeft,
-          ),
-          
-          const SizedBox(height: 8),
-          
           const Text(
             'Contact Details',
             style: TextStyle(
@@ -412,7 +386,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Phone number field (SMS)
+          // Phone number field
           Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
@@ -423,32 +397,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
               style: const TextStyle(color: Colors.white),
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
-                hintText: 'Phone Number * (SMS alerts)',
+                hintText: 'Phone Number *',
                 hintStyle: TextStyle(color: Color(0xFFBF7DCB)),
                 prefixIcon: Icon(Icons.phone, color: Colors.green),
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // WhatsApp field (for location sharing only)
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TextFormField(
-              controller: _whatsappController,
-              style: const TextStyle(color: Colors.white),
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                hintText: 'WhatsApp Number (for location sharing)',
-                hintStyle: TextStyle(color: Color(0xFFBF7DCB)),
-                prefixIcon: Icon(Icons.chat, color: Color(0xFFBF7DCB)),
-                helperText: 'Optional - used only for location sharing',
-                helperStyle: TextStyle(color: Colors.white38, fontSize: 10),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
@@ -488,6 +439,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 24),
 
+          // Add contact button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
