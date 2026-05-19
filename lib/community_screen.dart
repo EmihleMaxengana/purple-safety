@@ -19,7 +19,7 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   final IncidentService _incidentService = IncidentService();
-  String _selectedView = 'map'; // Default to map view
+  String _selectedView = 'list'; // Default to list view to see posts
   
   // Map related
   GoogleMapController? _mapController;
@@ -27,11 +27,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Set<Marker> _incidentMarkers = {};
   bool _isMapReady = false;
   
-  // Active SOS events list (for list view)
+  // Active SOS events list
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
   
-  // Current user location (center of South Africa as fallback)
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
   @override
@@ -47,9 +46,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     super.dispose();
   }
 
-  // ============================================================
-  // LISTEN TO ACTIVE SOS EVENTS FROM FIRESTORE
-  // ============================================================
   void _listenToActiveSOS() {
     FirebaseFirestore.instance
         .collection('active_sos_events')
@@ -100,9 +96,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     });
   }
 
-  // ============================================================
-  // LOAD INCIDENTS AS MARKERS ON MAP
-  // ============================================================
   void _loadIncidentsAsMarkers() {
     _incidentService.getAllIncidents().listen((incidents) {
       setState(() {
@@ -151,9 +144,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  // ============================================================
-  // SHOW SOS RESPONDER MODAL
-  // ============================================================
   void _showSOSResponderModal(Map<String, dynamic> sosEvent) {
     showModalBottomSheet(
       context: context,
@@ -295,9 +285,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     }
   }
 
-  // ============================================================
-  // BUILD UI
-  // ============================================================
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -315,7 +302,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
           backgroundColor: const Color(0xFF6A1B9A),
           foregroundColor: Colors.white,
           actions: [
-            // Active SOS count badge
             if (_activeSOSEvents.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(right: 8),
@@ -335,7 +321,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ],
                 ),
               ),
-            // Toggle view button
             IconButton(
               icon: Icon(_selectedView == 'list' ? Icons.map : Icons.list),
               onPressed: () {
@@ -348,18 +333,24 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
         body: _selectedView == 'map' ? _buildMapView() : _buildListView(),
-        // REMOVED: floatingActionButton - No more bell with plus sign
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            showDialog(
+              context: context,
+              barrierDismissible: true,
+              builder: (context) => const PostChoiceModal(),
+            );
+          },
+          backgroundColor: const Color(0xFF6A1B9A),
+          child: const Icon(Icons.add_alert, color: Colors.white),
+        ),
       ),
     );
   }
 
-  // ============================================================
-  // MAP VIEW WITH SOS MARKERS
-  // ============================================================
   Widget _buildMapView() {
     return Column(
       children: [
-        // Status bar showing active SOS count
         if (_activeSOSEvents.isNotEmpty)
           Container(
             width: double.infinity,
@@ -389,7 +380,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
           ),
         
-        // Google Map
         Expanded(
           child: Stack(
             children: [
@@ -412,13 +402,11 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 compassEnabled: true,
               ),
               
-              // Loading indicator
               if (_isLoadingSOS)
                 const Center(
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
               
-              // Legend overlay - ONLY RED (Removed purple dot)
               Positioned(
                 bottom: 80,
                 right: 8,
@@ -458,13 +446,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  // ============================================================
-  // LIST VIEW (Incidents list)
-  // ============================================================
+  // LIST VIEW - Shows all incidents
   Widget _buildListView() {
     return Column(
       children: [
-        // Active SOS banner
         if (_activeSOSEvents.isNotEmpty)
           GestureDetector(
             onTap: () {
@@ -511,16 +496,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
           ),
         
-        // All incidents list
+        // All incidents list - using a simpler query that definitely works
         Expanded(
-          child: StreamBuilder<List<Incident>>(
-            stream: _incidentService.getAllIncidents(),
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('incidents')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
               
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -541,7 +529,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 );
               }
               
-              final incidents = snapshot.data!;
+              final incidents = snapshot.data!.docs.map((doc) => Incident.fromFirestore(doc)).toList();
               return ListView.builder(
                 padding: const EdgeInsets.all(8),
                 itemCount: incidents.length,
@@ -557,9 +545,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  // ============================================================
-  // INCIDENT CARD
-  // ============================================================
   Widget _buildIncidentCard(Incident incident) {
     Color typeColor = _getTypeColor(incident.type);
     
@@ -607,6 +592,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+              // Title (for missing person, shows MISSING: Name)
               Text(
                 incident.title,
                 style: const TextStyle(
@@ -623,6 +609,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 8),
+              // Missing person details
               if (incident.type == IncidentType.missingPerson && incident.missingPersonName != null)
                 Container(
                   padding: const EdgeInsets.all(8),
@@ -631,16 +618,35 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.orange.withOpacity(0.3)),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.person_search, color: Colors.orange, size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'MISSING: ${incident.missingPersonName}',
-                          style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
-                        ),
+                      Row(
+                        children: [
+                          const Icon(Icons.person_search, color: Colors.orange, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'MISSING: ${incident.missingPersonName}',
+                            style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
+                      if (incident.missingPersonAge != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Age: ${incident.missingPersonAge}',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ),
+                      if (incident.lastSeenLocation != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Last seen: ${incident.lastSeenLocation}',
+                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ),
                     ],
                   ),
                 ),

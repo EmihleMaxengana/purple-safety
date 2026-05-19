@@ -1,15 +1,25 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:purple_safety/login_screen.dart';
 import 'package:purple_safety/main_screen.dart';
+import 'package:purple_safety/services/incident_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-
+  
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  
+  // Start periodic cleanup of expired incidents
+  final incidentService = IncidentService();
+  incidentService.deleteExpiredIncidents();
+  Timer.periodic(const Duration(hours: 1), (timer) {
+    incidentService.deleteExpiredIncidents();
+  });
+  
   runApp(const PurpleSafetyApp());
 }
 

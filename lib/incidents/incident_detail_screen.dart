@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
 import '../models/incident_model.dart';
 import '../services/incident_service.dart';
 
@@ -20,11 +21,24 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   bool _isCommentingAnonymous = false;
   bool _isLoading = false;
+  bool _isMarkingFound = false;
+  int _commentCount = 0;
 
   @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _commentCount = widget.incident.commentCount;
+    _listenToCommentCount();
+  }
+
+  void _listenToCommentCount() {
+    _incidentService.getComments(widget.incident.id).listen((comments) {
+      if (mounted) {
+        setState(() {
+          _commentCount = comments.length;
+        });
+      }
+    });
   }
 
   Future<void> _addComment() async {
@@ -52,25 +66,67 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     }
   }
 
+  // FIXED: Share using XFile like the tools page
   Future<void> _shareIncident() async {
-    final message = '''
-🚨 ${widget.incident.title}
+    String shareMessage;
+    
+    if (widget.incident.type == IncidentType.missingPerson) {
+      shareMessage = '''
+🚨🚨 URGENT: MISSING PERSON 🚨🚨
 
+🔍 NAME: ${widget.incident.missingPersonName ?? 'Unknown'}
+📏 AGE: ${widget.incident.missingPersonAge ?? 'Unknown'}
+📍 LAST SEEN: ${widget.incident.lastSeenLocation ?? 'Unknown'}
+📅 REPORTED: ${_formatTime(widget.incident.timestamp)}
+
+📝 DETAILS:
 ${widget.incident.description}
 
-📍 Location: ${widget.incident.location}
-📅 Reported: ${_formatTime(widget.incident.timestamp)}
-👤 Reported by: ${widget.incident.isAnonymous ? 'Anonymous' : widget.incident.userName ?? 'User'}
-${widget.incident.userPhone != null ? '📞 Contact: ${widget.incident.userPhone}' : ''}
+📞 CONTACT: ${widget.incident.isAnonymous ? 'Report via Purple Safety app' : (widget.incident.userPhone ?? 'Report via Purple Safety app')}
 
-${widget.incident.type == IncidentType.missingPerson ? '🔍 MISSING PERSON: ${widget.incident.missingPersonName}\nAge: ${widget.incident.missingPersonAge}\nLast seen: ${widget.incident.lastSeenLocation}\n' : ''}
-Please share to help spread awareness.
+---
+Please share this post to help find them.
+Download Purple Safety app to help your community.
 ''';
+    } else {
+      shareMessage = '''
+⚠️ INCIDENT REPORT ⚠️
+
+📌 TYPE: ${_getTypeLabel().toUpperCase()}
+📅 WHEN: ${_formatTime(widget.incident.timestamp)}
+📍 WHERE: ${widget.incident.location}
+
+📝 DETAILS:
+${widget.incident.description}
+
+---
+Please stay safe. Report incidents via Purple Safety app.
+''';
+    }
     
-    await Share.share(message);
+    // Share using XFile (same as tools page)
+    if (widget.incident.type == IncidentType.missingPerson && 
+        widget.incident.missingPersonImageUrl != null && 
+        widget.incident.missingPersonImageUrl!.isNotEmpty) {
+      try {
+        final imageFile = File(widget.incident.missingPersonImageUrl!);
+        if (await imageFile.exists()) {
+          await Share.shareXFiles(
+            [XFile(widget.incident.missingPersonImageUrl!)],
+            text: shareMessage,
+            subject: 'Missing Person Alert - Purple Safety',
+          );
+        } else {
+          await Share.share(shareMessage, subject: 'Purple Safety Alert');
+        }
+      } catch (e) {
+        await Share.share(shareMessage, subject: 'Purple Safety Alert');
+      }
+    } else {
+      await Share.share(shareMessage, subject: 'Purple Safety Alert');
+    }
+    
     await _incidentService.shareIncident(widget.incident.id);
-    
-    setState(() {});
   }
 
   Future<void> _callReporter() async {
@@ -79,6 +135,57 @@ Please share to help spread awareness.
       final Uri url = Uri(scheme: 'tel', path: phone.replaceAll(' ', ''));
       if (await canLaunchUrl(url)) {
         await launchUrl(url);
+      }
+    }
+  }
+
+  Future<void> _markAsFound() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark as Found'),
+        content: const Text(
+          'Has this person been found and is safe?\n\n'
+          'This post will be marked as "FOUND" and removed from the community feed after 2 hours.\n\n'
+          'Everyone in the community will be notified.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+            ),
+            child: const Text('Yes, Mark as Found'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isMarkingFound = true);
+      
+      try {
+        await _incidentService.markAsFound(widget.incident.id);
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Person marked as found! Everyone has been notified.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      } finally {
+        setState(() => _isMarkingFound = false);
       }
     }
   }
@@ -94,15 +201,37 @@ Please share to help spread awareness.
 
   @override
   Widget build(BuildContext context) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final isPoster = currentUser?.uid == widget.incident.userId;
+    final showFoundButton = widget.incident.type == IncidentType.missingPerson && 
+                            !widget.incident.isFound && 
+                            isPoster;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Incident Details'),
         backgroundColor: const Color(0xFF6A1B9A),
         foregroundColor: Colors.white,
         actions: [
+          if (showFoundButton)
+            IconButton(
+              icon: _isMarkingFound
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.check_circle, color: Colors.green),
+              onPressed: _isMarkingFound ? null : _markAsFound,
+              tooltip: 'Mark as Found',
+            ),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: _shareIncident,
+            tooltip: 'Share',
           ),
         ],
       ),
@@ -152,6 +281,47 @@ Please share to help spread awareness.
                     ),
                     const SizedBox(height: 16),
                     
+                    // Missing person image
+                    if (widget.incident.type == IncidentType.missingPerson && 
+                        widget.incident.missingPersonImageUrl != null &&
+                        widget.incident.missingPersonImageUrl!.isNotEmpty)
+                      Container(
+                        height: 180,
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(widget.incident.missingPersonImageUrl!),
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey[800],
+                                child: const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.person_outline, color: Colors.white54, size: 40),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'No photo available',
+                                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    
+                    // Missing person details
                     if (widget.incident.type == IncidentType.missingPerson)
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -184,6 +354,54 @@ Please share to help spread awareness.
                         ),
                       ),
                     const SizedBox(height: 16),
+                    
+                    // Evidence images for harassment
+                    if (widget.incident.imageUrls.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Evidence Images',
+                              style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 100,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: widget.incident.imageUrls.length,
+                                itemBuilder: (context, index) {
+                                  return Container(
+                                    width: 100,
+                                    margin: const EdgeInsets.only(right: 8),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.white24),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.file(
+                                        File(widget.incident.imageUrls[index]),
+                                        fit: BoxFit.cover,
+                                        width: 100,
+                                        height: 100,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return Container(
+                                            color: Colors.grey[800],
+                                            child: const Icon(Icons.broken_image, color: Colors.white54),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     
                     const Text(
                       'Description',
@@ -248,12 +466,13 @@ Please share to help spread awareness.
                     ],
                     const SizedBox(height: 16),
                     
+                    // Dynamic comment count
                     Row(
                       children: [
                         Icon(Icons.comment, color: const Color(0xFFBF7DCB), size: 16),
                         const SizedBox(width: 4),
                         Text(
-                          '${widget.incident.commentCount} comments',
+                          '$_commentCount comments',
                           style: const TextStyle(color: Colors.white70),
                         ),
                         const SizedBox(width: 16),

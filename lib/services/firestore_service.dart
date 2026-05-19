@@ -9,6 +9,7 @@ class Alert {
   bool read;
   final String? incidentId;
   final String? incidentTitle;
+  final String? invitationId;
 
   Alert({
     required this.id,
@@ -18,6 +19,7 @@ class Alert {
     this.read = false,
     this.incidentId,
     this.incidentTitle,
+    this.invitationId,
   });
 
   factory Alert.fromFirestore(DocumentSnapshot doc) {
@@ -30,6 +32,7 @@ class Alert {
       read: data['read'] ?? false,
       incidentId: data['incidentId'],
       incidentTitle: data['incidentTitle'],
+      invitationId: data['invitationId'],
     );
   }
 
@@ -41,6 +44,7 @@ class Alert {
       'read': read,
       'incidentId': incidentId,
       'incidentTitle': incidentTitle,
+      'invitationId': invitationId,
     };
   }
 }

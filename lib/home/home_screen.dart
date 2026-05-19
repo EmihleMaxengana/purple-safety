@@ -16,6 +16,7 @@ import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
 import 'package:purple_safety/services/sos_alert_service.dart';
 import 'package:purple_safety/services/trip_sharing_service.dart';
+import 'package:purple_safety/invitations/invite_contact_screen.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -90,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Trip sharing state
   bool _isSharingTrip = false;
+  Timer? _tripUpdateTimer;
 
   // Map state
   GoogleMapController? _mapController;
@@ -322,7 +324,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         }
         
-        // Update trip location if sharing
         if (_isSharingTrip && TripSharingService.isSharing) {
           TripSharingService.updateLocation(
             latitude: _currentPosition!.latitude,
@@ -471,23 +472,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  void _showAddContactModal() {
-    final user = AuthService().getCurrentUser();
-    if (user == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddContactScreen(
-          onAdd: (newContact) async {
-            await _firestoreService.addContact(user.uid, newContact);
-          },
-          currentCount: _contacts.length,
-        ),
-      ),
-    );
-  }
-
   void _showManageContactsModal() {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -541,9 +525,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return (_currentPosition?.latitude, _currentPosition?.longitude);
   }
 
-  // ============================================================
-  // TRIP SHARING - Uber/Bolt style with deep link
-  // ============================================================
   void _handleTripSharing() async {
     if (!_locationEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -573,8 +554,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_isSharingTrip) {
-      // Stop sharing
       await TripSharingService.stopSharing();
+      _tripUpdateTimer?.cancel();
       setState(() {
         _isSharingTrip = false;
       });
@@ -585,7 +566,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     } else {
-      // Start sharing
       try {
         final tripId = await TripSharingService.startSharing(
           userName: userName,
@@ -597,7 +577,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _isSharingTrip = true;
         });
         
-        // Show share dialog with deep link
+        _tripUpdateTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+          if (_currentPosition != null && TripSharingService.isSharing) {
+            TripSharingService.updateLocation(
+              latitude: _currentPosition!.latitude,
+              longitude: _currentPosition!.longitude,
+            );
+          }
+        });
+        
         _showTripShareDialog(tripId, userName);
         
       } catch (e) {
@@ -612,9 +600,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _showTripShareDialog(String tripId, String userName) {
-    // Create deep link
-    final deepLink = 'purplesafety://trip/$tripId';
-    final shareMessage = '🔴 $userName is sharing their live location with you!\n\nTap this link to watch their journey on Purple Safety:\n$deepLink\n\n(Download Purple Safety if you don\'t have it)';
+    final shareMessage = '🔴 $userName is sharing their live location with you!\n\n'
+        'Open Purple Safety app, go to Full Map, tap the QR icon, and enter this Trip ID:\n\n'
+        'TRIP ID: $tripId\n\n'
+        '(Download Purple Safety if you don\'t have it)';
 
     showModalBottomSheet(
       context: context,
@@ -642,7 +631,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 8),
             Text(
-              'Share this link with friends. When they tap it, the app will open and show your live location.',
+              'Share this Trip ID with friends. They can enter it in the Full Map to watch your journey.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
@@ -660,12 +649,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Trip Link',
+                          'Trip ID',
                           style: TextStyle(color: Colors.white54, fontSize: 10),
                         ),
                         Text(
-                          deepLink,
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          tripId,
+                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
@@ -674,31 +663,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   IconButton(
                     icon: const Icon(Icons.copy, color: Colors.purple, size: 20),
                     onPressed: () {
-                      Clipboard.setData(ClipboardData(text: deepLink));
+                      Clipboard.setData(ClipboardData(text: tripId));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Link copied!')),
+                        const SnackBar(content: Text('Trip ID copied!')),
                       );
                     },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline, color: Colors.blue, size: 16),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Trip ID: $tripId',
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
-                    ),
                   ),
                 ],
               ),
@@ -712,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       Share.share(shareMessage, subject: 'Live Location - Purple Safety');
                     },
                     icon: const Icon(Icons.share),
-                    label: const Text('Share Link'),
+                    label: const Text('Share Trip ID'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6A1B9A),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -756,6 +725,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     TripSharingService.stopSharing();
+    _tripUpdateTimer?.cancel();
     _holdTimer?.cancel();
     _countdownTimer?.cancel();
     _locationSubscription?.cancel();
@@ -766,6 +736,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isMaxContacts = _contacts.length >= 5;
+    
     return Stack(
       children: [
         Container(
@@ -910,8 +882,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 16),
 
                   SectionHeader(
-                    title: 'TRUSTED CONTACTS',
-                    action: 'Manage →',
+                    title: 'TRUSTED CONTACTS (${_contacts.length}/5)',
+                    action: _contacts.isNotEmpty ? 'Manage →' : null,
                     onActionTap: _showManageContactsModal,
                   ),
                   const SizedBox(height: 8),
@@ -928,7 +900,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             c.active,
                           ),
                         ),
-                        _buildAddContact(),
+                        if (!isMaxContacts) _buildAddContact(),
                       ],
                     ),
                   ),
@@ -1170,9 +1142,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildAddContact() {
     return GestureDetector(
-      onTap: _showAddContactModal,
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const InviteContactScreen()),
+        );
+      },
       child: Container(
-        width: 46,
+        width: 60,
         margin: const EdgeInsets.only(right: 12),
         child: Column(
           children: [
@@ -1188,13 +1165,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
                 child: const Center(
-                  child: Icon(Icons.add, color: Colors.purple, size: 18),
+                  child: Icon(Icons.add, color: Colors.purple, size: 24),
                 ),
               ),
             ),
             const SizedBox(height: 4),
             const Text(
-              'Add',
+              'Invite',
               style: TextStyle(color: Colors.white70, fontSize: 10),
             ),
           ],

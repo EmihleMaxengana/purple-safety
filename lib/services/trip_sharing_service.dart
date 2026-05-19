@@ -11,12 +11,11 @@ class TripSharingService {
   static bool get isSharing => _isSharing;
   static String? get currentTripId => _currentTripId;
 
-  // Start sharing trip
+  // Start sharing your live location
   static Future<String> startSharing({
     required String userName,
     required double latitude,
     required double longitude,
-    List<String>? sharedWithUserIds,
   }) async {
     // Stop any existing sharing
     if (_isSharing) {
@@ -26,7 +25,7 @@ class TripSharingService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
 
-    // Create new trip document
+    // Create a new trip document in Firestore
     final tripRef = _firestore.collection('active_trips').doc();
     _currentTripId = tripRef.id;
 
@@ -38,8 +37,7 @@ class TripSharingService {
       'currentLongitude': longitude,
       'startTime': FieldValue.serverTimestamp(),
       'lastUpdate': FieldValue.serverTimestamp(),
-      'status': 'active',
-      'sharedWith': sharedWithUserIds ?? [],
+      'status': 'active', // active, ended, expired
       'locationHistory': [
         {
           'latitude': latitude,
@@ -50,10 +48,11 @@ class TripSharingService {
     });
 
     _isSharing = true;
+    
     return _currentTripId!;
   }
 
-  // Update location from HomeScreen
+  // Update your current location
   static Future<void> updateLocation({
     required double latitude,
     required double longitude,
@@ -80,7 +79,7 @@ class TripSharingService {
     }
   }
 
-  // Stop sharing trip
+  // Stop sharing your location
   static Future<void> stopSharing() async {
     if (!_isSharing || _currentTripId == null) return;
 
@@ -101,26 +100,9 @@ class TripSharingService {
     _currentTripId = null;
   }
 
-  // Get active trips for Full Map screen
-  static Stream<List<Map<String, dynamic>>> getActiveTrips() {
-    return _firestore
-        .collection('active_trips')
-        .where('status', isEqualTo: 'active')
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data();
-            return {
-              'tripId': doc.id,
-              'userId': data['userId'],
-              'userName': data['userName'],
-              'latitude': data['currentLatitude'],
-              'longitude': data['currentLongitude'],
-              'lastUpdate': data['lastUpdate'],
-              'locationHistory': data['locationHistory'] ?? [],
-            };
-          }).toList();
-        });
+  // Get a specific trip to follow (for viewers)
+  static Stream<DocumentSnapshot> getTrip(String tripId) {
+    return _firestore.collection('active_trips').doc(tripId).snapshots();
   }
 
   // Clean up expired trips

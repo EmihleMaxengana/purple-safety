@@ -8,8 +8,8 @@ class IncidentService {
 
   Future<void> createIncident(Incident incident) async {
     try {
-      // Calculate expiration date (24 hours from now)
       final expiresAt = DateTime.now().add(const Duration(hours: 24));
+      final deleteAt = null;
       
       final incidentWithExpiry = Incident(
         id: incident.id,
@@ -36,7 +36,8 @@ class IncidentService {
         isResolved: false,
         isFound: false,
         foundAt: null,
-        expiresAt: expiresAt,  // NEW: Auto-delete after 24 hours
+        expiresAt: expiresAt,
+        deleteAt: deleteAt,
       );
       
       await _firestore.collection('incidents').doc(incident.id).set(incidentWithExpiry.toFirestore());
@@ -47,70 +48,104 @@ class IncidentService {
     }
   }
 
-  // NEW: Mark incident as found
+  // Mark incident as found - notifies ALL users
   Future<void> markAsFound(String incidentId) async {
     try {
       final now = DateTime.now();
+      final deleteAt = now.add(const Duration(hours: 2));
+      
+      // Get the incident details first
+      final incidentDoc = await _firestore.collection('incidents').doc(incidentId).get();
+      if (!incidentDoc.exists) return;
+      
+      final incident = Incident.fromFirestore(incidentDoc);
+      final missingPersonName = incident.missingPersonName ?? 'A missing person';
+      
       await _firestore.collection('incidents').doc(incidentId).update({
         'isFound': true,
         'foundAt': Timestamp.fromDate(now),
+        'deleteAt': Timestamp.fromDate(deleteAt),
       });
       
-      // Add a global alert that the person was found
-      await _firestore.collection('global_alerts').add({
-        'type': 'found',
-        'message': '✅ GOOD NEWS: A missing person has been found and is safe!',
-        'incidentId': incidentId,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
+      // Send notification to ALL users that the person has been found
+      await _sendFoundNotificationToAllUsers(missingPersonName, incidentId);
       
-      print('✅ Incident $incidentId marked as found');
+      print('✅ Incident $incidentId marked as found, will be deleted at $deleteAt');
     } catch (e) {
       print('Error marking incident as found: $e');
       throw e;
     }
   }
 
-  // NEW: Delete expired incidents (called periodically)
+  // Send notification to all users when a missing person is found
+  Future<void> _sendFoundNotificationToAllUsers(String missingPersonName, String incidentId) async {
+    try {
+      final usersSnapshot = await _firestore.collection('users').get();
+      final batch = _firestore.batch();
+      
+      for (var userDoc in usersSnapshot.docs) {
+        final alertRef = _firestore
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('alerts')
+            .doc();
+        
+        batch.set(alertRef, {
+          'message': '✅ GOOD NEWS: $missingPersonName has been found and is safe!',
+          'type': 'found',
+          'incidentId': incidentId,
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+        });
+      }
+      
+      await batch.commit();
+      print('✅ Found notification sent to ${usersSnapshot.docs.length} users');
+    } catch (e) {
+      print('Error sending found notifications: $e');
+    }
+  }
+
+  // Delete expired incidents
   Future<void> deleteExpiredIncidents() async {
     try {
       final now = DateTime.now();
+      
       final expiredIncidents = await _firestore
           .collection('incidents')
           .where('expiresAt', isLessThan: Timestamp.fromDate(now))
           .get();
       
+      final foundExpired = await _firestore
+          .collection('incidents')
+          .where('isFound', isEqualTo: true)
+          .where('deleteAt', isLessThan: Timestamp.fromDate(now))
+          .get();
+      
       final batch = _firestore.batch();
+      
       for (var doc in expiredIncidents.docs) {
         batch.delete(doc.reference);
         print('🗑️ Deleted expired incident: ${doc.id}');
       }
+      
+      for (var doc in foundExpired.docs) {
+        batch.delete(doc.reference);
+        print('🗑️ Deleted found incident after 2 hours: ${doc.id}');
+      }
+      
       await batch.commit();
     } catch (e) {
       print('Error deleting expired incidents: $e');
     }
   }
 
-  // NEW: Get only active incidents (not found and not expired)
-  Stream<List<Incident>> getActiveIncidents() {
-    final now = DateTime.now();
-    return _firestore
-        .collection('incidents')
-        .where('isFound', isEqualTo: false)
-        .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
-        .orderBy('timestamp', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Incident.fromFirestore(doc))
-            .toList());
-  }
-
-  // Keep original method for backward compatibility
+  // Get all incidents
   Stream<List<Incident>> getAllIncidents() {
     final now = DateTime.now();
     return _firestore
         .collection('incidents')
-        .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+        .where('deleteAt', isGreaterThan: Timestamp.fromDate(now))
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
@@ -123,7 +158,7 @@ class IncidentService {
     return _firestore
         .collection('incidents')
         .where('type', isEqualTo: type.toString())
-        .where('expiresAt', isGreaterThan: Timestamp.fromDate(now))
+        .where('deleteAt', isGreaterThan: Timestamp.fromDate(now))
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs

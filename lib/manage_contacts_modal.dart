@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/edit_contact_screen.dart';
+import 'package:purple_safety/invitations/invite_contact_screen.dart';
 
 class ManageContactsModal extends StatefulWidget {
   final List<Contact> contacts;
@@ -30,7 +31,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
   @override
   void didUpdateWidget(covariant ManageContactsModal oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Update local contacts when widget contacts change
     if (oldWidget.contacts != widget.contacts) {
       setState(() {
         _contacts = List.from(widget.contacts);
@@ -39,7 +39,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
   }
 
   void _handleDelete(String contactId) async {
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -60,15 +59,10 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
     );
 
     if (confirmed == true) {
-      // Call the delete function
       await widget.onDelete(contactId);
-      
-      // Immediately update local list
       setState(() {
         _contacts.removeWhere((contact) => contact.id == contactId);
       });
-      
-      // Show success message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -88,7 +82,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
           contact: contact,
           onUpdate: (updatedContact) async {
             await widget.onUpdate(updatedContact);
-            // Update local list
             setState(() {
               final index = _contacts.indexWhere((c) => c.id == updatedContact.id);
               if (index != -1) {
@@ -99,6 +92,14 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
           onDelete: () => _handleDelete(contact.id),
         ),
       ),
+    );
+  }
+
+  void _inviteNewContact() {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const InviteContactScreen()),
     );
   }
 
@@ -134,7 +135,7 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
               child: _contacts.isEmpty
                   ? const Center(
                       child: Text(
-                        'No contacts yet.\nTap the + button to add one.',
+                        'No contacts yet.\nTap Invite New Contact to add someone.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: Colors.white70),
                       ),
@@ -150,7 +151,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Avatar
                               CircleAvatar(
                                 radius: 20,
                                 backgroundColor: c.color.withOpacity(0.5),
@@ -164,8 +164,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                                 ),
                               ),
                               const SizedBox(width: 12),
-                              
-                              // Contact info - Expanded with flexible text
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,36 +222,9 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                                         ),
                                       ],
                                     ),
-                                    if (c.socialLinks.containsKey('whatsapp'))
-                                      Padding(
-                                        padding: const EdgeInsets.only(top: 2),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.chat,
-                                              color: Colors.green,
-                                              size: 12,
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Expanded(
-                                              child: Text(
-                                                c.socialLinks['whatsapp']!,
-                                                style: const TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 11,
-                                                ),
-                                                overflow: TextOverflow.ellipsis,
-                                                maxLines: 1,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
                                   ],
                                 ),
                               ),
-                              
-                              // Action buttons
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -278,15 +249,54 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                       },
                     ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6A1B9A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+            const SizedBox(height: 16),
+            // Invite button - fixed sizing
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _inviteNewContact,
+                icon: const Icon(Icons.person_add, color: Colors.white, size: 18),
+                label: const Text(
+                  'Invite New Contact',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6A1B9A),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
               ),
-              child: const Text('Close'),
+            ),
+            const SizedBox(height: 12),
+            // Close button - fixed sizing
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  side: const BorderSide(color: Colors.white24),
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  minimumSize: const Size(double.infinity, 44),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ),
           ],
         ),

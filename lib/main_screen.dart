@@ -9,11 +9,14 @@ import 'package:purple_safety/safety_tools_screen.dart';
 import 'package:purple_safety/settings_screen.dart';
 import 'package:purple_safety/user_profile_modal.dart';
 import 'package:purple_safety/safety_alerts_screen.dart';
+import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/services/auth_service.dart';
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({Key? key}) : super(key: key);
+  final String? initialTripId;
+  
+  const MainScreen({Key? key, this.initialTripId}) : super(key: key);
 
   @override
   State<MainScreen> createState() => _MainScreenState();
@@ -38,6 +41,7 @@ class _MainScreenState extends State<MainScreen> {
       });
     });
     _listenToAlerts();
+    _checkInitialTripId();
   }
 
   void _listenToAlerts() async {
@@ -47,6 +51,19 @@ class _MainScreenState extends State<MainScreen> {
         setState(() {
           _unreadAlertsCount = alerts.where((a) => !a.read).length;
         });
+      });
+    }
+  }
+
+  void _checkInitialTripId() {
+    if (widget.initialTripId != null && mounted) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FullMapScreen(initialTripId: widget.initialTripId),
+          ),
+        );
       });
     }
   }

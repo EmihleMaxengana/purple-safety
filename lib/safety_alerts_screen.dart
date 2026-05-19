@@ -3,6 +3,7 @@ import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/incidents/incident_detail_screen.dart';
 import 'package:purple_safety/services/incident_service.dart';
+import 'package:purple_safety/invitations/pending_invitations_screen.dart';
 
 class SafetyAlertsScreen extends StatefulWidget {
   const SafetyAlertsScreen({Key? key}) : super(key: key);
@@ -30,6 +31,13 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
           MaterialPageRoute(
             builder: (context) => IncidentDetailScreen(incident: incident),
           ),
+        );
+      }
+    } else if (alert.type == 'invitation' && alert.invitationId != null) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const PendingInvitationsScreen()),
         );
       }
     }
@@ -89,17 +97,22 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
               itemCount: alerts.length,
               itemBuilder: (context, index) {
                 final alert = alerts[index];
-                Color color = alert.type == 'warning'
-                    ? Colors.red
-                    : alert.type == 'incident'
-                    ? Colors.orange
-                    : Colors.blue;
+                Color color;
+                IconData icon;
                 
-                IconData icon = alert.type == 'warning'
-                    ? Icons.warning
-                    : alert.type == 'incident'
-                    ? Icons.report
-                    : Icons.info;
+                if (alert.type == 'warning') {
+                  color = Colors.red;
+                  icon = Icons.warning;
+                } else if (alert.type == 'incident') {
+                  color = Colors.orange;
+                  icon = Icons.report;
+                } else if (alert.type == 'invitation') {
+                  color = Colors.purple;
+                  icon = Icons.person_add;
+                } else {
+                  color = Colors.blue;
+                  icon = Icons.info;
+                }
                 
                 return GestureDetector(
                   onTap: () => _onAlertTap(alert),
@@ -154,7 +167,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                               shape: BoxShape.circle,
                             ),
                           ),
-                        if (alert.type == 'incident')
+                        if (alert.type == 'incident' || alert.type == 'invitation')
                           const Icon(
                             Icons.arrow_forward_ios,
                             color: Colors.white38,

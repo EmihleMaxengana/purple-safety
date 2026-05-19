@@ -25,11 +25,9 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _alternativePhoneController = TextEditingController();
   
-  // Incident info
-  String _selectedType = 'missingPerson';
-  final TextEditingController _titleController = TextEditingController();
+  // Incident info - REMOVED title, location, crime, accident, other
+  String _selectedType = 'missingPerson'; // Only missingPerson and harassment
   final TextEditingController _descriptionController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
   
   // Missing person fields
   final TextEditingController _missingPersonNameController = TextEditingController();
@@ -42,20 +40,15 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
   List<File> _videos = [];
   bool _isLoading = false;
   
+  // Updated incident types - removed crime, accident, other
   final List<String> _incidentTypes = [
     'missingPerson',
     'harassment',
-    'crime',
-    'accident',
-    'other',
   ];
   
   final Map<String, String> _typeLabels = {
     'missingPerson': 'Missing Person',
     'harassment': 'Harassment',
-    'crime': 'Crime',
-    'accident': 'Accident',
-    'other': 'Other',
   };
 
   @override
@@ -68,9 +61,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
   void dispose() {
     _phoneController.dispose();
     _alternativePhoneController.dispose();
-    _titleController.dispose();
     _descriptionController.dispose();
-    _locationController.dispose();
     _missingPersonNameController.dispose();
     _missingPersonAgeController.dispose();
     _lastSeenLocationController.dispose();
@@ -142,8 +133,23 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
       
       IncidentType type = IncidentType.values.firstWhere(
         (e) => e.toString() == 'IncidentType.$_selectedType',
-        orElse: () => IncidentType.other,
+        orElse: () => IncidentType.missingPerson,
       );
+      
+      // Get location (using geocoding to get location name from current position)
+      String locationName = 'Unknown location';
+      double? latitude;
+      double? longitude;
+      
+      try {
+        // You'll need to get current location here
+        // For now, we'll use placeholder or ask user
+        locationName = _lastSeenLocationController.text.isNotEmpty 
+            ? _lastSeenLocationController.text 
+            : 'Location not specified';
+      } catch (e) {
+        locationName = 'Location not specified';
+      }
       
       final incident = Incident(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -152,7 +158,9 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
         userPhone: _phoneController.text,
         alternativePhone: _alternativePhoneController.text.isNotEmpty ? _alternativePhoneController.text : null,
         isAnonymous: widget.isAnonymous,
-        title: _titleController.text,
+        title: _selectedType == 'missingPerson' 
+            ? 'MISSING: ${_missingPersonNameController.text}' 
+            : 'Harassment Report',
         description: _descriptionController.text,
         type: type,
         missingPersonName: _selectedType == 'missingPerson' ? _missingPersonNameController.text : null,
@@ -160,9 +168,12 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             ? int.tryParse(_missingPersonAgeController.text)
             : null,
         lastSeenLocation: _selectedType == 'missingPerson' ? _lastSeenLocationController.text : null,
-        location: _locationController.text,
-        imageUrls: [],
-        videoUrls: [],
+        missingPersonImageUrl: _missingPersonImage != null ? _missingPersonImage!.path : null,
+        location: locationName,
+        latitude: latitude,
+        longitude: longitude,
+        imageUrls: [], // Will be uploaded to storage in production
+        videoUrls: [], // Will be uploaded to storage in production
         timestamp: DateTime.now(),
       );
       
@@ -170,7 +181,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Incident reported successfully!')),
+          const SnackBar(content: Text('Report submitted successfully!')),
         );
         Navigator.pop(context);
       }
@@ -217,7 +228,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 8),
                 
-                // Name (auto-filled for non-anonymous)
                 if (!widget.isAnonymous)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -263,7 +273,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 20),
                 
-                // Incident type dropdown
+                // Incident type dropdown - Only Missing Person and Harassment
                 const Text(
                   'Incident Type *',
                   style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
@@ -293,20 +303,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 16),
                 
-                // Title
-                _buildTextField(
-                  controller: _titleController,
-                  label: 'Title *',
-                  hint: 'Brief title of the incident',
-                  icon: Icons.title,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a title';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
+                // REMOVED: Title field
                 
                 // Missing person section
                 if (_selectedType == 'missingPerson') ...[
@@ -355,9 +352,15 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                         
                         _buildTextField(
                           controller: _lastSeenLocationController,
-                          label: 'Last Seen Location',
+                          label: 'Last Seen Location *',
                           hint: 'Where were they last seen?',
                           icon: Icons.location_searching,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter last seen location';
+                            }
+                            return null;
+                          },
                         ),
                         const SizedBox(height: 12),
                         
@@ -425,20 +428,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   const SizedBox(height: 16),
                 ],
                 
-                // Location
-                _buildTextField(
-                  controller: _locationController,
-                  label: 'Location *',
-                  hint: 'Where did this happen?',
-                  icon: Icons.location_on,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a location';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
+                // REMOVED: Location field
                 
                 // Description
                 _buildTextField(
@@ -456,8 +446,8 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 16),
                 
-                // Media section (for harassment, crime, etc.)
-                if (_selectedType == 'harassment' || _selectedType == 'crime') ...[
+                // Evidence section (for harassment only)
+                if (_selectedType == 'harassment') ...[
                   const Text(
                     'Evidence (Optional)',
                     style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
@@ -669,4 +659,4 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
       ],
     );
   }
-} 
+}
