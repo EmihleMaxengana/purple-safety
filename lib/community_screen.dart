@@ -8,7 +8,6 @@ import 'models/incident_model.dart';
 import 'services/incident_service.dart';
 import 'services/sos_alert_service.dart';
 import 'incidents/incident_detail_screen.dart';
-import 'incidents/post_choice_modal.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);
@@ -19,7 +18,7 @@ class CommunityScreen extends StatefulWidget {
 
 class _CommunityScreenState extends State<CommunityScreen> {
   final IncidentService _incidentService = IncidentService();
-  String _selectedView = 'list'; // Default to list view to see posts
+  String _selectedView = 'list';
   
   // Map related
   GoogleMapController? _mapController;
@@ -333,17 +332,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
         body: _selectedView == 'map' ? _buildMapView() : _buildListView(),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () {
-            showDialog(
-              context: context,
-              barrierDismissible: true,
-              builder: (context) => const PostChoiceModal(),
-            );
-          },
-          backgroundColor: const Color(0xFF6A1B9A),
-          child: const Icon(Icons.add_alert, color: Colors.white),
-        ),
+        // NO FLOATING ACTION BUTTON - REMOVED
       ),
     );
   }
@@ -446,7 +435,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  // LIST VIEW - Shows all incidents
   Widget _buildListView() {
     return Column(
       children: [
@@ -496,7 +484,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
             ),
           ),
         
-        // All incidents list - using a simpler query that definitely works
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -521,7 +508,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       ),
                       SizedBox(height: 8),
                       Text(
-                        'Tap the + button to report an incident',
+                        'Tap Report Incident on Home screen to post',
                         style: TextStyle(color: Colors.white38),
                       ),
                     ],
@@ -592,7 +579,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              // Title (for missing person, shows MISSING: Name)
               Text(
                 incident.title,
                 style: const TextStyle(
@@ -609,7 +595,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 8),
-              // Missing person details
               if (incident.type == IncidentType.missingPerson && incident.missingPersonName != null)
                 Container(
                   padding: const EdgeInsets.all(8),
