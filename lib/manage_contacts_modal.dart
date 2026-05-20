@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/edit_contact_screen.dart';
-import 'package:purple_safety/invitations/invite_contact_screen.dart';
+import 'package:purple_safety/Invitations/invite_contact_screen.dart';
 
 class ManageContactsModal extends StatefulWidget {
   final List<Contact> contacts;
@@ -83,7 +83,9 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
           onUpdate: (updatedContact) async {
             await widget.onUpdate(updatedContact);
             setState(() {
-              final index = _contacts.indexWhere((c) => c.id == updatedContact.id);
+              final index = _contacts.indexWhere(
+                (c) => c.id == updatedContact.id,
+              );
               if (index != -1) {
                 _contacts[index] = updatedContact;
               }
@@ -229,14 +231,22 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                                    icon: const Icon(
+                                      Icons.edit,
+                                      color: Colors.blue,
+                                      size: 20,
+                                    ),
                                     onPressed: () => _handleEdit(c),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
                                   ),
                                   const SizedBox(width: 8),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                      size: 20,
+                                    ),
                                     onPressed: () => _handleDelete(c.id),
                                     padding: EdgeInsets.zero,
                                     constraints: const BoxConstraints(),
@@ -255,18 +265,22 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _inviteNewContact,
-                icon: const Icon(Icons.person_add, color: Colors.white, size: 18),
+                icon: const Icon(
+                  Icons.person_add,
+                  color: Colors.white,
+                  size: 18,
+                ),
                 label: const Text(
                   'Invite New Contact',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF6A1B9A),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
                   minimumSize: const Size(double.infinity, 44),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -283,7 +297,10 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white70,
                   side: const BorderSide(color: Colors.white24),
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
                   minimumSize: const Size(double.infinity, 44),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -291,10 +308,7 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                 ),
                 child: const Text(
                   'Close',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
               ),
             ),
