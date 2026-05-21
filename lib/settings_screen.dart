@@ -6,7 +6,8 @@ import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/login_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:url_launcher/url_launcher.dart';
+// import 'package:url_launcher/url_launcher.dart';
+import 'package:app_settings/app_settings.dart';
 import 'dart:io';
 
 class SettingsScreen extends StatefulWidget {
@@ -147,7 +148,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-              
+
               if (newPasswordController.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -157,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-              
+
               if (currentPasswordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -167,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-              
+
               // Show loading
               showDialog(
                 context: context,
@@ -176,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
               );
-              
+
               try {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user != null && user.email != null) {
@@ -186,15 +187,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     password: currentPasswordController.text,
                   );
                   await user.reauthenticateWithCredential(credential);
-                  
+
                   // Update password
                   await user.updatePassword(newPasswordController.text);
-                  
+
                   // Close loading dialog
                   Navigator.pop(context);
                   // Close password dialog
                   Navigator.pop(context);
-                  
+
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Password changed successfully'),
@@ -205,7 +206,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               } on FirebaseAuthException catch (e) {
                 // Close loading dialog
                 Navigator.pop(context);
-                
+
                 if (e.code == 'wrong-password') {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -245,9 +246,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // SIMPLIFIED MANAGE BIOMETRICS - Direct to device settings or toggle
   // ============================================================
   void _showManageBiometricsDialog() async {
-    final isBiometricAvailable = await BiometricService.isFingerprintAvailable();
+    final isBiometricAvailable =
+        await BiometricService.isFingerprintAvailable();
     final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
-    
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -271,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             const Divider(color: Colors.white24),
-            
+
             // SOS Fingerprint Toggle
             SwitchListTile(
               title: const Text(
@@ -279,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(color: Colors.white),
               ),
               subtitle: Text(
-                isBiometricAvailable 
+                isBiometricAvailable
                     ? 'Use fingerprint to instantly trigger SOS'
                     : 'Fingerprint not available on this device',
                 style: TextStyle(
@@ -288,38 +290,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               value: isSOSEnabled && isBiometricAvailable,
-              onChanged: isBiometricAvailable ? (value) async {
-                if (value) {
-                  // Enable SOS fingerprint
-                  final success = await BiometricService.enableSOSFingerprint();
-                  if (success) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('SOS Fingerprint enabled')),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to enable. Please try again.'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                } else {
-                  // Disable - would need a method to disable
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Feature coming soon'),
-                    ),
-                  );
-                }
-                Navigator.pop(context);
-                setState(() {});
-              } : null,
+              onChanged: isBiometricAvailable
+                  ? (value) async {
+                      if (value) {
+                        // Enable SOS fingerprint
+                        final success =
+                            await BiometricService.enableSOSFingerprint();
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('SOS Fingerprint enabled'),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Failed to enable. Please try again.',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      } else {
+                        // Disable - would need a method to disable
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Feature coming soon')),
+                        );
+                      }
+                      Navigator.pop(context);
+                      setState(() {});
+                    }
+                  : null,
               activeColor: const Color(0xFF6A1B9A),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Open device settings button
             ListTile(
               leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
@@ -331,33 +338,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Manage fingerprints in system settings',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
-              trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white54, size: 16),
+              trailing: const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white54,
+                size: 16,
+              ),
               onTap: () {
                 Navigator.pop(context);
                 _openDeviceBiometricSettings();
               },
             ),
-            
+
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(color: Colors.white70)),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Colors.white70),
+              ),
             ),
           ],
         ),
       ),
     );
   }
-  
+
   Future<void> _openDeviceBiometricSettings() async {
     // Open device settings - Android and iOS
+    // if (Platform.isAndroid) {
+    //   await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
+    // } else if (Platform.isIOS) {
+    //   await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
+    // } else {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('Open your device settings to manage fingerprints')),
+    //   );
+    // }
+
     if (Platform.isAndroid) {
-      await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
+      AppSettings.openAppSettings(type: AppSettingsType.security);
     } else if (Platform.isIOS) {
-      await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
+      AppSettings.openAppSettings();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Open your device settings to manage fingerprints')),
+        const SnackBar(
+          content: Text('Open your device settings to manage fingerprints'),
+        ),
       );
     }
   }
@@ -451,7 +477,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close', style: TextStyle(color: Color(0xFFBF7DCB))),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: Color(0xFFBF7DCB)),
+            ),
           ),
         ],
         backgroundColor: const Color(0xFF1a0f2e),
@@ -505,7 +534,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    
+
     if (confirm == true) {
       await _deleteAccount();
     }
@@ -513,7 +542,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<String?> _showPasswordDialog() async {
     String password = '';
-    
+
     return await showDialog<String>(
       context: context,
       barrierDismissible: false,
@@ -529,7 +558,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'WARNING: This action is permanent!',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   const Text(
@@ -558,12 +590,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: password.isEmpty 
-                      ? null 
+                  onPressed: password.isEmpty
+                      ? null
                       : () => Navigator.pop(context, password),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Delete Forever'),
                 ),
               ],
@@ -576,18 +606,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _deleteAccount() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final user = FirebaseAuth.instance.currentUser;
-      
+
       if (user != null && user.email != null) {
         final password = await _showPasswordDialog();
-        
+
         if (password == null) {
           setState(() => _isLoading = false);
           return;
         }
-        
+
         if (mounted) {
           showDialog(
             context: context,
@@ -607,22 +637,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           );
         }
-        
+
         final credential = EmailAuthProvider.credential(
           email: user.email!,
           password: password,
         );
-        
+
         await user.reauthenticateWithCredential(credential);
-        
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-        
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
+
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('contacts')
             .get();
-        
+
         if (contactsSnapshot.docs.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
           for (var doc in contactsSnapshot.docs) {
@@ -630,13 +663,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }
           await batch.commit();
         }
-        
+
         final alertsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('alerts')
             .get();
-        
+
         if (alertsSnapshot.docs.isNotEmpty) {
           final alertsBatch = FirebaseFirestore.instance.batch();
           for (var doc in alertsSnapshot.docs) {
@@ -644,15 +677,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           }
           await alertsBatch.commit();
         }
-        
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
-        
+
         await user.delete();
-        
+
         if (mounted) {
           Navigator.of(context).pop();
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Account permanently deleted'),
@@ -661,18 +694,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           );
         }
-        
+
         if (mounted) {
           await _navigateToLoginWithAnimation();
         }
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
-      
+
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       if (e.code == 'wrong-password') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -683,7 +716,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } else if (e.code == 'requires-recent-login') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please log out and log in again before deleting your account'),
+            content: Text(
+              'Please log out and log in again before deleting your account',
+            ),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -706,16 +741,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      
+
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
     }
   }
@@ -725,12 +757,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             const curve = Curves.easeInOut;
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
             var offsetAnimation = animation.drive(tween);
             return SlideTransition(position: offsetAnimation, child: child);
           },
@@ -752,15 +788,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              const begin = Offset(0.0, 1.0);
-              const end = Offset.zero;
-              const curve = Curves.easeInOut;
-              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              var offsetAnimation = animation.drive(tween);
-              return SlideTransition(position: offsetAnimation, child: child);
-            },
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const LoginScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(0.0, 1.0);
+                  const end = Offset.zero;
+                  const curve = Curves.easeInOut;
+                  var tween = Tween(
+                    begin: begin,
+                    end: end,
+                  ).chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
           ),
           (route) => false,
         );
@@ -834,7 +878,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // Security section - SIMPLIFIED
                 _buildSectionTitle('Security'),
                 const SizedBox(height: 8),
-                
+
                 // Change Password - NO extra authentication
                 _buildSettingTile(
                   icon: Icons.lock,
@@ -842,7 +886,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Update your password with current password',
                   onTap: _showChangePasswordDialog,
                 ),
-                
+
                 // Manage Biometrics - Direct to settings
                 _buildSettingTile(
                   icon: Icons.fingerprint,
@@ -850,7 +894,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Set up fingerprint for SOS or login',
                   onTap: _showManageBiometricsDialog,
                 ),
-                
+
                 // Privacy Policy - NO authentication needed
                 _buildSettingTile(
                   icon: Icons.privacy_tip,
@@ -887,7 +931,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 const SizedBox(height: 20),
-                
+
                 // Warning note
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -898,7 +942,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                      const Icon(
+                        Icons.warning_amber,
+                        color: Colors.orange,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1005,9 +1053,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
       ),
     );
