@@ -16,7 +16,7 @@ import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
 import 'package:purple_safety/services/sos_alert_service.dart';
 import 'package:purple_safety/services/trip_sharing_service.dart';
-import 'package:purple_safety/invitations/invite_contact_screen.dart';
+import 'package:purple_safety/Invitations/invite_contact_screen.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -234,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 ]
   ''';
-  
+
   bool _hasCenteredMap = false;
 
   @override
@@ -276,7 +276,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please enable location services to see your location.'),
+              content: Text(
+                'Please enable location services to see your location.',
+              ),
             ),
           );
         }
@@ -295,7 +297,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permission is required. Please grant it in settings.'),
+              content: Text(
+                'Location permission is required. Please grant it in settings.',
+              ),
             ),
           );
         }
@@ -323,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           );
         }
-        
+
         if (_isSharingTrip && TripSharingService.isSharing) {
           TripSharingService.updateLocation(
             latitude: _currentPosition!.latitude,
@@ -356,7 +360,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
-    
+
     if (_currentPosition != null && !_hasCenteredMap) {
       _hasCenteredMap = true;
       controller.moveCamera(
@@ -401,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final userData = await AuthService().getUserData(user.uid);
       userName = userData?['name'] ?? 'A user';
     }
-    
+
     if (_currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -412,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() => _isSosActive = false);
       return;
     }
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('🚨 Sending SOS alert to all users...'),
@@ -420,7 +424,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         duration: Duration(seconds: 2),
       ),
     );
-    
+
     try {
       await SOSAlertService.sendCommunitySOSAlert(
         userId: user?.uid ?? 'anonymous',
@@ -428,13 +432,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         latitude: _currentPosition!.latitude,
         longitude: _currentPosition!.longitude,
       );
-      
+
       if (_contacts.isNotEmpty) {
-        final locationLink = 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
+        final locationLink =
+            'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
         await SOSAlertService.sendPrivateAlerts(_contacts, locationLink);
         debugPrint('✅ Backup SMS sent to ${_contacts.length} trusted contacts');
       }
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ SOS alert sent! Help is on the way.'),
@@ -442,7 +447,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           duration: Duration(seconds: 3),
         ),
       );
-      
     } catch (e) {
       debugPrint('❌ Error sending SOS: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -452,7 +456,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       );
     }
-    
+
     widget.onNavigateToTools?.call();
     setState(() => _isSosActive = false);
   }
@@ -481,16 +485,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context) => ManageContactsModal(
         contacts: _contacts,
         onDelete: (id) async {
-          final authenticated = await BiometricService.authenticateWithPinFallback(
-            context: context,
-            reason: 'Authenticate to delete this contact',
-          );
+          final authenticated =
+              await BiometricService.authenticateWithPinFallback(
+                context: context,
+                reason: 'Authenticate to delete this contact',
+              );
           if (authenticated) {
             await _firestoreService.deleteContact(user.uid, id);
             if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Contact deleted')),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Contact deleted')));
             }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -504,9 +509,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         onUpdate: (updatedContact) async {
           await _firestoreService.updateContact(user.uid, updatedContact);
           if (context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Contact updated')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Contact updated')));
           }
         },
       ),
@@ -572,11 +577,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           latitude: _currentPosition!.latitude,
           longitude: _currentPosition!.longitude,
         );
-        
+
         setState(() {
           _isSharingTrip = true;
         });
-        
+
         _tripUpdateTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
           if (_currentPosition != null && TripSharingService.isSharing) {
             TripSharingService.updateLocation(
@@ -585,9 +590,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             );
           }
         });
-        
+
         _showTripShareDialog(tripId, userName);
-        
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -600,7 +604,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _showTripShareDialog(String tripId, String userName) {
-    final shareMessage = '🔴 $userName is sharing their live location with you!\n\n'
+    final shareMessage =
+        '🔴 $userName is sharing their live location with you!\n\n'
         'Open Purple Safety app, go to Full Map, tap the QR icon, and enter this Trip ID:\n\n'
         'TRIP ID: $tripId\n\n'
         '(Download Purple Safety if you don\'t have it)';
@@ -654,14 +659,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         Text(
                           tripId,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.copy, color: Colors.purple, size: 20),
+                    icon: const Icon(
+                      Icons.copy,
+                      color: Colors.purple,
+                      size: 20,
+                    ),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: tripId));
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -678,7 +691,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Share.share(shareMessage, subject: 'Live Location - Purple Safety');
+                      Share.share(
+                        shareMessage,
+                        subject: 'Live Location - Purple Safety',
+                      );
                     },
                     icon: const Icon(Icons.share),
                     label: const Text('Share Trip ID'),
@@ -737,7 +753,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isMaxContacts = _contacts.length >= 5;
-    
+
     return Stack(
       children: [
         Container(

@@ -3,7 +3,7 @@ import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/incidents/incident_detail_screen.dart';
 import 'package:purple_safety/services/incident_service.dart';
-import 'package:purple_safety/invitations/pending_invitations_screen.dart';
+import 'package:purple_safety/Invitations/pending_invitations_screen.dart';
 
 class SafetyAlertsScreen extends StatefulWidget {
   const SafetyAlertsScreen({Key? key}) : super(key: key);
@@ -22,7 +22,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
     if (user != null) {
       await _firestoreService.markAlertAsRead(user.uid, alert.id);
     }
-    
+
     if (alert.type == 'incident' && alert.incidentId != null) {
       final incident = await _incidentService.getIncident(alert.incidentId!);
       if (incident != null && mounted) {
@@ -37,7 +37,9 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
       if (mounted) {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const PendingInvitationsScreen()),
+          MaterialPageRoute(
+            builder: (context) => const PendingInvitationsScreen(),
+          ),
         );
       }
     }
@@ -99,7 +101,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                 final alert = alerts[index];
                 Color color;
                 IconData icon;
-                
+
                 if (alert.type == 'warning') {
                   color = Colors.red;
                   icon = Icons.warning;
@@ -113,7 +115,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                   color = Colors.blue;
                   icon = Icons.info;
                 }
-                
+
                 return GestureDetector(
                   onTap: () => _onAlertTap(alert),
                   child: Container(
@@ -167,7 +169,8 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                               shape: BoxShape.circle,
                             ),
                           ),
-                        if (alert.type == 'incident' || alert.type == 'invitation')
+                        if (alert.type == 'incident' ||
+                            alert.type == 'invitation')
                           const Icon(
                             Icons.arrow_forward_ios,
                             color: Colors.white38,
