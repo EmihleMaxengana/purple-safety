@@ -314,8 +314,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       } else {
                         // Disable - would need a method to disable
+                        // NOTE: new method
+                        // ScaffoldMessenger.of(context).showSnackBar(
+                        //   const SnackBar(content: Text('Feature coming soon')),
+                        // );
+
+                        BiometricService.disableSOSFingerprint();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Feature coming soon')),
+                          const SnackBar(
+                            content: Text('SOS Fingerprint disabled'),
+                          ),
                         );
                       }
                       Navigator.pop(context);
