@@ -4,13 +4,15 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+// import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import com.emihle.purplesafety.services.PowerButtonService
 import com.emihle.purplesafety.services.ShakeDetectorService
 
-class MainActivity : FlutterActivity() {
+// class MainActivity : FlutterActivity() {
+class MainActivity: FlutterFragmentActivity(){
     private val CHANNEL = "sos_trigger"
 
     override fun onCreate(savedInstanceState: Bundle?) {

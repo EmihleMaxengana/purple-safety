@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:local_auth_android/local_auth_android.dart';
+import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class BiometricService {
@@ -17,7 +19,8 @@ class BiometricService {
 
       final List<BiometricType> availableTypes = await _auth
           .getAvailableBiometrics();
-      return availableTypes.contains(BiometricType.fingerprint);
+      return availableTypes.contains(BiometricType.weak) ||
+          availableTypes.contains(BiometricType.strong);
     } on PlatformException catch (e) {
       print('Error checking biometrics: $e');
       return false;
@@ -36,6 +39,14 @@ class BiometricService {
     try {
       final bool authenticated = await _auth.authenticate(
         localizedReason: reason,
+        biometricOnly: true,
+        authMessages: [
+          AndroidAuthMessages(
+            signInTitle: 'Authenticate',
+            cancelButton: 'Cancel',
+          ),
+          IOSAuthMessages(cancelButton: 'Cancel'),
+        ],
       );
       return authenticated;
     } catch (e) {
@@ -51,19 +62,30 @@ class BiometricService {
     try {
       final bool authenticated = await _auth.authenticate(
         localizedReason: reason,
+        biometricOnly: false,
+        authMessages: [
+          AndroidAuthMessages(
+            signInTitle: 'Authenticate',
+            cancelButton: 'Cancel',
+          ),
+          IOSAuthMessages(cancelButton: 'Cancel'),
+        ],
       );
       if (authenticated) return true;
     } catch (e) {
       print('Biometric error: $e');
     }
-    
+
     return await _showPinDialog(context, reason);
   }
 
-  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
+  static Future<bool> _showPinDialog(
+    BuildContext context,
+    String reason,
+  ) async {
     String enteredPin = '';
     bool isFirstTime = await _isFirstTimePinSetup();
-    
+
     return await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -86,7 +108,9 @@ class BiometricService {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
               decoration: InputDecoration(
-                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
+                hintText: isFirstTime
+                    ? 'Enter 6-digit PIN'
+                    : 'Enter your 6-digit PIN',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -114,7 +138,7 @@ class BiometricService {
                 );
                 return;
               }
-              
+
               if (isFirstTime) {
                 await _savePin(enteredPin);
                 Navigator.pop(context, true);
@@ -163,7 +187,7 @@ class BiometricService {
       context: context,
       reason: 'Authenticate to change your PIN',
     );
-    
+
     if (authenticated) {
       await _storage.delete(key: _userPinKey);
       return await _showPinDialog(context, 'Set up your new PIN');
@@ -184,6 +208,14 @@ class BiometricService {
       return true;
     }
     return false;
+  }
+
+  static Future<void> disableSOSFingerprint() async {
+    final fingerprint = await _storage.read(key: _sosFingerprintEnabledKey);
+
+    if (fingerprint == 'true') {
+      await _storage.write(key: _sosFingerprintEnabledKey, value: 'false');
+    }
   }
 
   static Future<bool> isSOSFingerprintEnabled() async {
