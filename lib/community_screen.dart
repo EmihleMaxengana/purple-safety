@@ -8,6 +8,7 @@ import 'models/incident_model.dart';
 import 'services/incident_service.dart';
 import 'services/sos_alert_service.dart';
 import 'incidents/incident_detail_screen.dart';
+import 'next_of_kin_modal.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);
@@ -158,13 +159,30 @@ class _CommunityScreenState extends State<CommunityScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.2),
-                shape: BoxShape.circle,
+            // Avatar with tap to show next of kin
+            GestureDetector(
+              onTap: () => showNextOfKinModal(
+                context,
+                sosEvent['userId'],
+                sosEvent['userName'],
               ),
-              child: const Icon(Icons.sos, color: Colors.red, size: 48),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.red, width: 2),
+                ),
+                child: CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.red.withOpacity(0.2),
+                  child: Text(
+                    (sosEvent['userName'] as String).isNotEmpty
+                        ? (sosEvent['userName'] as String)[0].toUpperCase()
+                        : '?',
+                    style: const TextStyle(color: Colors.red, fontSize: 20),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             const Text(
@@ -332,7 +350,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
           ],
         ),
         body: _selectedView == 'map' ? _buildMapView() : _buildListView(),
-        // NO FLOATING ACTION BUTTON - REMOVED
       ),
     );
   }

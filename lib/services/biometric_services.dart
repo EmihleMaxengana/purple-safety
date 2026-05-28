@@ -16,9 +16,7 @@ class BiometricService {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
       if (!canCheck) return false;
-
-      final List<BiometricType> availableTypes = await _auth
-          .getAvailableBiometrics();
+      final List<BiometricType> availableTypes = await _auth.getAvailableBiometrics();
       return availableTypes.contains(BiometricType.weak) ||
           availableTypes.contains(BiometricType.strong);
     } on PlatformException catch (e) {
@@ -35,7 +33,11 @@ class BiometricService {
     }
   }
 
-  static Future<bool> authenticate({required String reason}) async {
+  /// Authenticate using fingerprint ONLY (no PIN fallback).
+  /// Returns true if successful, false if failed or not available.
+  static Future<bool> authenticateWithBiometricOnly({required String reason}) async {
+    final available = await isFingerprintAvailable();
+    if (!available) return false;
     try {
       final bool authenticated = await _auth.authenticate(
         localizedReason: reason,
@@ -50,39 +52,41 @@ class BiometricService {
       );
       return authenticated;
     } catch (e) {
-      print('Authentication error: $e');
+      print('Biometric authentication error: $e');
       return false;
     }
   }
 
-  static Future<bool> authenticateWithPinFallback({
-    required BuildContext context,
-    required String reason,
-  }) async {
-    try {
-      final bool authenticated = await _auth.authenticate(
-        localizedReason: reason,
-        biometricOnly: false,
-        authMessages: [
-          AndroidAuthMessages(
-            signInTitle: 'Authenticate',
-            cancelButton: 'Cancel',
-          ),
-          IOSAuthMessages(cancelButton: 'Cancel'),
-        ],
-      );
-      if (authenticated) return true;
-    } catch (e) {
-      print('Biometric error: $e');
-    }
-
+  /// Authenticate using PIN dialog only (no biometric attempt).
+  static Future<bool> authenticateWithPinOnly(BuildContext context, {required String reason}) async {
     return await _showPinDialog(context, reason);
   }
 
-  static Future<bool> _showPinDialog(
-    BuildContext context,
-    String reason,
-  ) async {
+  /// Unified authentication: if fingerprint is enabled (SOS toggle) AND available,
+  /// use fingerprint only; otherwise use PIN.
+  static Future<bool> authenticateWithUserPreference({
+    required BuildContext context,
+    required String reason,
+  }) async {
+    final isFingerprintEnabled = await isSOSFingerprintEnabled();
+    final fingerprintAvailable = await isFingerprintAvailable();
+
+    if (isFingerprintEnabled && fingerprintAvailable) {
+      // Use fingerprint only
+      final success = await authenticateWithBiometricOnly(reason: reason);
+      if (success) return true;
+      // If fingerprint fails (e.g., cancelled or error), do NOT fall back to PIN automatically.
+      // User must retry or use PIN via a different action if they want.
+      // But to avoid lockout, we can still show PIN as a secondary option? The requirement says only one must appear.
+      // We'll stick to fingerprint only and return false on failure.
+      return false;
+    } else {
+      // Use PIN only
+      return await authenticateWithPinOnly(context, reason: reason);
+    }
+  }
+
+  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
     String enteredPin = '';
     bool isFirstTime = await _isFirstTimePinSetup();
 
@@ -108,9 +112,7 @@ class BiometricService {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
               decoration: InputDecoration(
-                hintText: isFirstTime
-                    ? 'Enter 6-digit PIN'
-                    : 'Enter your 6-digit PIN',
+                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -183,11 +185,10 @@ class BiometricService {
   }
 
   static Future<bool> resetPin(BuildContext context) async {
-    final authenticated = await authenticateWithPinFallback(
+    final authenticated = await authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to change your PIN',
     );
-
     if (authenticated) {
       await _storage.delete(key: _userPinKey);
       return await _showPinDialog(context, 'Set up your new PIN');
@@ -199,10 +200,9 @@ class BiometricService {
     final available = await isFingerprintAvailable();
     if (!available) return false;
 
-    final bool authenticated = await authenticate(
+    final bool authenticated = await authenticateWithBiometricOnly(
       reason: 'Set up fingerprint for SOS emergency trigger',
     );
-
     if (authenticated) {
       await _storage.write(key: _sosFingerprintEnabledKey, value: 'true');
       return true;
@@ -211,11 +211,7 @@ class BiometricService {
   }
 
   static Future<void> disableSOSFingerprint() async {
-    final fingerprint = await _storage.read(key: _sosFingerprintEnabledKey);
-
-    if (fingerprint == 'true') {
-      await _storage.write(key: _sosFingerprintEnabledKey, value: 'false');
-    }
+    await _storage.write(key: _sosFingerprintEnabledKey, value: 'false');
   }
 
   static Future<bool> isSOSFingerprintEnabled() async {
@@ -226,8 +222,7 @@ class BiometricService {
   static Future<bool> triggerSOSWithFingerprint() async {
     final enabled = await isSOSFingerprintEnabled();
     if (!enabled) return false;
-
-    return await authenticate(
+    return await authenticateWithBiometricOnly(
       reason: 'FINGERPRINT SOS - Emergency services will be notified',
     );
   }

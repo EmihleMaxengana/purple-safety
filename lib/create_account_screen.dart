@@ -315,7 +315,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Phone Number (South African)
+                          // Phone Number
                           const Text(
                             'Phone Number *',
                             style: TextStyle(
@@ -378,6 +378,189 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 return 'Please enter a valid 9-digit SA number';
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // NEXT OF KIN SECTION (Optional)
+                          Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            child: const Text(
+                              'Next of Kin (Optional)',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFFCCCCFF),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _nextOfKinNameController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText: 'Full name of next of kin',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.person,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _nextOfKinPhoneController,
+                            style: const TextStyle(color: Colors.white),
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(9),
+                            ],
+                            decoration: InputDecoration(
+                              hintText: 'Phone number (e.g., 712345678)',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.phone,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              prefixText: '+27 ',
+                              prefixStyle: const TextStyle(color: Colors.white),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) return null;
+                              final digits = value.replaceAll(
+                                RegExp(r'\D'),
+                                '',
+                              );
+                              if (digits.length != 9)
+                                return 'Enter a valid 9-digit SA number';
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _nextOfKinRelationController,
+                            style: const TextStyle(color: Colors.white),
+                            decoration: InputDecoration(
+                              hintText:
+                                  'Relation (e.g., Spouse, Parent, Sibling)',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.people,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _nextOfKinAltPhoneController,
+                            style: const TextStyle(color: Colors.white),
+                            keyboardType: TextInputType.phone,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(9),
+                            ],
+                            decoration: InputDecoration(
+                              hintText: 'Alternative phone number (optional)',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.phone_android,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              prefixText: '+27 ',
+                              prefixStyle: const TextStyle(color: Colors.white),
+                            ),
                           ),
                           const SizedBox(height: 20),
 
@@ -639,8 +822,40 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                     _emailController.text,
                                     _passwordController.text,
                                     _phoneController.text,
+                                    nextOfKinName:
+                                        _nextOfKinNameController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinNameController.text.trim()
+                                        : null,
+                                    nextOfKinPhone:
+                                        _nextOfKinPhoneController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinPhoneController.text.trim()
+                                        : null,
+                                    nextOfKinRelation:
+                                        _nextOfKinRelationController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinRelationController.text
+                                              .trim()
+                                        : null,
+                                    nextOfKinAltPhone:
+                                        _nextOfKinAltPhoneController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinAltPhoneController.text
+                                              .trim()
+                                        : null,
                                   );
                                   if (user != null) {
+                                    // write biometric setting
+                                    await prefs.setBool(
+                                      "useBiometrics",
+                                      _useBiometrics,
+                                    );
+
                                     // Format phone number for Firebase SMS verification: +271 23456789
                                     // write biometric setting
                                     await prefs.setBool(
