@@ -29,10 +29,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _isLoading = false;
 
+  bool _useBiometrics = false;
+  bool _isBiometricAvailable = false;
+  bool _isSOSEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadIsBiometricEnabled();
   }
 
   @override
@@ -93,6 +98,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadIsBiometricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    final useBiometrics = prefs.getBool('useBiometrics') ?? false;
+    final isBiometricAvailable =
+        await BiometricService.isFingerprintAvailable();
+    final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
+
+    if (!mounted) return;
+    setState(() {
+      _useBiometrics = useBiometrics;
+      _isBiometricAvailable = isBiometricAvailable;
+      _isSOSEnabled = isSOSEnabled;
+    });
+  }
+
+  Future<void> _saveIsBiometricEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('useBiometrics', value);
   }
 
   // ============================================================
@@ -198,7 +223,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Authentication failed. Changes not saved.'), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text('Authentication failed. Changes not saved.'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -210,10 +238,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         await _auth.updateNextOfKin(
           user.uid,
-          name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : null,
-          phone: phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : null,
-          relation: relationController.text.trim().isNotEmpty ? relationController.text.trim() : null,
-          altPhone: altPhoneController.text.trim().isNotEmpty ? altPhoneController.text.trim() : null,
+          name: nameController.text.trim().isNotEmpty
+              ? nameController.text.trim()
+              : null,
+          phone: phoneController.text.trim().isNotEmpty
+              ? phoneController.text.trim()
+              : null,
+          relation: relationController.text.trim().isNotEmpty
+              ? relationController.text.trim()
+              : null,
+          altPhone: altPhoneController.text.trim().isNotEmpty
+              ? altPhoneController.text.trim()
+              : null,
         );
         // Update local variables
         setState(() {
@@ -223,7 +259,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _nextOfKinAltPhone = altPhoneController.text.trim();
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Next of kin updated'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Next of kin updated'),
+            backgroundColor: Colors.green,
+          ),
         );
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -381,119 +420,183 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ============================================================
   // Manage Biometrics (unchanged)
   // ============================================================
-  void _showManageBiometricsDialog() async {
-    final isBiometricAvailable = await BiometricService.isFingerprintAvailable();
-    final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
+  void _showManageBiometricsDialog() {
+    // final isBiometricAvailable =
+    //     await BiometricService.isFingerprintAvailable();
+    // final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1a0f2e),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border.all(color: Colors.purple.withOpacity(0.3)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Biometric Settings',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white24),
-            SwitchListTile(
-              title: const Text(
-                'SOS Fingerprint',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: Text(
-                isBiometricAvailable
-                    ? 'Use fingerprint to instantly trigger SOS'
-                    : 'Fingerprint not available on this device',
+      // builder: (context) => Container(
+      builder: (context) => StatefulBuilder(
+        builder: (context, sheetSetState) => Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Biometric Settings',
                 style: TextStyle(
-                  color: isBiometricAvailable ? Colors.white70 : Colors.red,
-                  fontSize: 12,
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              value: isSOSEnabled && isBiometricAvailable,
-              onChanged: isBiometricAvailable
-                  ? (value) async {
-                      if (value) {
-                        final success = await BiometricService.enableSOSFingerprint();
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('SOS Fingerprint enabled')),
-                          );
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24),
+
+              SwitchListTile(
+                title: const Text(
+                  "Toggle Biometrics",
+                  style: TextStyle(color: Colors.white70),
+                ),
+                subtitle: Text(
+                  _useBiometrics ? "Disable biometrics" : "Enable biometrics",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                value: _isBiometricAvailable ? _useBiometrics : false,
+                onChanged: (value) async {
+                  setState(() {
+                    _useBiometrics = value;
+                  });
+                  sheetSetState(() {});
+                  await _saveIsBiometricEnabled(value);
+                  print("useBiometrics: $value");
+                },
+                activeThumbColor: const Color(0xFF6A1B9A),
+              ),
+              SizedBox(height: 8),
+
+              // SOS Fingerprint Toggle
+              SwitchListTile(
+                title: const Text(
+                  'SOS Fingerprint',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _isBiometricAvailable && _useBiometrics
+                      ? 'Use fingerprint to instantly trigger SOS'
+                      : 'Fingerprint not available on this device',
+                  style: TextStyle(
+                    color: _isBiometricAvailable && _useBiometrics
+                        ? Colors.white70
+                        : Colors.red,
+                    fontSize: 12,
+                  ),
+                ),
+                value: _isSOSEnabled,
+                onChanged: _isBiometricAvailable && _useBiometrics
+                    ? (value) async {
+                        if (value) {
+                          // Enable SOS fingerprint
+                          final success =
+                              await BiometricService.enableSOSFingerprint();
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('SOS Fingerprint enabled'),
+                              ),
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Failed to enable. Please try again.',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
                         } else {
+                          // Disable - would need a method to disable
+                          // NOTE: new method
+                          // ScaffoldMessenger.of(context).showSnackBar(
+                          //   const SnackBar(content: Text('Feature coming soon')),
+                          // );
+
+                          BiometricService.disableSOSFingerprint();
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('Failed to enable. Please try again.'),
-                              backgroundColor: Colors.red,
+                              content: Text('SOS Fingerprint disabled'),
                             ),
                           );
                         }
-                      } else {
-                        await BiometricService.disableSOSFingerprint();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('SOS Fingerprint disabled')),
-                        );
+                        // Navigator.pop(context);
+                        setState(() {
+                          _isSOSEnabled = value;
+                        });
                       }
-                      Navigator.pop(context);
-                      setState(() {});
-                    }
-                  : null,
-              activeColor: const Color(0xFF6A1B9A),
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
-              title: const Text(
-                'Device Biometric Settings',
-                style: TextStyle(color: Colors.white),
+                    : null,
+                activeColor: const Color(0xFF6A1B9A),
               ),
-              subtitle: const Text(
-                'Manage fingerprints in system settings',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
+              const SizedBox(height: 8),
+
+              // Open device settings button
+              ListTile(
+                leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
+                title: const Text(
+                  'Device Biometric Settings',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Manage fingerprints in system settings',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white54,
+                  size: 16,
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openDeviceBiometricSettings();
+                },
               ),
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white54,
-                size: 16,
+
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
-              onTap: () {
-                Navigator.pop(context);
-                if (Platform.isAndroid) {
-                  AppSettings.openAppSettings(type: AppSettingsType.security);
-                } else if (Platform.isIOS) {
-                  AppSettings.openAppSettings();
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Open your device settings to manage fingerprints'),
-                    ),
-                  );
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Close',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _openDeviceBiometricSettings() async {
+    // Open device settings - Android and iOS
+    // if (Platform.isAndroid) {
+    //   await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
+    // } else if (Platform.isIOS) {
+    //   await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
+    // } else {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('Open your device settings to manage fingerprints')),
+    //   );
+    // }
+
+    if (Platform.isAndroid) {
+      AppSettings.openAppSettings(type: AppSettingsType.security);
+    } else if (Platform.isIOS) {
+      AppSettings.openAppSettings();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Open your device settings to manage fingerprints'),
+        ),
+      );
+    }
   }
 
   // ============================================================
@@ -753,7 +856,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           password: password,
         );
         await user.reauthenticateWithCredential(credential);
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -771,7 +877,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .get();
         if (alertsSnapshot.docs.isNotEmpty) {
           final alertsBatch = FirebaseFirestore.instance.batch();
-          for (var doc in alertsSnapshot.docs) alertsBatch.delete(doc.reference);
+          for (var doc in alertsSnapshot.docs)
+            alertsBatch.delete(doc.reference);
           await alertsBatch.commit();
         }
         final prefs = await SharedPreferences.getInstance();
@@ -794,7 +901,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
-      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+      if (mounted && Navigator.of(context).canPop())
+        Navigator.of(context).pop();
       if (e.code == 'wrong-password') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -805,7 +913,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } else if (e.code == 'requires-recent-login') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please log out and log in again before deleting your account'),
+            content: Text(
+              'Please log out and log in again before deleting your account',
+            ),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -820,12 +930,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _navigateToLoginWithAnimation();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.message}'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
+      if (mounted && Navigator.of(context).canPop())
+        Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
@@ -837,12 +951,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             const curve = Curves.easeInOut;
-            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
             var offsetAnimation = animation.drive(tween);
             return SlideTransition(position: offsetAnimation, child: child);
           },
@@ -864,15 +982,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              const begin = Offset(0.0, 1.0);
-              const end = Offset.zero;
-              const curve = Curves.easeInOut;
-              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-              var offsetAnimation = animation.drive(tween);
-              return SlideTransition(position: offsetAnimation, child: child);
-            },
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const LoginScreen(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(0.0, 1.0);
+                  const end = Offset.zero;
+                  const curve = Curves.easeInOut;
+                  var tween = Tween(
+                    begin: begin,
+                    end: end,
+                  ).chain(CurveTween(curve: curve));
+                  var offsetAnimation = animation.drive(tween);
+                  return SlideTransition(
+                    position: offsetAnimation,
+                    child: child,
+                  );
+                },
           ),
           (route) => false,
         );
@@ -961,17 +1087,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Expanded(
                   child: Text(
                     _nextOfKinName,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF6A1B9A),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _nextOfKinRelation.isNotEmpty ? _nextOfKinRelation : 'Contact',
+                    _nextOfKinRelation.isNotEmpty
+                        ? _nextOfKinRelation
+                        : 'Contact',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
                 ),
@@ -993,11 +1127,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
-                    const Icon(Icons.phone_android, color: Colors.white54, size: 14),
+                    const Icon(
+                      Icons.phone_android,
+                      color: Colors.white54,
+                      size: 14,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       _formatPhoneForDisplay(_nextOfKinAltPhone),
-                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),

@@ -24,11 +24,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
   String? _errorMessage;
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
-  
+
   // Real contacts from Firestore
   List<Contact> _realContacts = [];
   bool _isLoadingContacts = true;
-  
+
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _contactsSubscription;
 
@@ -56,11 +56,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
       _contactsSubscription = _firestoreService
           .getContactsStream(user.uid)
           .listen((contacts) {
-        setState(() {
-          _realContacts = contacts;
-          _isLoadingContacts = false;
-        });
-      });
+            setState(() {
+              _realContacts = contacts;
+              _isLoadingContacts = false;
+            });
+          });
     } else {
       setState(() {
         _isLoadingContacts = false;
@@ -71,15 +71,23 @@ class _UserProfileModalState extends State<UserProfileModal> {
   Future<void> _loadLocationSharingPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _shareLocationWithContacts = prefs.getBool('shareLocationWithContacts') ?? true;
-      _shareLocationWithCommunity = prefs.getBool('shareLocationWithCommunity') ?? false;
+      _shareLocationWithContacts =
+          prefs.getBool('shareLocationWithContacts') ?? true;
+      _shareLocationWithCommunity =
+          prefs.getBool('shareLocationWithCommunity') ?? false;
     });
   }
 
   Future<void> _saveLocationSharingPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('shareLocationWithContacts', _shareLocationWithContacts);
-    await prefs.setBool('shareLocationWithCommunity', _shareLocationWithCommunity);
+    await prefs.setBool(
+      'shareLocationWithContacts',
+      _shareLocationWithContacts,
+    );
+    await prefs.setBool(
+      'shareLocationWithCommunity',
+      _shareLocationWithCommunity,
+    );
   }
 
   Future<void> _loadUser() async {
@@ -471,7 +479,10 @@ class _UserProfileModalState extends State<UserProfileModal> {
                       padding: const EdgeInsets.only(bottom: 2),
                       child: Text(
                         c.relationship!,
-                        style: const TextStyle(color: Colors.white54, fontSize: 11),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   Text(

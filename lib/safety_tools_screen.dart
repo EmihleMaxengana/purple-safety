@@ -52,7 +52,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   List<Contact> _contacts = [];
   String _securityNumber = '10111';
-  
+
   final FirestoreService _firestoreService = FirestoreService();
 
   @override
@@ -125,7 +125,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please enable location services to use this feature.'),
+              content: Text(
+                'Please enable location services to use this feature.',
+              ),
             ),
           );
         }
@@ -140,7 +142,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location permission is required. Please grant it in settings.'),
+              content: Text(
+                'Location permission is required. Please grant it in settings.',
+              ),
             ),
           );
         }
@@ -226,12 +230,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           .where('userId', isEqualTo: userId)
           .where('status', isEqualTo: 'active')
           .get();
-      
+
       for (var doc in querySnapshot.docs) {
         await SOSAlertService.deactivateSOSEvent(doc.id);
         debugPrint('✅ Deactivated SOS event: ${doc.id}');
       }
-      
+
       if (querySnapshot.docs.isEmpty) {
         debugPrint('No active SOS event found for user $userId');
       }
@@ -277,9 +281,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       final locationLink = _currentPosition != null
           ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
           : 'Location unavailable';
-      
-      final message = '✅ SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
-      
+
+      final message =
+          '✅ SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
+
       await FirebaseFirestore.instance.collection('global_alerts').add({
         'timestamp': FieldValue.serverTimestamp(),
         'message': message,
@@ -287,17 +292,19 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         'userName': userName,
         'locationLink': locationLink,
       });
-      
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
       final batch = FirebaseFirestore.instance.batch();
-      
+
       for (var userDoc in usersSnapshot.docs) {
         final alertRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userDoc.id)
             .collection('alerts')
             .doc();
-        
+
         batch.set(alertRef, {
           'message': message,
           'type': 'safe',
@@ -305,10 +312,11 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           'read': false,
         });
       }
-      
+
       await batch.commit();
-      debugPrint('Global safe alert sent to all ${usersSnapshot.docs.length} users');
-      
+      debugPrint(
+        'Global safe alert sent to all ${usersSnapshot.docs.length} users',
+      );
     } catch (e) {
       debugPrint('Error sending global safe alert: $e');
     }
@@ -347,7 +355,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     if (await _audioRecorder.hasPermission()) {
       final dir = Directory.systemTemp;
-      final path = '${dir.path}/safety_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      final path =
+          '${dir.path}/safety_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _audioRecorder.start(
         RecordConfig(encoder: AudioEncoder.aacLc),
         path: path,
@@ -361,9 +370,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         const SnackBar(content: Text('🔴 Audio recording started')),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot access microphone'))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Cannot access microphone')));
     }
   }
 
@@ -374,9 +383,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
       if (path != null) {
         debugPrint('Audio recording saved at: $path');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Audio recording saved'))
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Audio recording saved')));
         await _shareFile(path, 'audio');
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -389,9 +398,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera permission denied'))
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Camera permission denied')));
       return;
     }
 
@@ -421,9 +430,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   Future<void> _startLiveStreaming() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera permission denied')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Camera permission denied')));
       return;
     }
     final micStatus = await Permission.microphone.request();
@@ -436,9 +445,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     final cameras = await availableCameras();
     if (cameras.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No camera available')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('No camera available')));
       return;
     }
 
@@ -454,16 +463,16 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         _isLiveStreaming = true;
       });
       debugPrint('Live streaming started');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Live stream started')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Live stream started')));
 
       _liveStreamRoomId = DateTime.now().millisecondsSinceEpoch.toString();
       _streamUrl = 'https://live.purplesafety.com/room/$_liveStreamRoomId';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Stream ready to share')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Stream ready to share')));
     } catch (e) {
       debugPrint('Failed to start camera: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -485,9 +494,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _liveStreamRoomId = null;
     });
     debugPrint('Live stream stopped');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Live stream ended')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Live stream ended')));
   }
 
   Future<void> _shareFile(String filePath, String type) async {
@@ -498,7 +507,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     final time = DateTime.now().toLocal().toString();
-    final message = '🚨 Safety recording: $type recording from $time\n\n'
+    final message =
+        '🚨 Safety recording: $type recording from $time\n\n'
         'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}';
 
     await Share.shareXFiles(
@@ -575,13 +585,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               const SizedBox(height: 24),
               Row(
                 children: [
-                  Expanded(
-                    child: _buildCallEmergencyButton(),
-                  ),
+                  Expanded(child: _buildCallEmergencyButton()),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildImSafeButton(),
-                  ),
+                  Expanded(child: _buildImSafeButton()),
                 ],
               ),
               const SizedBox(height: 40),
@@ -677,7 +683,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildMediaButton(
                 icon: _isLiveStreaming ? Icons.stop_circle : Icons.live_tv,
                 label: _isLiveStreaming ? 'Stop Live' : 'Go Live',
-                onTap: _isLiveStreaming ? _stopLiveStreaming : _startLiveStreaming,
+                onTap: _isLiveStreaming
+                    ? _stopLiveStreaming
+                    : _startLiveStreaming,
                 color: _isLiveStreaming ? Colors.red : Colors.purple,
               ),
               const SizedBox(height: 12),
@@ -691,7 +699,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildMediaButton(
                 icon: _isRecordingAudio ? Icons.stop : Icons.mic,
                 label: _isRecordingAudio ? 'Stop Audio' : 'Record Audio',
-                onTap: _isRecordingAudio ? _stopAudioRecording : _startAudioRecording,
+                onTap: _isRecordingAudio
+                    ? _stopAudioRecording
+                    : _startAudioRecording,
                 color: _isRecordingAudio ? Colors.red : Colors.green,
               ),
             ],
@@ -961,9 +971,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.red,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
       ),
     );
@@ -984,9 +992,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.green,
         padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
       ),
     );

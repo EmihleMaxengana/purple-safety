@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import 'otp_verification_screen.dart';
 import 'package:purple_safety/services/auth_service.dart';
@@ -27,6 +28,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _nextOfKinPhoneController = TextEditingController();
   final _nextOfKinRelationController = TextEditingController();
   final _nextOfKinAltPhoneController = TextEditingController();
+
+  bool _useBiometrics = false;
 
   String _password = '';
   PasswordStrength _passwordStrength = PasswordStrength.weak;
@@ -470,7 +473,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) return null;
-                              final digits = value.replaceAll(RegExp(r'\D'), '');
+                              final digits = value.replaceAll(
+                                RegExp(r'\D'),
+                                '',
+                              );
                               if (digits.length != 9)
                                 return 'Enter a valid 9-digit SA number';
                               return null;
@@ -481,7 +487,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              hintText: 'Relation (e.g., Spouse, Parent, Sibling)',
+                              hintText:
+                                  'Relation (e.g., Spouse, Parent, Sibling)',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -770,6 +777,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               return null;
                             },
                           ),
+                          const SizedBox(height: 20),
+
+                          SwitchListTile(
+                            title: Text(
+                              "Use Biometrics",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            subtitle: Text(
+                              "Do you wish to enable device biometrics for app authentication and confirmations?",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            value: _useBiometrics,
+                            onChanged: (value) async {
+                              // Handle biometric toggle
+                              setState(() {
+                                _useBiometrics = value;
+                              });
+                            },
+                            activeThumbColor: const Color(0xFFD105FF),
+                          ),
                           const SizedBox(height: 30),
 
                           // Continue Button
@@ -777,6 +812,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
+                                SharedPreferences prefs =
+                                    await SharedPreferences.getInstance();
+
                                 if (_formKey.currentState!.validate()) {
                                   final auth = AuthService();
                                   final user = await auth.registerWithEmail(
@@ -784,20 +822,41 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                     _emailController.text,
                                     _passwordController.text,
                                     _phoneController.text,
-                                    nextOfKinName: _nextOfKinNameController.text.trim().isNotEmpty
+                                    nextOfKinName:
+                                        _nextOfKinNameController.text
+                                            .trim()
+                                            .isNotEmpty
                                         ? _nextOfKinNameController.text.trim()
                                         : null,
-                                    nextOfKinPhone: _nextOfKinPhoneController.text.trim().isNotEmpty
+                                    nextOfKinPhone:
+                                        _nextOfKinPhoneController.text
+                                            .trim()
+                                            .isNotEmpty
                                         ? _nextOfKinPhoneController.text.trim()
                                         : null,
-                                    nextOfKinRelation: _nextOfKinRelationController.text.trim().isNotEmpty
-                                        ? _nextOfKinRelationController.text.trim()
+                                    nextOfKinRelation:
+                                        _nextOfKinRelationController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinRelationController.text
+                                              .trim()
                                         : null,
-                                    nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isNotEmpty
-                                        ? _nextOfKinAltPhoneController.text.trim()
+                                    nextOfKinAltPhone:
+                                        _nextOfKinAltPhoneController.text
+                                            .trim()
+                                            .isNotEmpty
+                                        ? _nextOfKinAltPhoneController.text
+                                              .trim()
                                         : null,
                                   );
                                   if (user != null) {
+                                    // write biometric setting
+                                    await prefs.setBool(
+                                      "useBiometrics",
+                                      _useBiometrics,
+                                    );
+
+                                    // Format phone number for Firebase SMS verification: +271 23456789
                                     final phoneDigits = _phoneController.text
                                         .replaceAll(RegExp(r'\D'), '');
                                     final formattedPhone = '+27$phoneDigits';
