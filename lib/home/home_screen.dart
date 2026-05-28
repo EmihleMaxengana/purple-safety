@@ -764,6 +764,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
             ),
           ),
+          height: 1000,
           child: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16),

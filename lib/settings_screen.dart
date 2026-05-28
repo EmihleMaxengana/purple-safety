@@ -23,10 +23,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
 
+  bool _useBiometrics = false;
+  bool _isBiometricAvailable = false;
+  bool _isSOSEnabled = false;
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadIsBiometricEnabled();
   }
 
   @override
@@ -83,6 +88,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _loadIsBiometricEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() async {
+      _useBiometrics = prefs.getBool('useBiometrics') ?? false;
+      _isBiometricAvailable = await BiometricService.isFingerprintAvailable();
+      _isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
+    });
+  }
+
+  Future<void> _saveIsBiometricEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('useBiometrics', value);
   }
 
   // ============================================================
@@ -245,127 +264,154 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ============================================================
   // SIMPLIFIED MANAGE BIOMETRICS - Direct to device settings or toggle
   // ============================================================
-  void _showManageBiometricsDialog() async {
-    final isBiometricAvailable =
-        await BiometricService.isFingerprintAvailable();
-    final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
+  void _showManageBiometricsDialog() {
+    // final isBiometricAvailable =
+    //     await BiometricService.isFingerprintAvailable();
+    // final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1a0f2e),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border.all(color: Colors.purple.withOpacity(0.3)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Biometric Settings',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white24),
-
-            // SOS Fingerprint Toggle
-            SwitchListTile(
-              title: const Text(
-                'SOS Fingerprint',
-                style: TextStyle(color: Colors.white),
-              ),
-              subtitle: Text(
-                isBiometricAvailable
-                    ? 'Use fingerprint to instantly trigger SOS'
-                    : 'Fingerprint not available on this device',
+      // builder: (context) => Container(
+      builder: (context) => StatefulBuilder(
+        builder: (context, sheetSetState) => Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Biometric Settings',
                 style: TextStyle(
-                  color: isBiometricAvailable ? Colors.white70 : Colors.red,
-                  fontSize: 12,
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              value: isSOSEnabled && isBiometricAvailable,
-              onChanged: isBiometricAvailable
-                  ? (value) async {
-                      if (value) {
-                        // Enable SOS fingerprint
-                        final success =
-                            await BiometricService.enableSOSFingerprint();
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('SOS Fingerprint enabled'),
-                            ),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Failed to enable. Please try again.',
+              const SizedBox(height: 16),
+              const Divider(color: Colors.white24),
+
+              SwitchListTile(
+                title: const Text(
+                  "Toggle Biometrics",
+                  style: TextStyle(color: Colors.white70),
+                ),
+                subtitle: Text(
+                  _useBiometrics ? "Disable biometrics" : "Enable biometrics",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                value: _useBiometrics,
+                onChanged: (value) async {
+                  sheetSetState(() {});
+                  setState(() {
+                    _useBiometrics = value;
+                  });
+                  await _saveIsBiometricEnabled(value);
+                },
+                activeThumbColor: const Color(0xFF6A1B9A),
+              ),
+              SizedBox(height: 8),
+
+              // SOS Fingerprint Toggle
+              SwitchListTile(
+                title: const Text(
+                  'SOS Fingerprint',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _isBiometricAvailable && _useBiometrics
+                      ? 'Use fingerprint to instantly trigger SOS'
+                      : 'Fingerprint not available on this device',
+                  style: TextStyle(
+                    color: _isBiometricAvailable && _useBiometrics
+                        ? Colors.white70
+                        : Colors.red,
+                    fontSize: 12,
+                  ),
+                ),
+                value: _isSOSEnabled,
+                onChanged: _useBiometrics
+                    ? (value) async {
+                        if (value) {
+                          // Enable SOS fingerprint
+                          final success =
+                              await BiometricService.enableSOSFingerprint();
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('SOS Fingerprint enabled'),
                               ),
-                              backgroundColor: Colors.red,
+                            );
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Failed to enable. Please try again.',
+                                ),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } else {
+                          // Disable - would need a method to disable
+                          // NOTE: new method
+                          // ScaffoldMessenger.of(context).showSnackBar(
+                          //   const SnackBar(content: Text('Feature coming soon')),
+                          // );
+
+                          BiometricService.disableSOSFingerprint();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('SOS Fingerprint disabled'),
                             ),
                           );
                         }
-                      } else {
-                        // Disable - would need a method to disable
-                        // NOTE: new method
-                        // ScaffoldMessenger.of(context).showSnackBar(
-                        //   const SnackBar(content: Text('Feature coming soon')),
-                        // );
-
-                        BiometricService.disableSOSFingerprint();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('SOS Fingerprint disabled'),
-                          ),
-                        );
+                        Navigator.pop(context);
+                        setState(() {
+                          _isSOSEnabled = value;
+                        });
                       }
-                      Navigator.pop(context);
-                      setState(() {});
-                    }
-                  : null,
-              activeColor: const Color(0xFF6A1B9A),
-            ),
+                    : null,
+                activeColor: const Color(0xFF6A1B9A),
+              ),
+              const SizedBox(height: 8),
 
-            const SizedBox(height: 8),
+              // Open device settings button
+              ListTile(
+                leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
+                title: const Text(
+                  'Device Biometric Settings',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Manage fingerprints in system settings',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                trailing: const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white54,
+                  size: 16,
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openDeviceBiometricSettings();
+                },
+              ),
 
-            // Open device settings button
-            ListTile(
-              leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
-              title: const Text(
-                'Device Biometric Settings',
-                style: TextStyle(color: Colors.white),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
-              subtitle: const Text(
-                'Manage fingerprints in system settings',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-              trailing: const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white54,
-                size: 16,
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                _openDeviceBiometricSettings();
-              },
-            ),
-
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Close',
-                style: TextStyle(color: Colors.white70),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

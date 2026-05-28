@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import 'otp_verification_screen.dart';
 import 'package:purple_safety/services/auth_service.dart';
@@ -22,6 +23,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
+  // Next of Kin controllers
+  final _nextOfKinNameController = TextEditingController();
+  final _nextOfKinPhoneController = TextEditingController();
+  final _nextOfKinRelationController = TextEditingController();
+  final _nextOfKinAltPhoneController = TextEditingController();
+
+  bool _useBiometrics = false;
+
   String _password = '';
   PasswordStrength _passwordStrength = PasswordStrength.weak;
 
@@ -33,6 +42,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _nextOfKinNameController.dispose();
+    _nextOfKinPhoneController.dispose();
+    _nextOfKinRelationController.dispose();
+    _nextOfKinAltPhoneController.dispose();
     super.dispose();
   }
 
@@ -581,6 +594,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               return null;
                             },
                           ),
+                          const SizedBox(height: 20),
+
+                          SwitchListTile(
+                            title: Text(
+                              "Use Biometrics",
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            subtitle: Text(
+                              "Do you wish to enable device biometrics for app authentication and confirmations?",
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: Colors.white70,
+                              ),
+                            ),
+                            value: _useBiometrics,
+                            onChanged: (value) async {
+                              // Handle biometric toggle
+                              setState(() {
+                                _useBiometrics = value;
+                              });
+                            },
+                            activeThumbColor: const Color(0xFFD105FF),
+                          ),
                           const SizedBox(height: 30),
 
                           // Continue Button
@@ -588,6 +629,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
+                                SharedPreferences prefs =
+                                    await SharedPreferences.getInstance();
+
                                 if (_formKey.currentState!.validate()) {
                                   final auth = AuthService();
                                   final user = await auth.registerWithEmail(
@@ -598,6 +642,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   );
                                   if (user != null) {
                                     // Format phone number for Firebase SMS verification: +271 23456789
+                                    // write biometric setting
+                                    await prefs.setBool(
+                                      "useBiometrics",
+                                      _useBiometrics,
+                                    );
+
                                     final phoneDigits = _phoneController.text
                                         .replaceAll(RegExp(r'\D'), '');
                                     final formattedPhone = '+27$phoneDigits';
