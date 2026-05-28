@@ -16,7 +16,8 @@ class BiometricService {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
       if (!canCheck) return false;
-      final List<BiometricType> availableTypes = await _auth.getAvailableBiometrics();
+      final List<BiometricType> availableTypes = await _auth
+          .getAvailableBiometrics();
       return availableTypes.contains(BiometricType.weak) ||
           availableTypes.contains(BiometricType.strong);
     } on PlatformException catch (e) {
@@ -35,7 +36,9 @@ class BiometricService {
 
   /// Authenticate using fingerprint ONLY (no PIN fallback).
   /// Returns true if successful, false if failed or not available.
-  static Future<bool> authenticateWithBiometricOnly({required String reason}) async {
+  static Future<bool> authenticateWithBiometricOnly({
+    required String reason,
+  }) async {
     final available = await isFingerprintAvailable();
     if (!available) return false;
     try {
@@ -58,7 +61,10 @@ class BiometricService {
   }
 
   /// Authenticate using PIN dialog only (no biometric attempt).
-  static Future<bool> authenticateWithPinOnly(BuildContext context, {required String reason}) async {
+  static Future<bool> authenticateWithPinOnly(
+    BuildContext context, {
+    required String reason,
+  }) async {
     return await _showPinDialog(context, reason);
   }
 
@@ -86,7 +92,10 @@ class BiometricService {
     }
   }
 
-  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
+  static Future<bool> _showPinDialog(
+    BuildContext context,
+    String reason,
+  ) async {
     String enteredPin = '';
     bool isFirstTime = await _isFirstTimePinSetup();
 
@@ -112,7 +121,9 @@ class BiometricService {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
               decoration: InputDecoration(
-                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
+                hintText: isFirstTime
+                    ? 'Enter 6-digit PIN'
+                    : 'Enter your 6-digit PIN',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),

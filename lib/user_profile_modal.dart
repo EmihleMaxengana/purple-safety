@@ -516,8 +516,10 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Widget _buildNextOfKinCard() {
-    final hasNextOfKin = (_userData['nextOfKinName'] != null && _userData['nextOfKinName'].toString().isNotEmpty);
-    
+    final hasNextOfKin =
+        (_userData['nextOfKinName'] != null &&
+        _userData['nextOfKinName'].toString().isNotEmpty);
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -530,22 +532,35 @@ class _UserProfileModalState extends State<UserProfileModal> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.emergency, color: Color(0xFFBF7DCB), size: 20),
+                    const Icon(
+                      Icons.emergency,
+                      color: Color(0xFFBF7DCB),
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       _userData['nextOfKinName'],
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFF6A1B9A),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         _userData['nextOfKinRelation'] ?? 'Contact',
-                        style: const TextStyle(color: Colors.white70, fontSize: 10),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ],
@@ -557,23 +572,38 @@ class _UserProfileModalState extends State<UserProfileModal> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _formatPhoneForDisplay(_userData['nextOfKinPhone'] ?? 'No phone'),
-                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                        _formatPhoneForDisplay(
+                          _userData['nextOfKinPhone'] ?? 'No phone',
+                        ),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                if (_userData['nextOfKinAltPhone'] != null && _userData['nextOfKinAltPhone'].toString().isNotEmpty)
+                if (_userData['nextOfKinAltPhone'] != null &&
+                    _userData['nextOfKinAltPhone'].toString().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Row(
                       children: [
-                        const Icon(Icons.phone_android, color: Colors.white54, size: 14),
+                        const Icon(
+                          Icons.phone_android,
+                          color: Colors.white54,
+                          size: 14,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            _formatPhoneForDisplay(_userData['nextOfKinAltPhone']),
-                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                            _formatPhoneForDisplay(
+                              _userData['nextOfKinAltPhone'],
+                            ),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ],
@@ -695,10 +725,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticateWithUserPreference(
-                context: context,
-                reason: 'Authenticate to view data sharing settings',
-              );
+              final authenticated =
+                  await BiometricService.authenticateWithUserPreference(
+                    context: context,
+                    reason: 'Authenticate to view data sharing settings',
+                  );
               if (authenticated) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -724,10 +755,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticateWithUserPreference(
-                context: context,
-                reason: 'Authenticate to change biometrics settings',
-              );
+              final authenticated =
+                  await BiometricService.authenticateWithUserPreference(
+                    context: context,
+                    reason: 'Authenticate to change biometrics settings',
+                  );
               if (authenticated) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -753,10 +785,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticateWithUserPreference(
-                context: context,
-                reason: 'Authenticate to manage devices',
-              );
+              final authenticated =
+                  await BiometricService.authenticateWithUserPreference(
+                    context: context,
+                    reason: 'Authenticate to manage devices',
+                  );
               if (authenticated) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -775,10 +808,11 @@ class _UserProfileModalState extends State<UserProfileModal> {
     return Center(
       child: TextButton(
         onPressed: () async {
-          final authenticated = await BiometricService.authenticateWithUserPreference(
-            context: context,
-            reason: 'Authenticate to log out',
-          );
+          final authenticated =
+              await BiometricService.authenticateWithUserPreference(
+                context: context,
+                reason: 'Authenticate to log out',
+              );
           if (authenticated) {
             await AuthService().logout();
             if (context.mounted) {
