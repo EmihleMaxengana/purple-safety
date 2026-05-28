@@ -6,7 +6,6 @@ import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/login_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:url_launcher/url_launcher.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io';
 
@@ -21,6 +20,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _auth = AuthService();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+
+  // Next of kin data (loaded from Firestore)
+  String _nextOfKinName = '';
+  String _nextOfKinPhone = '';
+  String _nextOfKinRelation = '';
+  String _nextOfKinAltPhone = '';
+
   bool _isLoading = false;
 
   @override
@@ -44,13 +50,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (data != null) {
         _emailController.text = data['email'] ?? '';
         _phoneController.text = data['phone'] ?? '';
+        _nextOfKinName = data['nextOfKinName'] ?? '';
+        _nextOfKinPhone = data['nextOfKinPhone'] ?? '';
+        _nextOfKinRelation = data['nextOfKinRelation'] ?? '';
+        _nextOfKinAltPhone = data['nextOfKinAltPhone'] ?? '';
       }
     }
     setState(() => _isLoading = false);
   }
 
   Future<void> _saveUserData() async {
-    final authenticated = await BiometricService.authenticateWithPinFallback(
+    final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to update your profile',
     );
@@ -86,7 +96,146 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // SIMPLIFIED CHANGE PASSWORD - Only requires current password
+  // CHANGE NEXT OF KIN: Authentication AFTER changes, NO extra confirmation
+  // ============================================================
+  Future<void> _changeNextOfKin() async {
+    // Controllers pre-filled with current data
+    final nameController = TextEditingController(text: _nextOfKinName);
+    final phoneController = TextEditingController(text: _nextOfKinPhone);
+    final relationController = TextEditingController(text: _nextOfKinRelation);
+    final altPhoneController = TextEditingController(text: _nextOfKinAltPhone);
+
+    final formKey = GlobalKey<FormState>();
+    bool hasChanges = false;
+
+    // Show edit dialog without authentication
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Change Next of Kin'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Full Name',
+                        hintText: 'Next of kin full name',
+                        prefixIcon: Icon(Icons.person),
+                      ),
+                      onChanged: (_) => setState(() => hasChanges = true),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone Number',
+                        hintText: 'Primary contact number',
+                        prefixIcon: Icon(Icons.phone),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      onChanged: (_) => setState(() => hasChanges = true),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: relationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Relationship',
+                        hintText: 'e.g., Spouse, Parent, Sibling',
+                        prefixIcon: Icon(Icons.people),
+                      ),
+                      onChanged: (_) => setState(() => hasChanges = true),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: altPhoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Alternative Phone (Optional)',
+                        hintText: 'Secondary contact number',
+                        prefixIcon: Icon(Icons.phone_android),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      onChanged: (_) => setState(() => hasChanges = true),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (!hasChanges) {
+                    Navigator.pop(context, false);
+                    return;
+                  }
+                  // Close edit dialog, then authenticate and save directly
+                  Navigator.pop(context, true);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result != true) return;
+
+    // AUTHENTICATION AFTER CHANGES (no confirmation dialog after this)
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+      context: context,
+      reason: 'Authenticate to save next of kin changes',
+    );
+    if (!authenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Authentication failed. Changes not saved.'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // Save directly to Firestore
+    setState(() => _isLoading = true);
+    final user = _auth.getCurrentUser();
+    if (user != null) {
+      try {
+        await _auth.updateNextOfKin(
+          user.uid,
+          name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : null,
+          phone: phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : null,
+          relation: relationController.text.trim().isNotEmpty ? relationController.text.trim() : null,
+          altPhone: altPhoneController.text.trim().isNotEmpty ? altPhoneController.text.trim() : null,
+        );
+        // Update local variables
+        setState(() {
+          _nextOfKinName = nameController.text.trim();
+          _nextOfKinPhone = phoneController.text.trim();
+          _nextOfKinRelation = relationController.text.trim();
+          _nextOfKinAltPhone = altPhoneController.text.trim();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Next of kin updated'), backgroundColor: Colors.green),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  // ============================================================
+  // Change Password (unchanged)
   // ============================================================
   void _showChangePasswordDialog() {
     final currentPasswordController = TextEditingController();
@@ -138,7 +287,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              // Validate passwords
               if (newPasswordController.text != confirmController.text) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -148,7 +296,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-
               if (newPasswordController.text.length < 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -158,7 +305,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
                 return;
               }
-
               if (currentPasswordController.text.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -169,7 +315,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 return;
               }
 
-              // Show loading
               showDialog(
                 context: context,
                 barrierDismissible: false,
@@ -181,21 +326,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               try {
                 final user = FirebaseAuth.instance.currentUser;
                 if (user != null && user.email != null) {
-                  // Re-authenticate with current password
                   final credential = EmailAuthProvider.credential(
                     email: user.email!,
                     password: currentPasswordController.text,
                   );
                   await user.reauthenticateWithCredential(credential);
-
-                  // Update password
                   await user.updatePassword(newPasswordController.text);
-
-                  // Close loading dialog
                   Navigator.pop(context);
-                  // Close password dialog
                   Navigator.pop(context);
-
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Password changed successfully'),
@@ -204,9 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   );
                 }
               } on FirebaseAuthException catch (e) {
-                // Close loading dialog
                 Navigator.pop(context);
-
                 if (e.code == 'wrong-password') {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -243,11 +379,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // SIMPLIFIED MANAGE BIOMETRICS - Direct to device settings or toggle
+  // Manage Biometrics (unchanged)
   // ============================================================
   void _showManageBiometricsDialog() async {
-    final isBiometricAvailable =
-        await BiometricService.isFingerprintAvailable();
+    final isBiometricAvailable = await BiometricService.isFingerprintAvailable();
     final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
 
     showModalBottomSheet(
@@ -273,8 +408,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
             const Divider(color: Colors.white24),
-
-            // SOS Fingerprint Toggle
             SwitchListTile(
               title: const Text(
                 'SOS Fingerprint',
@@ -293,37 +426,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: isBiometricAvailable
                   ? (value) async {
                       if (value) {
-                        // Enable SOS fingerprint
-                        final success =
-                            await BiometricService.enableSOSFingerprint();
+                        final success = await BiometricService.enableSOSFingerprint();
                         if (success) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('SOS Fingerprint enabled'),
-                            ),
+                            const SnackBar(content: Text('SOS Fingerprint enabled')),
                           );
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text(
-                                'Failed to enable. Please try again.',
-                              ),
+                              content: Text('Failed to enable. Please try again.'),
                               backgroundColor: Colors.red,
                             ),
                           );
                         }
                       } else {
-                        // Disable - would need a method to disable
-                        // NOTE: new method
-                        // ScaffoldMessenger.of(context).showSnackBar(
-                        //   const SnackBar(content: Text('Feature coming soon')),
-                        // );
-
-                        BiometricService.disableSOSFingerprint();
+                        await BiometricService.disableSOSFingerprint();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('SOS Fingerprint disabled'),
-                          ),
+                          const SnackBar(content: Text('SOS Fingerprint disabled')),
                         );
                       }
                       Navigator.pop(context);
@@ -332,10 +451,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   : null,
               activeColor: const Color(0xFF6A1B9A),
             ),
-
             const SizedBox(height: 8),
-
-            // Open device settings button
             ListTile(
               leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
               title: const Text(
@@ -353,10 +469,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onTap: () {
                 Navigator.pop(context);
-                _openDeviceBiometricSettings();
+                if (Platform.isAndroid) {
+                  AppSettings.openAppSettings(type: AppSettingsType.security);
+                } else if (Platform.isIOS) {
+                  AppSettings.openAppSettings();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Open your device settings to manage fingerprints'),
+                    ),
+                  );
+                }
               },
             ),
-
             const SizedBox(height: 16),
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -371,33 +496,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _openDeviceBiometricSettings() async {
-    // Open device settings - Android and iOS
-    // if (Platform.isAndroid) {
-    //   await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
-    // } else if (Platform.isIOS) {
-    //   await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
-    // } else {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text('Open your device settings to manage fingerprints')),
-    //   );
-    // }
-
-    if (Platform.isAndroid) {
-      AppSettings.openAppSettings(type: AppSettingsType.security);
-    } else if (Platform.isIOS) {
-      AppSettings.openAppSettings();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Open your device settings to manage fingerprints'),
-        ),
-      );
-    }
-  }
-
   // ============================================================
-  // SIMPLIFIED PRIVACY POLICY - No authentication, just open/view
+  // Privacy Policy (unchanged)
   // ============================================================
   void _showPrivacyPolicy() {
     showDialog(
@@ -500,8 +600,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ============================================================
+  // Delete Account (unchanged)
+  // ============================================================
   void _confirmDeleteAccount() async {
-    final authenticated = await BiometricService.authenticateWithPinFallback(
+    final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to delete your account',
     );
@@ -620,7 +723,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (user != null && user.email != null) {
         final password = await _showPasswordDialog();
-
         if (password == null) {
           setState(() => _isLoading = false);
           return;
@@ -650,50 +752,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           email: user.email!,
           password: password,
         );
-
         await user.reauthenticateWithCredential(credential);
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .delete();
-
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('contacts')
             .get();
-
         if (contactsSnapshot.docs.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
-          for (var doc in contactsSnapshot.docs) {
-            batch.delete(doc.reference);
-          }
+          for (var doc in contactsSnapshot.docs) batch.delete(doc.reference);
           await batch.commit();
         }
-
         final alertsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('alerts')
             .get();
-
         if (alertsSnapshot.docs.isNotEmpty) {
           final alertsBatch = FirebaseFirestore.instance.batch();
-          for (var doc in alertsSnapshot.docs) {
-            alertsBatch.delete(doc.reference);
-          }
+          for (var doc in alertsSnapshot.docs) alertsBatch.delete(doc.reference);
           await alertsBatch.commit();
         }
-
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
-
         await user.delete();
 
         if (mounted) {
-          Navigator.of(context).pop();
-
+          Navigator.of(context).pop(); // close loading dialog
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Account permanently deleted'),
@@ -702,18 +788,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           );
         }
-
         if (mounted) {
           await _navigateToLoginWithAnimation();
         }
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
-
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-
+      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
       if (e.code == 'wrong-password') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -724,9 +805,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } else if (e.code == 'requires-recent-login') {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Please log out and log in again before deleting your account',
-            ),
+            content: Text('Please log out and log in again before deleting your account'),
             backgroundColor: Colors.orange,
             duration: Duration(seconds: 4),
           ),
@@ -741,19 +820,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await _navigateToLoginWithAnimation();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: ${e.message}'), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
       setState(() => _isLoading = false);
-
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
-
+      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
@@ -765,16 +837,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const LoginScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             const begin = Offset(1.0, 0.0);
             const end = Offset.zero;
             const curve = Curves.easeInOut;
-            var tween = Tween(
-              begin: begin,
-              end: end,
-            ).chain(CurveTween(curve: curve));
+            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
             var offsetAnimation = animation.drive(tween);
             return SlideTransition(position: offsetAnimation, child: child);
           },
@@ -786,7 +854,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
-    final authenticated = await BiometricService.authenticateWithPinFallback(
+    final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to log out',
     );
@@ -796,23 +864,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) =>
-                const LoginScreen(),
-            transitionsBuilder:
-                (context, animation, secondaryAnimation, child) {
-                  const begin = Offset(0.0, 1.0);
-                  const end = Offset.zero;
-                  const curve = Curves.easeInOut;
-                  var tween = Tween(
-                    begin: begin,
-                    end: end,
-                  ).chain(CurveTween(curve: curve));
-                  var offsetAnimation = animation.drive(tween);
-                  return SlideTransition(
-                    position: offsetAnimation,
-                    child: child,
-                  );
-                },
+            pageBuilder: (context, animation, secondaryAnimation) => const LoginScreen(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(0.0, 1.0);
+              const end = Offset.zero;
+              const curve = Curves.easeInOut;
+              var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+              var offsetAnimation = animation.drive(tween);
+              return SlideTransition(position: offsetAnimation, child: child);
+            },
           ),
           (route) => false,
         );
@@ -825,6 +885,204 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
     }
+  }
+
+  // Helper build methods
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Color(0xFFa078c0),
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: Colors.white),
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Color(0xFFBF7DCB)),
+        prefixIcon: Icon(icon, color: const Color(0xFFBF7DCB)),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  String _formatPhoneForDisplay(String phone) {
+    if (phone.isEmpty) return 'Not set';
+    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleaned.startsWith('27') && cleaned.length == 11) {
+      cleaned = cleaned.substring(2);
+    }
+    if (cleaned.length == 9) {
+      return '+27 ${cleaned.substring(0, 2)} ${cleaned.substring(2, 5)} ${cleaned.substring(5)}';
+    }
+    return phone;
+  }
+
+  Widget _buildNextOfKinDisplay() {
+    final hasData = _nextOfKinName.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1a0f2e),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'In case of emergency, other users will contact this person.',
+            style: TextStyle(color: Colors.white70, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          if (hasData) ...[
+            Row(
+              children: [
+                const Icon(Icons.person, color: Color(0xFFBF7DCB), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _nextOfKinName,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6A1B9A),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    _nextOfKinRelation.isNotEmpty ? _nextOfKinRelation : 'Contact',
+                    style: const TextStyle(color: Colors.white70, fontSize: 10),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.phone, color: Colors.white54, size: 14),
+                const SizedBox(width: 8),
+                Text(
+                  _formatPhoneForDisplay(_nextOfKinPhone),
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+            if (_nextOfKinAltPhone.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Row(
+                  children: [
+                    const Icon(Icons.phone_android, color: Colors.white54, size: 14),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatPhoneForDisplay(_nextOfKinAltPhone),
+                      style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+          ] else ...[
+            const Icon(Icons.person_outline, color: Colors.white38, size: 48),
+            const SizedBox(height: 8),
+            const Text(
+              'No next of kin added',
+              style: TextStyle(color: Colors.white54, fontSize: 14),
+            ),
+          ],
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLoading ? null : _changeNextOfKin,
+              icon: const Icon(Icons.edit, size: 18),
+              label: Text(hasData ? 'Change Next of Kin' : 'Add Next of Kin'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFBF7DCB),
+                side: const BorderSide(color: Color(0xFFBF7DCB)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      color: const Color(0xFF1a0f2e),
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFFBF7DCB)),
+        title: Text(title, style: const TextStyle(color: Colors.white)),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        trailing: const Icon(
+          Icons.arrow_forward_ios,
+          color: Colors.white70,
+          size: 16,
+        ),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ElevatedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, color: Colors.white, size: 20),
+      label: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 2,
+      ),
+    );
   }
 
   @override
@@ -855,7 +1113,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Profile section
+                // Profile Information
                 _buildSectionTitle('Profile Information'),
                 const SizedBox(height: 8),
                 _buildTextField(
@@ -868,6 +1126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   controller: _phoneController,
                   label: 'Phone Number',
                   icon: Icons.phone,
+                  keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
@@ -883,27 +1142,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                // Security section - SIMPLIFIED
+                // Next of Kin Section with Change button
+                _buildSectionTitle('Next of Kin'),
+                const SizedBox(height: 8),
+                _buildNextOfKinDisplay(),
+
+                const SizedBox(height: 32),
+
+                // Security Section
                 _buildSectionTitle('Security'),
                 const SizedBox(height: 8),
-
-                // Change Password - NO extra authentication
                 _buildSettingTile(
                   icon: Icons.lock,
                   title: 'Change Password',
                   subtitle: 'Update your password with current password',
                   onTap: _showChangePasswordDialog,
                 ),
-
-                // Manage Biometrics - Direct to settings
                 _buildSettingTile(
                   icon: Icons.fingerprint,
                   title: 'Manage Biometrics',
                   subtitle: 'Set up fingerprint for SOS or login',
                   onTap: _showManageBiometricsDialog,
                 ),
-
-                // Privacy Policy - NO authentication needed
                 _buildSettingTile(
                   icon: Icons.privacy_tip,
                   title: 'Privacy Policy',
@@ -972,97 +1232,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Color(0xFFa078c0),
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 1,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-  }) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFFBF7DCB)),
-        prefixIcon: Icon(icon, color: const Color(0xFFBF7DCB)),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-    Color color = Colors.white,
-  }) {
-    return Card(
-      color: const Color(0xFF1a0f2e),
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.purple.withOpacity(0.3)),
-      ),
-      child: ListTile(
-        leading: Icon(icon, color: const Color(0xFFBF7DCB)),
-        title: Text(title, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        trailing: const Icon(
-          Icons.arrow_forward_ios,
-          color: Colors.white70,
-          size: 16,
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return ElevatedButton.icon(
-      onPressed: onTap,
-      icon: Icon(icon, color: Colors.white, size: 20),
-      label: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
-        ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 2,
       ),
     );
   }

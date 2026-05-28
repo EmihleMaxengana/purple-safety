@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/services/trip_sharing_service.dart';
+import 'package:purple_safety/next_of_kin_modal.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
@@ -385,10 +386,31 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 ),
                 child: Row(
                   children: [
+                    // Avatar for followed person – tap to show next of kin
+                    GestureDetector(
+                      onTap: () {
+                        if (_followedTrip != null) {
+                          showNextOfKinModal(
+                            context,
+                            _followedTrip!['userId'],
+                            _followedTrip!['userName'] ?? 'User',
+                          );
+                        }
+                      },
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.purple,
+                        child: Text(
+                          (_followedTrip!['userName'] ?? 'U')[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       width: 10,
                       height: 10,
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.green,
                         shape: BoxShape.circle,
                       ),

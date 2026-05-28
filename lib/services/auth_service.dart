@@ -5,13 +5,17 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Register with email and password
+  // Register with email and password, with optional next of kin
   Future<User?> registerWithEmail(
     String name,
     String email,
     String password,
-    String phone,
-  ) async {
+    String phone, {
+    String? nextOfKinName,
+    String? nextOfKinPhone,
+    String? nextOfKinRelation,
+    String? nextOfKinAltPhone,
+  }) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -20,13 +24,18 @@ class AuthService {
       User? user = result.user;
 
       if (user != null) {
-        // Store additional user data in Firestore
-        await _firestore.collection('users').doc(user.uid).set({
+        Map<String, dynamic> userData = {
           'name': name,
           'email': email,
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
-        });
+        };
+        if (nextOfKinName != null && nextOfKinName.isNotEmpty) userData['nextOfKinName'] = nextOfKinName;
+        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty) userData['nextOfKinPhone'] = nextOfKinPhone;
+        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty) userData['nextOfKinRelation'] = nextOfKinRelation;
+        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty) userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
+        
+        await _firestore.collection('users').doc(user.uid).set(userData);
       }
       return user;
     } catch (e) {
@@ -76,8 +85,26 @@ class AuthService {
     return doc.data() as Map<String, dynamic>?;
   }
 
-  // Update user data
+  // Update user data (generic)
   Future<void> updateUserData(String uid, Map<String, dynamic> data) async {
     await _firestore.collection('users').doc(uid).update(data);
+  }
+
+  // Update next of kin specifically
+  Future<void> updateNextOfKin(
+    String userId, {
+    String? name,
+    String? phone,
+    String? relation,
+    String? altPhone,
+  }) async {
+    Map<String, dynamic> updateData = {};
+    if (name != null) updateData['nextOfKinName'] = name;
+    if (phone != null) updateData['nextOfKinPhone'] = phone;
+    if (relation != null) updateData['nextOfKinRelation'] = relation;
+    if (altPhone != null) updateData['nextOfKinAltPhone'] = altPhone;
+    if (updateData.isNotEmpty) {
+      await _firestore.collection('users').doc(userId).update(updateData);
+    }
   }
 }

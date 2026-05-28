@@ -485,11 +485,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context) => ManageContactsModal(
         contacts: _contacts,
         onDelete: (id) async {
-          final authenticated =
-              await BiometricService.authenticateWithPinFallback(
-                context: context,
-                reason: 'Authenticate to delete this contact',
-              );
+          // Updated authentication method
+          final authenticated = await BiometricService.authenticateWithUserPreference(
+            context: context,
+            reason: 'Authenticate to delete this contact',
+          );
           if (authenticated) {
             await _firestoreService.deleteContact(user.uid, id);
             if (context.mounted) {

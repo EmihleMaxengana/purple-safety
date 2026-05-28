@@ -61,10 +61,10 @@ class _EditContactScreenState extends State<EditContactScreen> {
   }
 
   Future<void> _saveChanges() async {
-    final authenticated = await BiometricService.authenticateWithPinFallback(
-      context: context,
-      reason: 'Authenticate to save contact changes',
-    );
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+  context: context,
+  reason: 'Authenticate to save contact changes',
+);
 
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -118,10 +118,10 @@ class _EditContactScreenState extends State<EditContactScreen> {
     );
 
     if (confirmed == true) {
-      final authenticated = await BiometricService.authenticateWithPinFallback(
-        context: context,
-        reason: 'Authenticate to delete this contact',
-      );
+      final authenticated = await BiometricService.authenticateWithUserPreference(
+  context: context,
+  reason: 'Authenticate to delete this contact',
+);
 
       if (authenticated) {
         widget.onDelete();

@@ -163,13 +163,14 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
-  // Wrapper for toggles that require fingerprint
+  // Updated: unified authentication (fingerprint if enabled, else PIN)
   Future<void> _toggleWithFingerprint(
     String settingName,
     bool currentValue,
     Function(bool) onToggle,
   ) async {
-    final authenticated = await BiometricService.authenticate(
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+      context: context,
       reason: 'Authenticate to change $settingName',
     );
     if (authenticated) {
@@ -182,6 +183,17 @@ class _UserProfileModalState extends State<UserProfileModal> {
         ),
       );
     }
+  }
+
+  String _formatPhoneForDisplay(String phone) {
+    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleaned.startsWith('27') && cleaned.length == 11) {
+      cleaned = cleaned.substring(2);
+    }
+    if (cleaned.length == 9) {
+      return '+27 ${cleaned.substring(0, 2)} ${cleaned.substring(2, 5)} ${cleaned.substring(5)}';
+    }
+    return phone;
   }
 
   @override
@@ -241,6 +253,9 @@ class _UserProfileModalState extends State<UserProfileModal> {
                       const SizedBox(height: 24),
                       _buildSectionTitle('Emergency Contacts'),
                       _buildEmergencyContacts(),
+                      const SizedBox(height: 24),
+                      _buildSectionTitle('Next of Kin'),
+                      _buildNextOfKinCard(),
                       const SizedBox(height: 24),
                       _buildSectionTitle('Privacy & Security'),
                       _buildPrivacySecurity(),
@@ -360,7 +375,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
   }
 
   Widget _buildEmergencyContacts() {
-    // Show loading indicator while fetching contacts
     if (_isLoadingContacts) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -387,7 +401,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
       );
     }
 
-    // Show real contacts from Firestore
     if (_realContacts.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -491,6 +504,90 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
+  Widget _buildNextOfKinCard() {
+    final hasNextOfKin = (_userData['nextOfKinName'] != null && _userData['nextOfKinName'].toString().isNotEmpty);
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2a1f3e),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: hasNextOfKin
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.emergency, color: Color(0xFFBF7DCB), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      _userData['nextOfKinName'],
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6A1B9A),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        _userData['nextOfKinRelation'] ?? 'Contact',
+                        style: const TextStyle(color: Colors.white70, fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(Icons.phone, color: Colors.white54, size: 14),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _formatPhoneForDisplay(_userData['nextOfKinPhone'] ?? 'No phone'),
+                        style: const TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_userData['nextOfKinAltPhone'] != null && _userData['nextOfKinAltPhone'].toString().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.phone_android, color: Colors.white54, size: 14),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _formatPhoneForDisplay(_userData['nextOfKinAltPhone']),
+                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            )
+          : const Column(
+              children: [
+                Icon(Icons.person_outline, color: Colors.white38, size: 48),
+                SizedBox(height: 8),
+                Text(
+                  'No next of kin added',
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'You can add one in Settings > Next of Kin',
+                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+              ],
+            ),
+    );
+  }
+
   Widget _buildPrivacySecurity() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -587,7 +684,8 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticate(
+              final authenticated = await BiometricService.authenticateWithUserPreference(
+                context: context,
                 reason: 'Authenticate to view data sharing settings',
               );
               if (authenticated) {
@@ -615,7 +713,8 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticate(
+              final authenticated = await BiometricService.authenticateWithUserPreference(
+                context: context,
                 reason: 'Authenticate to change biometrics settings',
               );
               if (authenticated) {
@@ -643,7 +742,8 @@ class _UserProfileModalState extends State<UserProfileModal> {
               size: 16,
             ),
             onTap: () async {
-              final authenticated = await BiometricService.authenticate(
+              final authenticated = await BiometricService.authenticateWithUserPreference(
+                context: context,
                 reason: 'Authenticate to manage devices',
               );
               if (authenticated) {
@@ -664,7 +764,8 @@ class _UserProfileModalState extends State<UserProfileModal> {
     return Center(
       child: TextButton(
         onPressed: () async {
-          final authenticated = await BiometricService.authenticate(
+          final authenticated = await BiometricService.authenticateWithUserPreference(
+            context: context,
             reason: 'Authenticate to log out',
           );
           if (authenticated) {

@@ -195,10 +195,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   // I'm Safe Function - Deactivates SOS (SMS only)
   // ============================================================
   Future<void> _imSafe() async {
-    final authenticated = await BiometricService.authenticateWithPinFallback(
-      context: context,
-      reason: 'Confirm you are safe to deactivate SOS',
-    );
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+  context: context,
+  reason: 'Confirm you are safe to deactivate SOS',
+);
 
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
