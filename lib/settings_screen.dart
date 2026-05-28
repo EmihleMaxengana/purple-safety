@@ -458,6 +458,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) async {
                   setState(() {
                     _useBiometrics = value;
+                    !_useBiometrics
+                        ? _isSOSEnabled = value
+                        : _isSOSEnabled = _isSOSEnabled;
                   });
                   sheetSetState(() {});
                   await _saveIsBiometricEnabled(value);
@@ -522,6 +525,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           );
                         }
                         // Navigator.pop(context);
+                        sheetSetState(() {});
                         setState(() {
                           _isSOSEnabled = value;
                         });
