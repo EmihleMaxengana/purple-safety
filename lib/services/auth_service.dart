@@ -1,5 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// AuthService provides authentication helpers plus a small
+/// session / re-auth persistence layer used by the app to require
+/// short re-authentication when the user returns to the app.
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -30,11 +35,15 @@ class AuthService {
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
         };
-        if (nextOfKinName != null && nextOfKinName.isNotEmpty) userData['nextOfKinName'] = nextOfKinName;
-        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty) userData['nextOfKinPhone'] = nextOfKinPhone;
-        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty) userData['nextOfKinRelation'] = nextOfKinRelation;
-        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty) userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
-        
+        if (nextOfKinName != null && nextOfKinName.isNotEmpty)
+          userData['nextOfKinName'] = nextOfKinName;
+        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty)
+          userData['nextOfKinPhone'] = nextOfKinPhone;
+        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty)
+          userData['nextOfKinRelation'] = nextOfKinRelation;
+        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty)
+          userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
+
         await _firestore.collection('users').doc(user.uid).set(userData);
       }
       return user;
@@ -105,6 +114,92 @@ class AuthService {
     if (altPhone != null) updateData['nextOfKinAltPhone'] = altPhone;
     if (updateData.isNotEmpty) {
       await _firestore.collection('users').doc(userId).update(updateData);
+    }
+  }
+
+  // --- Session / re-auth helpers ---
+  static const String _sessionKeyPrefix = 'session_verified_';
+  static const String _requireReauthKey = 'require_reauth';
+
+  /// Mark the session as verified (store timestamp for current user)
+  Future<void> markSessionVerified() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await prefs.setString(
+          '${_sessionKeyPrefix}$userId',
+          DateTime.now().toIso8601String(),
+        );
+        await prefs.setBool(_requireReauthKey, false);
+      }
+    } catch (e) {
+      print('Error marking session verified: $e');
+    }
+  }
+
+  /// Mark that reauth is required (called when app is backgrounded/exited)
+  Future<void> markRequireReauth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_requireReauthKey, true);
+    } catch (e) {
+      print('Error setting requireReauth flag: $e');
+    }
+  }
+
+  /// Clear the require reauth flag
+  Future<void> clearRequireReauth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_requireReauthKey, false);
+    } catch (e) {
+      print('Error clearing requireReauth flag: $e');
+    }
+  }
+
+  /// Returns true if the app currently requires re-authentication
+  Future<bool> isRequireReauth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_requireReauthKey) ?? false;
+    } catch (e) {
+      print('Error reading requireReauth flag: $e');
+      return false;
+    }
+  }
+
+  /// Re-authenticate the current user using their password without
+  /// signing them out/in. Uses Firebase `reauthenticateWithCredential`.
+  Future<bool> reauthenticateWithPassword(String password) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return false;
+      final email = user.email;
+      if (email == null) return false;
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+      await user.reauthenticateWithCredential(credential);
+      return true;
+    } catch (e) {
+      print('Re-authentication failed: $e');
+      return false;
+    }
+  }
+
+  /// Clear stored session info for current user
+  Future<void> clearSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await prefs.remove('${_sessionKeyPrefix}$userId');
+      }
+      await prefs.setBool(_requireReauthKey, false);
+    } catch (e) {
+      print('Error clearing session: $e');
     }
   }
 }
