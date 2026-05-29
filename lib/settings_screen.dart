@@ -464,7 +464,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   });
                   sheetSetState(() {});
                   await _saveIsBiometricEnabled(value);
-                  print("useBiometrics: $value");
                 },
                 activeThumbColor: const Color(0xFF6A1B9A),
               ),
