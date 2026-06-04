@@ -134,11 +134,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         break;
       case AppLifecycleState.detached:
         // App is terminated
-        print("App is terminated.");
+        print("App is detached.");
         break;
       case AppLifecycleState.hidden:
         // App is running but not visible (Flutter 3.13+)
-        print("App is invisible.");
+        print("App is hidden.");
         break;
     }
   }

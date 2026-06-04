@@ -54,12 +54,13 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // When the app is backgrounded or detached, require re-auth on next resume.
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.hidden) {
       _authService.markRequireReauth();
     }
-    if (state == AppLifecycleState.resumed) {
+
+    if (state == AppLifecycleState.hidden) {
       _checkReauthRequired();
     }
   }

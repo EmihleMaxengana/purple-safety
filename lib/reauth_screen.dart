@@ -71,7 +71,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
 
   Future<void> _submit() async {
     if (_usePasswd) {
-      print('Submitting password auth');
+      // print('Submitting password auth');
 
       final password = _passwordController.text.trim();
       if (password.isEmpty) {
@@ -94,23 +94,30 @@ class _ReauthScreenState extends State<ReauthScreen> {
     }
 
     if (_usePIN) {
-      print('Submitting PIN auth');
+      try {
+        // print('Submitting PIN auth');
 
-      final pin = _pinController.text.trim();
-      if (pin.isEmpty) {
-        setState(() => _error = 'Enter your PIN');
-        return;
-      }
+        final pin = _pinController.text.trim();
+        if (pin.isEmpty) {
+          setState(() => _error = 'Enter your PIN');
+          return;
+        }
 
-      setState(() => _isLoading = true);
+        setState(() => _isLoading = true);
 
-      final isValid = await _authService.reauthenticateWithPIN(pin);
-      if (isValid) {
-        await _authService.markSessionVerified();
-        widget.onAuthenticated?.call();
-      } else {
+        final isValid = await _authService.reauthenticateWithPIN(pin);
+        if (isValid) {
+          await _authService.markSessionVerified();
+          widget.onAuthenticated?.call();
+        } else {
+          setState(() {
+            _error = 'Incorrect PIN';
+            _isLoading = false;
+          });
+        }
+      } catch (e) {
         setState(() {
-          _error = 'Incorrect PIN';
+          _error = 'Error during PIN authentication: ${e.toString()}';
           _isLoading = false;
         });
       }
@@ -315,23 +322,25 @@ class _ReauthScreenState extends State<ReauthScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  TextButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Fingerprint auth not yet configured',
+                  if (!_useBiometrics) ...[
+                    TextButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Fingerprint auth not yet configured',
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
-                    child: Text(
-                      'Use fingerprint',
-                      style: TextStyle(color: _accent),
+                              );
+                            },
+                      child: Text(
+                        'Use fingerprint',
+                        style: TextStyle(color: _accent),
+                      ),
                     ),
-                  ),
+                  ],
                   TextButton(
                     onPressed: _isLoading ? null : _switchAuthMethod,
                     child: Text(

@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// AuthService provides authentication helpers plus a small
@@ -9,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   // Register with email and password, with optional next of kin and gender
   Future<User?> registerWithEmail(
@@ -191,11 +193,12 @@ class AuthService {
   }
 
   Future<bool> reauthenticateWithPIN(String pin) async {
-    // Placeholder for PIN-based re-authentication logic
-    // In a real implementation, you would verify the PIN against a secure store
-    print('Re-authenticating with PIN: $pin');
-    await Future.delayed(const Duration(seconds: 1)); // Simulate async work
-    return pin == '123456'; // Example: only accept '1234' as valid PINj
+    String storedPin = await _storage.read(key: pin) ?? '';
+    if (storedPin.isEmpty) {
+      throw Exception("There is no pin available for this user.");
+    }
+
+    return pin == storedPin;
   }
 
   /// Clear stored session info for current user

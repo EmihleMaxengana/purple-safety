@@ -345,7 +345,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _startMapLoadTimer() {
     _mapLoadTimer?.cancel();
-    _mapLoadTimer = Timer(const Duration(seconds: 5), () {
+    // Tumelo - I think the map needs more time to load; don't mind the 10 seconds, that was just for my convenience. But you do need to reconsider extending it a bit longer...
+    // _mapLoadTimer = Timer(const Duration(seconds: 5), () {
+    _mapLoadTimer = Timer(const Duration(seconds: 10), () {
       if (_mapController == null && mounted) {
         setState(() {
           _mapLoadFailed = true;
@@ -500,10 +502,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context) => ManageContactsModal(
         contacts: _contacts,
         onDelete: (id) async {
-          final authenticated = await BiometricService.authenticateWithUserPreference(
-            context: context,
-            reason: 'Authenticate to delete this contact',
-          );
+          final authenticated =
+              await BiometricService.authenticateWithUserPreference(
+                context: context,
+                reason: 'Authenticate to delete this contact',
+              );
           if (authenticated) {
             await _firestoreService.deleteContact(user.uid, id);
             if (context.mounted) {
@@ -561,7 +564,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!_locationEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location not available. Please enable location services.'),
+          content: Text(
+            'Location not available. Please enable location services.',
+          ),
           backgroundColor: Colors.red,
         ),
       );
