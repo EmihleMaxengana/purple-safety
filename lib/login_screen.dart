@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'main_screen.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_modal.dart';
@@ -19,10 +20,41 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _loadSavedEmail();
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // Load saved email if Remember Me was previously enabled
+  Future<void> _loadSavedEmail() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email');
+    final rememberMeFlag = prefs.getBool('remember_me') ?? false;
+    if (savedEmail != null && rememberMeFlag) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _rememberMe = true;
+      });
+    }
+  }
+
+  // Save email if Remember Me is checked, otherwise clear saved email
+  Future<void> _saveEmailPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString('saved_email', _emailController.text.trim());
+      await prefs.setBool('remember_me', true);
+    } else {
+      await prefs.remove('saved_email');
+      await prefs.setBool('remember_me', false);
+    }
   }
 
   @override
@@ -224,8 +256,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               scale: 0.9,
                               child: Checkbox(
                                 value: _rememberMe,
-                                onChanged: (value) =>
-                                    setState(() => _rememberMe = value!),
+                                onChanged: (value) => setState(() {
+                                  _rememberMe = value ?? false;
+                                }),
                                 activeColor: const Color(0xFFD105FF),
                                 checkColor: Colors.white,
                               ),
@@ -233,7 +266,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const Text(
                               'Remember me',
                               style: TextStyle(
-                                color: Colors.black,
+                                color: Colors.white,
                                 fontSize: 13,
                               ),
                             ),
@@ -263,14 +296,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         ElevatedButton(
                           onPressed: () async {
-                            if (_emailController.text.isNotEmpty &&
-                                _passwordController.text.isNotEmpty) {
+                            final email = _emailController.text.trim();
+                            final password = _passwordController.text.trim();
+                            if (email.isNotEmpty && password.isNotEmpty) {
                               final auth = AuthService();
                               final user = await auth.loginWithEmail(
-                                _emailController.text,
-                                _passwordController.text,
+                                email,
+                                password,
                               );
                               if (user != null) {
+                                // Save email preference if Remember Me is checked
+                                await _saveEmailPreference();
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
@@ -281,6 +317,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Invalid email or password.'),
+                                    backgroundColor: Colors.red,
                                   ),
                                 );
                               }
@@ -290,6 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   content: Text(
                                     'Please enter email and password',
                                   ),
+                                  backgroundColor: Colors.orange,
                                 ),
                               );
                             }
