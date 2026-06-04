@@ -36,14 +36,6 @@ class AuthService {
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
         };
-<<<<<<< HEAD
-        if (nextOfKinName != null && nextOfKinName.isNotEmpty) userData['nextOfKinName'] = nextOfKinName;
-        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty) userData['nextOfKinPhone'] = nextOfKinPhone;
-        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty) userData['nextOfKinRelation'] = nextOfKinRelation;
-        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty) userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
-        if (gender != null && gender.isNotEmpty) userData['gender'] = gender;
-        
-=======
         if (nextOfKinName != null && nextOfKinName.isNotEmpty)
           userData['nextOfKinName'] = nextOfKinName;
         if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty)
@@ -53,7 +45,6 @@ class AuthService {
         if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty)
           userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
 
->>>>>>> f7c3a54e55f44d1bae02b7dfb9b6bf10ce0751de
         await _firestore.collection('users').doc(user.uid).set(userData);
       }
       return user;

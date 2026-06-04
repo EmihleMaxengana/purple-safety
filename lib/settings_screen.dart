@@ -31,7 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool _useBiometrics = false;
   bool _isBiometricAvailable = false;
-  bool _isSOSEnabled = false;
 
   @override
   void initState() {
@@ -105,7 +104,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() async {
       _useBiometrics = prefs.getBool('useBiometrics') ?? false;
       _isBiometricAvailable = await BiometricService.isFingerprintAvailable();
-      _isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
     });
   }
 
@@ -118,7 +116,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // CHANGE NEXT OF KIN: Authentication AFTER changes, NO extra confirmation
   // ============================================================
   Future<void> _changeNextOfKin() async {
-    // Controllers pre-filled with current data
     final nameController = TextEditingController(text: _nextOfKinName);
     final phoneController = TextEditingController(text: _nextOfKinPhone);
     final relationController = TextEditingController(text: _nextOfKinRelation);
@@ -127,7 +124,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final formKey = GlobalKey<FormState>();
     bool hasChanges = false;
 
-    // Show edit dialog without authentication
     final result = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -197,7 +193,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Navigator.pop(context, false);
                     return;
                   }
-                  // Close edit dialog, then authenticate and save directly
                   Navigator.pop(context, true);
                 },
                 child: const Text('Save'),
@@ -210,7 +205,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result != true) return;
 
-    // AUTHENTICATION AFTER CHANGES (no confirmation dialog after this)
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to save next of kin changes',
@@ -225,27 +219,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return;
     }
 
-    // Save directly to Firestore
     setState(() => _isLoading = true);
     final user = _auth.getCurrentUser();
     if (user != null) {
       try {
         await _auth.updateNextOfKin(
           user.uid,
-          name: nameController.text.trim().isNotEmpty
-              ? nameController.text.trim()
-              : null,
-          phone: phoneController.text.trim().isNotEmpty
-              ? phoneController.text.trim()
-              : null,
-          relation: relationController.text.trim().isNotEmpty
-              ? relationController.text.trim()
-              : null,
-          altPhone: altPhoneController.text.trim().isNotEmpty
-              ? altPhoneController.text.trim()
-              : null,
+          name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : null,
+          phone: phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : null,
+          relation: relationController.text.trim().isNotEmpty ? relationController.text.trim() : null,
+          altPhone: altPhoneController.text.trim().isNotEmpty ? altPhoneController.text.trim() : null,
         );
-        // Update local variables
         setState(() {
           _nextOfKinName = nameController.text.trim();
           _nextOfKinPhone = phoneController.text.trim();
@@ -268,7 +252,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Change Password (unchanged)
+  // Change Password
   // ============================================================
   void _showChangePasswordDialog() {
     final currentPasswordController = TextEditingController();
@@ -412,17 +396,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Manage Biometrics (unchanged)
+  // Manage Biometrics (SOS Fingerprint removed)
   // ============================================================
   void _showManageBiometricsDialog() {
-    // final isBiometricAvailable =
-    //     await BiometricService.isFingerprintAvailable();
-    // final isSOSEnabled = await BiometricService.isSOSFingerprintEnabled();
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      // builder: (context) => Container(
       builder: (context) => StatefulBuilder(
         builder: (context, sheetSetState) => Container(
           padding: const EdgeInsets.all(20),
@@ -458,79 +437,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onChanged: (value) async {
                   setState(() {
                     _useBiometrics = value;
-                    !_useBiometrics
-                        ? _isSOSEnabled = value
-                        : _isSOSEnabled = _isSOSEnabled;
                   });
                   sheetSetState(() {});
                   await _saveIsBiometricEnabled(value);
                 },
                 activeThumbColor: const Color(0xFF6A1B9A),
-              ),
-              SizedBox(height: 8),
-
-              // SOS Fingerprint Toggle
-              SwitchListTile(
-                title: const Text(
-                  'SOS Fingerprint',
-                  style: TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  _isBiometricAvailable && _useBiometrics
-                      ? 'Use fingerprint to instantly trigger SOS'
-                      : 'Fingerprint not available on this device',
-                  style: TextStyle(
-                    color: _isBiometricAvailable && _useBiometrics
-                        ? Colors.white70
-                        : Colors.red,
-                    fontSize: 12,
-                  ),
-                ),
-                value: _isSOSEnabled,
-                onChanged: _isBiometricAvailable && _useBiometrics
-                    ? (value) async {
-                        if (value) {
-                          // Enable SOS fingerprint
-                          final success =
-                              await BiometricService.enableSOSFingerprint();
-                          if (success) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('SOS Fingerprint enabled'),
-                              ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Failed to enable. Please try again.',
-                                ),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        } else {
-                          // Disable - would need a method to disable
-                          // NOTE: new method
-                          // ScaffoldMessenger.of(context).showSnackBar(
-                          //   const SnackBar(content: Text('Feature coming soon')),
-                          // );
-
-                          BiometricService.disableSOSFingerprint();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('SOS Fingerprint disabled'),
-                            ),
-                          );
-                        }
-                        // Navigator.pop(context);
-                        sheetSetState(() {});
-                        setState(() {
-                          _isSOSEnabled = value;
-                        });
-                      }
-                    : null,
-                activeColor: const Color(0xFF6A1B9A),
               ),
               const SizedBox(height: 8),
 
@@ -572,17 +483,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _openDeviceBiometricSettings() async {
-    // Open device settings - Android and iOS
-    // if (Platform.isAndroid) {
-    //   await launchUrl(Uri.parse('android.settings.SECURITY_SETTINGS'));
-    // } else if (Platform.isIOS) {
-    //   await launchUrl(Uri.parse('App-Prefs://TOUCHID_PASSCODE'));
-    // } else {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(content: Text('Open your device settings to manage fingerprints')),
-    //   );
-    // }
-
     if (Platform.isAndroid) {
       AppSettings.openAppSettings(type: AppSettingsType.security);
     } else if (Platform.isIOS) {
@@ -597,7 +497,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Privacy Policy (unchanged)
+  // Privacy Policy
   // ============================================================
   void _showPrivacyPolicy() {
     showDialog(
@@ -701,7 +601,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Delete Account (unchanged)
+  // Delete Account
   // ============================================================
   void _confirmDeleteAccount() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
@@ -883,7 +783,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await user.delete();
 
         if (mounted) {
-          Navigator.of(context).pop(); // close loading dialog
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Account permanently deleted'),
@@ -1100,9 +1000,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _nextOfKinRelation.isNotEmpty
-                        ? _nextOfKinRelation
-                        : 'Contact',
+                    _nextOfKinRelation.isNotEmpty ? _nextOfKinRelation : 'Contact',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
                 ),
@@ -1280,7 +1178,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                // Next of Kin Section with Change button
+                // Next of Kin Section
                 _buildSectionTitle('Next of Kin'),
                 const SizedBox(height: 8),
                 _buildNextOfKinDisplay(),
@@ -1299,7 +1197,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSettingTile(
                   icon: Icons.fingerprint,
                   title: 'Manage Biometrics',
-                  subtitle: 'Set up fingerprint for SOS or login',
+                  subtitle: 'Set up fingerprint for login',
                   onTap: _showManageBiometricsDialog,
                 ),
                 _buildSettingTile(
