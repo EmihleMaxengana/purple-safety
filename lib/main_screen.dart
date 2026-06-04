@@ -15,14 +15,14 @@ import 'package:purple_safety/services/auth_service.dart';
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
-  
+
   const MainScreen({Key? key, this.initialTripId}) : super(key: key);
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   bool _isEmergencyMode = false;
   final EmergencyManager _emergencyManager = EmergencyManager();
@@ -42,6 +42,8 @@ class _MainScreenState extends State<MainScreen> {
     });
     _listenToAlerts();
     _checkInitialTripId();
+
+    WidgetsBinding.instance.addObserver(this);
   }
 
   void _listenToAlerts() async {
@@ -61,7 +63,8 @@ class _MainScreenState extends State<MainScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => FullMapScreen(initialTripId: widget.initialTripId),
+            builder: (context) =>
+                FullMapScreen(initialTripId: widget.initialTripId),
           ),
         );
       });
@@ -111,6 +114,39 @@ class _MainScreenState extends State<MainScreen> {
       context,
       MaterialPageRoute(builder: (context) => const SafetyAlertsScreen()),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App is in the foreground and active
+        print("App has resumed.");
+        break;
+      case AppLifecycleState.inactive:
+        // App is in an inactive state (e.g., phone call, split screen)
+        print("App is inactive...");
+        break;
+      case AppLifecycleState.paused:
+        // App is in the background
+        print("App has paused.");
+        break;
+      case AppLifecycleState.detached:
+        // App is terminated
+        print("App is terminated.");
+        break;
+      case AppLifecycleState.hidden:
+        // App is running but not visible (Flutter 3.13+)
+        print("App is invisible.");
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
