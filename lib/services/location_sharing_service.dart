@@ -54,15 +54,7 @@ class LocationSharingService {
     
     String message = await _buildLocationMessage(userName, lat, lng);
     
-    // SMS ONLY - Send to trusted contacts
-    if (contacts.isNotEmpty) {
-      for (var contact in contacts) {
-        if (contact.phone != null && contact.phone!.isNotEmpty) {
-          await _sendSMS(contact.phone!, message);
-        }
-      }
-      debugPrint('📍 Location shared via SMS with ${contacts.length} trusted contacts');
-    }
+    // SMS REMOVED - no longer send to trusted contacts
     
     // Send to community (in-app only)
     if (_shareWithCommunity) {
@@ -145,26 +137,5 @@ class LocationSharingService {
     final now = DateFormat('HH:mm').format(DateTime.now());
     final link = 'https://www.google.com/maps?q=$lat,$lng';
     return '$userName is in $locationName at $now\nLocation: $link';
-  }
-
-  static Future<void> _sendSMS(String phoneNumber, String message) async {
-    try {
-      String cleanNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
-      
-      final Uri smsUri = Uri(
-        scheme: 'sms',
-        path: cleanNumber,
-        query: 'body=${Uri.encodeComponent(message)}',
-      );
-      
-      if (await canLaunchUrl(smsUri)) {
-        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-        debugPrint('✅ SMS opened for $phoneNumber');
-      } else {
-        debugPrint('❌ Could not open SMS for $phoneNumber');
-      }
-    } catch (e) {
-      debugPrint('❌ Error sending SMS: $e');
-    }
   }
 }

@@ -102,6 +102,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
+  // Map retry
+  bool _mapLoadFailed = false;
+  Timer? _mapLoadTimer;
+
   // Contacts
   List<Contact> _contacts = [];
 
@@ -112,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
-  // Custom map style
+  // Custom map style (unchanged)
   final String _mapStyle = '''
 [
   {
@@ -312,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     setState(() => _locationEnabled = true);
+    _startMapLoadTimer();
 
     _locationSubscription = _location.onLocationChanged.listen((event) {
       if (event.latitude != null && event.longitude != null) {
@@ -338,6 +343,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+  void _startMapLoadTimer() {
+    _mapLoadTimer?.cancel();
+    _mapLoadTimer = Timer(const Duration(seconds: 5), () {
+      if (_mapController == null && mounted) {
+        setState(() {
+          _mapLoadFailed = true;
+        });
+      }
+    });
+  }
+
   void _setupDangerZones() {
     _dangerZones = {
       Polygon(
@@ -360,6 +376,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapController!.setMapStyle(_mapStyle);
+    _mapLoadTimer?.cancel();
+    setState(() {
+      _mapLoadFailed = false;
+    });
 
     if (_currentPosition != null && !_hasCenteredMap) {
       _hasCenteredMap = true;
@@ -433,12 +453,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude: _currentPosition!.longitude,
       );
 
-      if (_contacts.isNotEmpty) {
-        final locationLink =
-            'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}';
-        await SOSAlertService.sendPrivateAlerts(_contacts, locationLink);
-        debugPrint('✅ Backup SMS sent to ${_contacts.length} trusted contacts');
-      }
+      // SMS PRIVATE ALERTS REMOVED as requested
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -485,7 +500,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context) => ManageContactsModal(
         contacts: _contacts,
         onDelete: (id) async {
-          // Updated authentication method
           final authenticated = await BiometricService.authenticateWithUserPreference(
             context: context,
             reason: 'Authenticate to delete this contact',
@@ -531,10 +545,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleTripSharing() async {
+    // 1. Check if user is logged in
+    final user = AuthService().getCurrentUser();
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to share your trip.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // 2. Check location services and permission
     if (!_locationEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location not available. Please enable location.'),
+          content: Text('Location not available. Please enable location services.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -544,21 +571,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (_currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Getting current location... Please wait.'),
+          content: Text('Getting current location... Please wait a moment.'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    final user = AuthService().getCurrentUser();
+    // 3. Get user name
     String userName = 'User';
-    if (user != null) {
-      final userData = await AuthService().getUserData(user.uid);
-      userName = userData?['name'] ?? 'User';
-    }
+    final userData = await AuthService().getUserData(user.uid);
+    userName = userData?['name'] ?? 'User';
 
     if (_isSharingTrip) {
+      // Stop sharing
       await TripSharingService.stopSharing();
       _tripUpdateTimer?.cancel();
       setState(() {
@@ -582,6 +608,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _isSharingTrip = true;
         });
 
+        // Periodic location updates
         _tripUpdateTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
           if (_currentPosition != null && TripSharingService.isSharing) {
             TripSharingService.updateLocation(
@@ -599,6 +626,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             backgroundColor: Colors.red,
           ),
         );
+        debugPrint('Trip sharing error: $e');
       }
     }
   }
@@ -606,7 +634,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _showTripShareDialog(String tripId, String userName) {
     final shareMessage =
         '🔴 $userName is sharing their live location with you!\n\n'
-        'Open Purple Safety app, go to Full Map, tap the QR icon, and enter this Trip ID:\n\n'
+        'Open Purple Safety app, go to Full Map, tap the ID icon, and enter this Trip ID:\n\n'
         'TRIP ID: $tripId\n\n'
         '(Download Purple Safety if you don\'t have it)';
 
@@ -747,6 +775,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _locationSubscription?.cancel();
     _mapController?.dispose();
     _contactsSubscription?.cancel();
+    _mapLoadTimer?.cancel();
     super.dispose();
   }
 
@@ -995,6 +1024,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildMapContent() {
     final LatLng targetPosition = _currentPosition ?? _defaultPosition;
     final bool hasLocation = _currentPosition != null;
+
+    if (_mapLoadFailed) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.map, size: 48, color: Colors.white38),
+            const SizedBox(height: 16),
+            const Text(
+              'Failed to load map',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  _mapLoadFailed = false;
+                  _mapController = null;
+                });
+                _startMapLoadTimer();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
 
     if (_isLocationLoading) {
       return const Center(

@@ -29,6 +29,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final _nextOfKinRelationController = TextEditingController();
   final _nextOfKinAltPhoneController = TextEditingController();
 
+  // Gender
+  String? _selectedGender;
+  final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
   bool _useBiometrics = false;
 
   String _password = '';
@@ -378,6 +382,47 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 return 'Please enter a valid 9-digit SA number';
                               return null;
                             },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // GENDER FIELD - NEW
+                          const Text(
+                            'Gender',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFCCCCFF),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonFormField<String>(
+                              value: _selectedGender,
+                              dropdownColor: const Color(0xFF2a1f3e),
+                              style: const TextStyle(color: Colors.white),
+                              decoration: InputDecoration(
+                                hintText: 'Select your gender',
+                                hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
+                                prefixIcon: const Icon(Icons.person_outline, color: Color(0xFFBF7DCB)),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                              ),
+                              items: _genderOptions.map((option) {
+                                return DropdownMenuItem(
+                                  value: option,
+                                  child: Text(option),
+                                );
+                              }).toList(),
+                              onChanged: (value) {
+                                setState(() {
+                                  _selectedGender = value;
+                                });
+                              },
+                            ),
                           ),
                           const SizedBox(height: 20),
 
@@ -798,7 +843,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             value: _useBiometrics,
                             onChanged: (value) async {
-                              // Handle biometric toggle
                               setState(() {
                                 _useBiometrics = value;
                               });
@@ -848,16 +892,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                         ? _nextOfKinAltPhoneController.text
                                               .trim()
                                         : null,
+                                    gender: _selectedGender, // ADD GENDER
                                   );
                                   if (user != null) {
-                                    // write biometric setting
-                                    await prefs.setBool(
-                                      "useBiometrics",
-                                      _useBiometrics,
-                                    );
-
-                                    // Format phone number for Firebase SMS verification: +271 23456789
-                                    // write biometric setting
                                     await prefs.setBool(
                                       "useBiometrics",
                                       _useBiometrics,

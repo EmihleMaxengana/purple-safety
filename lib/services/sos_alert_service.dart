@@ -196,45 +196,4 @@ class SOSAlertService {
       rethrow;
     }
   }
-  
-  // ============================================================
-  // SMS ONLY - Send private alerts to trusted contacts (SOS backup)
-  // ============================================================
-  static Future<void> sendPrivateAlerts(
-    List<Contact> contacts,
-    String locationLink, {
-    String? audioPath,
-    String? videoPath,
-  }) async {
-    debugPrint('📱 Sending private SMS alerts to ${contacts.length} trusted contacts');
-    
-    if (await Permission.sms.request().isGranted) {
-      for (var contact in contacts) {
-        if (contact.phone != null && contact.phone!.isNotEmpty) {
-          await sendSMS(contact.phone!, locationLink);
-        }
-      }
-    }
-  }
-  
-  static Future<void> sendSMS(String phoneNumber, String message) async {
-    final String fullMessage = message;
-    try {
-      String cleanNumber = phoneNumber.replaceAll(RegExp(r'\s+'), '');
-      final Uri smsUri = Uri(
-        scheme: 'sms',
-        path: cleanNumber,
-        query: 'body=${Uri.encodeComponent(fullMessage)}',
-      );
-      
-      if (await canLaunchUrl(smsUri)) {
-        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-        debugPrint('📱 SMS opened for $phoneNumber');
-      } else {
-        debugPrint('Could not open SMS for $phoneNumber');
-      }
-    } catch (e) {
-      debugPrint('Error sending SMS: $e');
-    }
-  }
 }

@@ -5,7 +5,7 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Register with email and password, with optional next of kin
+  // Register with email and password, with optional next of kin and gender
   Future<User?> registerWithEmail(
     String name,
     String email,
@@ -15,6 +15,7 @@ class AuthService {
     String? nextOfKinPhone,
     String? nextOfKinRelation,
     String? nextOfKinAltPhone,
+    String? gender,
   }) async {
     try {
       UserCredential result = await _auth.createUserWithEmailAndPassword(
@@ -34,6 +35,7 @@ class AuthService {
         if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty) userData['nextOfKinPhone'] = nextOfKinPhone;
         if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty) userData['nextOfKinRelation'] = nextOfKinRelation;
         if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty) userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
+        if (gender != null && gender.isNotEmpty) userData['gender'] = gender;
         
         await _firestore.collection('users').doc(user.uid).set(userData);
       }

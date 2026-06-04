@@ -28,6 +28,8 @@ class TripSharingService {
     // Create a new trip document in Firestore
     final tripRef = _firestore.collection('active_trips').doc();
     _currentTripId = tripRef.id;
+    final now = DateTime.now();
+    final timestamp = Timestamp.fromDate(now);
 
     await tripRef.set({
       'tripId': _currentTripId,
@@ -35,14 +37,14 @@ class TripSharingService {
       'userName': userName,
       'currentLatitude': latitude,
       'currentLongitude': longitude,
-      'startTime': FieldValue.serverTimestamp(),
-      'lastUpdate': FieldValue.serverTimestamp(),
+      'startTime': timestamp,
+      'lastUpdate': timestamp,
       'status': 'active', // active, ended, expired
       'locationHistory': [
         {
           'latitude': latitude,
           'longitude': longitude,
-          'timestamp': FieldValue.serverTimestamp(),
+          'timestamp': timestamp,
         }
       ],
     });
@@ -61,16 +63,18 @@ class TripSharingService {
 
     try {
       final tripRef = _firestore.collection('active_trips').doc(_currentTripId);
+      final now = DateTime.now();
+      final timestamp = Timestamp.fromDate(now);
       
       await tripRef.update({
         'currentLatitude': latitude,
         'currentLongitude': longitude,
-        'lastUpdate': FieldValue.serverTimestamp(),
+        'lastUpdate': timestamp,
         'locationHistory': FieldValue.arrayUnion([
           {
             'latitude': latitude,
             'longitude': longitude,
-            'timestamp': FieldValue.serverTimestamp(),
+            'timestamp': timestamp,
           }
         ]),
       });
@@ -90,7 +94,7 @@ class TripSharingService {
       final tripRef = _firestore.collection('active_trips').doc(_currentTripId);
       await tripRef.update({
         'status': 'ended',
-        'endTime': FieldValue.serverTimestamp(),
+        'endTime': Timestamp.fromDate(DateTime.now()),
       });
     } catch (e) {
       print('Error stopping trip: $e');

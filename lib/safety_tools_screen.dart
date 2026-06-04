@@ -8,7 +8,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:camera/camera.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/home/home_screen.dart';
@@ -38,11 +37,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
-
-  bool _isLiveStreaming = false;
-  CameraController? _cameraController;
-  String? _streamUrl;
-  String? _liveStreamRoomId;
 
   location.Location _location = location.Location();
   GoogleMapController? _mapController;
@@ -92,7 +86,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   @override
   void dispose() {
-    _stopLiveStreaming();
     _locationSubscription?.cancel();
     _audioRecorder.dispose();
     WidgetsBinding.instance.removeObserver(this);
@@ -101,10 +94,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused && _cameraController != null) {
-      _cameraController!.dispose();
-      _cameraController = null;
-    }
+    // No camera controller to dispose
   }
 
   Future<void> _loadContacts() async {
@@ -196,13 +186,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   // ============================================================
-  // I'm Safe Function - Deactivates SOS (SMS only)
+  // I'm Safe Function - Deactivates SOS (no SMS)
   // ============================================================
   Future<void> _imSafe() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
-  context: context,
-  reason: 'Confirm you are safe to deactivate SOS',
-);
+      context: context,
+      reason: 'Confirm you are safe to deactivate SOS',
+    );
 
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -252,15 +242,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     if (_isRecordingAudio) {
       await _stopAudioRecording();
     }
-    if (_isLiveStreaming) {
-      await _stopLiveStreaming();
-    }
 
     // Send in-app safe alert to ALL users
     await _sendGlobalSafeAlert(userName);
-
-    // Send SMS to trusted contacts (WhatsApp removed)
-    await _sendSafeMessageToContacts();
 
     EmergencyManager().deactivateEmergencyMode();
 
@@ -320,25 +304,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     } catch (e) {
       debugPrint('Error sending global safe alert: $e');
     }
-  }
-
-  // SMS ONLY - No WhatsApp
-  Future<void> _sendSafeMessageToContacts() async {
-    if (_contacts.isEmpty) return;
-
-    final message = 'I am safe now. SOS has been deactivated.';
-    final locationLink = _currentPosition != null
-        ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-        : 'Location unavailable';
-
-    final fullMessage = '$message\nFinal location: $locationLink';
-
-    for (var contact in _contacts) {
-      if (contact.phone != null && contact.phone!.isNotEmpty) {
-        await SOSAlertService.sendSMS(contact.phone!, fullMessage);
-      }
-    }
-    debugPrint('Safe message sent to ${_contacts.length} contacts (SMS only)');
   }
 
   // ============================================================
@@ -427,78 +392,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  Future<void> _startLiveStreaming() async {
-    final cameraStatus = await Permission.camera.request();
-    if (!cameraStatus.isGranted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Camera permission denied')));
-      return;
-    }
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Microphone permission denied')),
-      );
-      return;
-    }
-
-    final cameras = await availableCameras();
-    if (cameras.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No camera available')));
-      return;
-    }
-
-    final camera = cameras.firstWhere(
-      (cam) => cam.lensDirection == CameraLensDirection.front,
-      orElse: () => cameras.first,
-    );
-    _cameraController = CameraController(camera, ResolutionPreset.medium);
-    try {
-      await _cameraController!.initialize();
-      await _cameraController!.startImageStream((CameraImage image) {});
-      setState(() {
-        _isLiveStreaming = true;
-      });
-      debugPrint('Live streaming started');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Live stream started')));
-
-      _liveStreamRoomId = DateTime.now().millisecondsSinceEpoch.toString();
-      _streamUrl = 'https://live.purplesafety.com/room/$_liveStreamRoomId';
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Stream ready to share')));
-    } catch (e) {
-      debugPrint('Failed to start camera: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to start live stream')),
-      );
-      _cameraController = null;
-    }
-  }
-
-  Future<void> _stopLiveStreaming() async {
-    if (_cameraController != null) {
-      await _cameraController!.stopImageStream();
-      await _cameraController!.dispose();
-      _cameraController = null;
-    }
-    setState(() {
-      _isLiveStreaming = false;
-      _streamUrl = null;
-      _liveStreamRoomId = null;
-    });
-    debugPrint('Live stream stopped');
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Live stream ended')));
-  }
-
   Future<void> _shareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -540,15 +433,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         false;
   }
 
-  void _stopEmergency() {
-    if (_isRecordingAudio) {
-      _stopAudioRecording();
-    }
-    if (_isLiveStreaming) {
-      _stopLiveStreaming();
-    }
-  }
-
   // ============================================================
   // BUILD UI
   // ============================================================
@@ -573,9 +457,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildRecordingControls(),
               const SizedBox(height: 16),
               _buildAutoShareToggle(),
-              const SizedBox(height: 24),
-              if (_isLiveStreaming && _cameraController != null)
-                _buildLivePreview(),
               const SizedBox(height: 24),
               _buildLocationMap(),
               const SizedBox(height: 24),
@@ -627,7 +508,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           _buildStatusRow(Icons.location_on, 'Location is being shared', true),
           _buildStatusRow(Icons.videocam, 'Video recording', _isRecordingVideo),
           _buildStatusRow(Icons.mic, 'Audio recording', _isRecordingAudio),
-          _buildStatusRow(Icons.live_tv, 'Live streaming', _isLiveStreaming),
         ],
       ),
     );
@@ -670,7 +550,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Record & Stream',
+            'Record Evidence',
             style: TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.bold,
@@ -681,15 +561,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           Column(
             children: [
               _buildMediaButton(
-                icon: _isLiveStreaming ? Icons.stop_circle : Icons.live_tv,
-                label: _isLiveStreaming ? 'Stop Live' : 'Go Live',
-                onTap: _isLiveStreaming
-                    ? _stopLiveStreaming
-                    : _startLiveStreaming,
-                color: _isLiveStreaming ? Colors.red : Colors.purple,
-              ),
-              const SizedBox(height: 12),
-              _buildMediaButton(
                 icon: Icons.videocam,
                 label: 'Record Video',
                 onTap: _recordVideo,
@@ -699,9 +570,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildMediaButton(
                 icon: _isRecordingAudio ? Icons.stop : Icons.mic,
                 label: _isRecordingAudio ? 'Stop Audio' : 'Record Audio',
-                onTap: _isRecordingAudio
-                    ? _stopAudioRecording
-                    : _startAudioRecording,
+                onTap: _isRecordingAudio ? _stopAudioRecording : _startAudioRecording,
                 color: _isRecordingAudio ? Colors.red : Colors.green,
               ),
             ],
@@ -742,21 +611,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildLivePreview() {
-    return Container(
-      height: 200,
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple.withOpacity(0.3)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: CameraPreview(_cameraController!),
       ),
     );
   }

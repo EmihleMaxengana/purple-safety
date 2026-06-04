@@ -26,6 +26,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
   Set<Marker> _sosMarkers = {};
   Set<Marker> _incidentMarkers = {};
   bool _isMapReady = false;
+  bool _mapLoadFailed = false;
   
   // Active SOS events list
   List<Map<String, dynamic>> _activeSOSEvents = [];
@@ -38,6 +39,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
     super.initState();
     _listenToActiveSOS();
     _loadIncidentsAsMarkers();
+    _startMapLoadTimer();
+  }
+
+  void _startMapLoadTimer() {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!_isMapReady && mounted) {
+        setState(() {
+          _mapLoadFailed = true;
+        });
+      }
+    });
   }
 
   @override
@@ -159,7 +171,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Avatar with tap to show next of kin
             GestureDetector(
               onTap: () => showNextOfKinModal(
                 context,
@@ -389,26 +400,52 @@ class _CommunityScreenState extends State<CommunityScreen> {
         Expanded(
           child: Stack(
             children: [
-              GoogleMap(
-                onMapCreated: (controller) {
-                  _mapController = controller;
-                  setState(() => _isMapReady = true);
-                },
-                initialCameraPosition: const CameraPosition(
-                  target: _saCenter,
-                  zoom: 5.0,
+              if (_mapLoadFailed)
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.map, size: 48, color: Colors.white38),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Failed to load map',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _mapLoadFailed = false;
+                            _isMapReady = false;
+                          });
+                          _startMapLoadTimer();
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                GoogleMap(
+                  onMapCreated: (controller) {
+                    _mapController = controller;
+                    setState(() => _isMapReady = true);
+                  },
+                  initialCameraPosition: const CameraPosition(
+                    target: _saCenter,
+                    zoom: 5.0,
+                  ),
+                  markers: {
+                    ..._sosMarkers,
+                    ..._incidentMarkers,
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  zoomControlsEnabled: true,
+                  compassEnabled: true,
                 ),
-                markers: {
-                  ..._sosMarkers,
-                  ..._incidentMarkers,
-                },
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
-                zoomControlsEnabled: true,
-                compassEnabled: true,
-              ),
               
-              if (_isLoadingSOS)
+              if (_isLoadingSOS && !_mapLoadFailed)
                 const Center(
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
