@@ -1,6 +1,6 @@
 # Purple Safety
 
-Purple Safety is a Flutter-based mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services.
+<!-- Purple Safety is a Flutter-based mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services. -->
 
 <!-- # Purple Safety -->
 
@@ -31,7 +31,7 @@ Purple Safety is a Flutter mobile application providing personal safety features
 1. Clone the repository:
 
    ```bash
-   git clone <https://github.com/EmihleMaxengana/purple-safety.git>
+   git clone https://github.com/EmihleMaxengana/purple-safety.git
    cd purple-safety
    ```
 
@@ -133,4 +133,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, code style, 
 
 ## License
 
-Specify your project license in `CONTRIBUTING.md` or add a `LICENSE` file.
+<!-- Specify your project license in `CONTRIBUTING.md` or add a `LICENSE` file. -->
+
+If no LICENSE file exists, discuss licensing with maintainers before contributing.

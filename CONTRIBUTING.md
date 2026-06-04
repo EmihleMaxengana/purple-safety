@@ -14,7 +14,7 @@ Please follow a respectful and collaborative tone in issues and pull requests.
 2. Install Flutter and platform toolchains.
 
    ```bash
-   git clone <https://github.com/EmihleMaxengana/purple-safety/fork>
+   git clone https://github.com/EmihleMaxengana/purple-safety/fork
    cd purple-safety
    flutter pub get
    ```
