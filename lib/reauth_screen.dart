@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
 import 'package:purple_safety/services/auth_service.dart';
-// import 'package:purple_safety/login_screen.dart';
+import 'package:purple_safety/login_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ReauthScreen extends StatefulWidget {
   const ReauthScreen({Key? key, this.onAuthenticated}) : super(key: key);
@@ -14,6 +16,9 @@ class ReauthScreen extends StatefulWidget {
 
 class _ReauthScreenState extends State<ReauthScreen> {
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _pinController = TextEditingController();
+  final FocusNode _passwordFocus = FocusNode();
+  final FocusNode _pinFocus = FocusNode();
   final AuthService _authService = AuthService();
   bool _obscure = true;
   String _error = '';
@@ -23,30 +28,101 @@ class _ReauthScreenState extends State<ReauthScreen> {
   Color get _accent => const Color(0xFFBF7DCB);
   Color get _bgDark => const Color(0xFF100c1f);
 
+  bool _usePIN = false;
+  bool _usePasswd = false;
+  bool _useBiometrics = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitStates();
+  }
+
+  Future<void> _loadInitStates() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _usePIN = prefs.getBool('usePinAuth') ?? false;
+      _usePasswd = prefs.getBool('usePasswordAuth') ?? true;
+      _useBiometrics = prefs.getBool('useBiometrics') ?? false;
+    });
+  }
+
+  void _switchAuthMethod() async {
+    setState(() {
+      _usePasswd = !_usePasswd;
+      _usePIN = !_usePIN;
+      // Clear controllers when switching methods
+      _passwordController.clear();
+      _pinController.clear();
+      _error = '';
+    });
+    // Request focus on the active input
+
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setBool('usePinAuth', _usePIN);
+    prefs.setBool('usePasswordAuth', _usePasswd);
+
+    if (_usePasswd) {
+      _passwordFocus.requestFocus();
+    } else {
+      _pinFocus.requestFocus();
+    }
+  }
+
   Future<void> _submit() async {
-    final password = _passwordController.text.trim();
-    if (password.isEmpty) {
-      setState(() => _error = 'Enter your password');
-      return;
+    if (_usePasswd) {
+      print('Submitting password auth');
+
+      final password = _passwordController.text.trim();
+      if (password.isEmpty) {
+        setState(() => _error = 'Enter your password');
+        return;
+      }
+
+      setState(() => _isLoading = true);
+
+      final isValid = await _authService.reauthenticateWithPassword(password);
+      if (isValid) {
+        await _authService.markSessionVerified();
+        widget.onAuthenticated?.call();
+      } else {
+        setState(() {
+          _error = 'Incorrect password';
+          _isLoading = false;
+        });
+      }
     }
 
-    setState(() => _isLoading = true);
+    if (_usePIN) {
+      print('Submitting PIN auth');
 
-    final isValid = await _authService.reauthenticateWithPassword(password);
-    if (isValid) {
-      await _authService.markSessionVerified();
-      widget.onAuthenticated?.call();
-    } else {
-      setState(() {
-        _error = 'Incorrect password';
-        _isLoading = false;
-      });
+      final pin = _pinController.text.trim();
+      if (pin.isEmpty) {
+        setState(() => _error = 'Enter your PIN');
+        return;
+      }
+
+      setState(() => _isLoading = true);
+
+      final isValid = await _authService.reauthenticateWithPIN(pin);
+      if (isValid) {
+        await _authService.markSessionVerified();
+        widget.onAuthenticated?.call();
+      } else {
+        setState(() {
+          _error = 'Incorrect PIN';
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _pinController.dispose();
+    _passwordFocus.dispose();
+    _pinFocus.dispose();
     super.dispose();
   }
 
@@ -59,7 +135,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
       backgroundColor: _bgDark,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 36.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -116,35 +192,71 @@ class _ReauthScreenState extends State<ReauthScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              TextField(
-                controller: _passwordController,
-                obscureText: _obscure,
-                enabled: !_isLoading,
-                style: const TextStyle(color: Color(0xFFCCCCFF)),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: const Color(0xFF1a0f2e),
-                  hintText: 'Enter your password',
-                  hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility : Icons.visibility_off,
-                      color: _accent,
+              if (_usePasswd)
+                TextField(
+                  // autofocus: _usePasswd,
+                  focusNode: _passwordFocus,
+                  controller: _passwordController,
+                  obscureText: _obscure,
+                  enabled: !_isLoading,
+                  style: const TextStyle(color: Color(0xFFCCCCFF)),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF1a0f2e),
+                    hintText: 'Enter your password',
+                    hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure ? Icons.visibility : Icons.visibility_off,
+                        color: _accent,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
                     ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFFD105FF)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFFD105FF)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Color(0xFFD105FF)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: const BorderSide(color: Color(0xFFD105FF)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  onSubmitted: !_isLoading ? (_) => _submit() : null,
                 ),
-                onSubmitted: !_isLoading ? (_) => _submit() : null,
-              ),
-              const SizedBox(height: 12),
+              if (_usePIN) ...[
+                TextField(
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  focusNode: _pinFocus,
+                  controller: _pinController,
+                  obscureText: _obscure,
+                  enabled: !_isLoading,
+                  style: const TextStyle(color: Color(0xFFCCCCFF)),
+                  maxLength: 6,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: const Color(0xFF1a0f2e),
+                    hintText: 'Enter your PIN',
+                    hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscure ? Icons.visibility : Icons.visibility_off,
+                        color: _accent,
+                      ),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFFD105FF)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: const BorderSide(color: Color(0xFFD105FF)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onSubmitted: !_isLoading ? (_) => _submit() : null,
+                ),
+              ],
+              const SizedBox(height: 8),
               if (_error.isNotEmpty)
                 Text(_error, style: const TextStyle(color: Colors.redAccent)),
               const SizedBox(height: 20),
@@ -199,23 +311,35 @@ class _ReauthScreenState extends State<ReauthScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
-              TextButton(
-                onPressed: _isLoading
-                    ? null
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Fingerprint auth not yet configured',
-                            ),
-                          ),
-                        );
-                      },
-                child: Text(
-                  'Use fingerprint',
-                  style: TextStyle(color: _accent),
-                ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Fingerprint auth not yet configured',
+                                ),
+                              ),
+                            );
+                          },
+                    child: Text(
+                      'Use fingerprint',
+                      style: TextStyle(color: _accent),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _isLoading ? null : _switchAuthMethod,
+                    child: Text(
+                      _usePasswd ? 'Use PIN instead' : 'Use password instead',
+                      style: TextStyle(color: _accent),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

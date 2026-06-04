@@ -190,6 +190,14 @@ class AuthService {
     }
   }
 
+  Future<bool> reauthenticateWithPIN(String pin) async {
+    // Placeholder for PIN-based re-authentication logic
+    // In a real implementation, you would verify the PIN against a secure store
+    print('Re-authenticating with PIN: $pin');
+    await Future.delayed(const Duration(seconds: 1)); // Simulate async work
+    return pin == '123456'; // Example: only accept '1234' as valid PINj
+  }
+
   /// Clear stored session info for current user
   Future<void> clearSession() async {
     try {
