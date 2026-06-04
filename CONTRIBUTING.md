@@ -4,18 +4,20 @@ Thanks for your interest in contributing! This document explains how to get the 
 
 ## Code of Conduct
 
-Please follow a respectful and collaborative tone in issues and pull requests. If you'd like, add a `CODE_OF_CONDUCT.md` to formalize this project.
+Please follow a respectful and collaborative tone in issues and pull requests.
+
+<!-- If you'd like, add a `CODE_OF_CONDUCT.md` to formalize this project. -->
 
 ## Development Setup
 
 1. Fork the repo and clone your fork.
 2. Install Flutter and platform toolchains.
 
-```bash
-git clone <your-fork-url>
-cd purple-safety
-flutter pub get
-```
+   ```bash
+   git clone <https://github.com/EmihleMaxengana/purple-safety/fork>
+   cd purple-safety
+   flutter pub get
+   ```
 
 3. Add Firebase config files as described in the project `readme.md`.
 
@@ -29,18 +31,18 @@ flutter pub get
 - Follow Dart/Flutter best practices and the project's existing style.
 - Run the formatter before committing:
 
-```bash
-dart format .
-```
+  ```bash
+  dart format .
+  ```
 
 ## Testing
 
 - Add unit and widget tests where appropriate.
 - Run the test suite locally:
 
-```bash
-flutter test
-```
+  ```bash
+  flutter test
+  ```
 
 ## Pull Requests
 

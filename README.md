@@ -2,7 +2,7 @@
 
 Purple Safety is a Flutter-based mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services.
 
-# Purple Safety
+<!-- # Purple Safety -->
 
 ![Build](https://img.shields.io/badge/build-passing-brightgreen)
 ![Flutter](https://img.shields.io/badge/flutter-%3E=_3.0-blue?logo=flutter)
@@ -30,44 +30,44 @@ Purple Safety is a Flutter mobile application providing personal safety features
 
 1. Clone the repository:
 
-```bash
-git clone <repo-url>
-cd purple-safety
-```
+   ```bash
+   git clone <https://github.com/EmihleMaxengana/purple-safety.git>
+   cd purple-safety
+   ```
 
 2. Install dependencies:
 
-```bash
-flutter pub get
-```
+   ```bash
+   flutter pub get
+   ```
 
 3. Add platform Firebase config files (detailed steps below).
 
 4. Run on an emulator or device:
 
-```bash
-flutter run
-```
+   ```bash
+   flutter run
+   ```
 
 ## Detailed Firebase Setup
 
 Follow these steps to connect the app to Firebase and enable required services.
 
 1. Create a Firebase project
-   - Visit https://console.firebase.google.com and create a new project.
+   - Visit <https://console.firebase.google.com> and create a new project.
 
 2. Add Android app in Firebase
    - Register package name (match `applicationId` in `android/app/build.gradle.kts`).
    - Add a nickname (optional).
    - Add debug and release SHA-1 keys (important for authentication and Google Sign-In):
 
-```bash
-# Get debug SHA-1
-keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-```
+   ```bash
+   # Get debug SHA-1
+   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
+   ```
 
-    - Download `google-services.json` and place it at `android/app/google-services.json` (or `android/app/`).
-    - Update `android/build.gradle.kts` and `android/app/build.gradle.kts` as required by Firebase Android setup (the project already includes Gradle KTS files; follow Firebase console instructions if needed).
+   - Download `google-services.json` and place it at `android/app/google-services.json` (or `android/app/`).
+   - Update `android/build.gradle.kts` and `android/app/build.gradle.kts` as required by Firebase Android setup (the project already includes Gradle KTS files; follow Firebase console instructions if needed).
 
 3. Android permissions and setup
    - Ensure required permissions are present in `android/app/src/main/AndroidManifest.xml` (location, internet, contacts, camera, etc.).
@@ -134,7 +134,3 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, code style, 
 ## License
 
 Specify your project license in `CONTRIBUTING.md` or add a `LICENSE` file.
-
-## License
-
-Specify your project license here.
