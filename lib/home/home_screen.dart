@@ -95,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Map state
   GoogleMapController? _mapController;
-  location.Location _location = location.Location();
+  final location.Location _location = location.Location();
   bool _locationEnabled = false;
   bool _isLocationLoading = false;
   LatLng? _currentPosition;
@@ -357,22 +357,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupDangerZones() {
-    _dangerZones = {
-      Polygon(
-        polygonId: const PolygonId('johannesburg_zone'),
-        points: const [
-          LatLng(-26.1, 28.0),
-          LatLng(-26.2, 28.1),
-          LatLng(-26.3, 28.0),
-          LatLng(-26.2, 27.9),
-          LatLng(-26.1, 28.0),
-        ],
-        fillColor: Colors.purple.withOpacity(0.3),
-        strokeColor: Colors.purple,
-        strokeWidth: 2,
-        geodesic: true,
-      ),
-    };
+    // _dangerZones = {
+    //   Polygon(
+    //     polygonId: const PolygonId('johannesburg_zone'),
+    //     points: const [
+    //       LatLng(-26.1, 28.0),
+    //       LatLng(-26.2, 28.1),
+    //       LatLng(-26.3, 28.0),
+    //       LatLng(-26.2, 27.9),
+    //       LatLng(-26.1, 28.0),
+    //     ],
+    //     fillColor: Colors.purple.withOpacity(0.3),
+    //     strokeColor: Colors.purple,
+    //     strokeWidth: 2,
+    //     geodesic: true,
+    //   ),
+    // };
+
+    setState(() {
+      _dangerZones = {
+        Polygon(
+          polygonId: const PolygonId('johannesburg_zone'),
+          points: const [
+            LatLng(-26.1, 28.0),
+            LatLng(-26.2, 28.1),
+            LatLng(-26.3, 28.0),
+            LatLng(-26.2, 27.9),
+            LatLng(-26.1, 28.0),
+          ],
+          fillColor: Colors.purple.withOpacity(0.3),
+          strokeColor: Colors.purple,
+          strokeWidth: 2,
+          geodesic: true,
+        ),
+      };
+    });
   }
 
   void _onMapCreated(GoogleMapController controller) {
