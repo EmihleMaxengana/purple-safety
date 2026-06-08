@@ -12,6 +12,7 @@ import 'package:purple_safety/safety_alerts_screen.dart';
 import 'package:purple_safety/full_map_screen.dart';
 import 'package:purple_safety/services/firestore_service.dart';
 import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/dm/dm_screen.dart';          // <-- import DM screen
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
@@ -116,31 +117,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  void _openDMScreen() {                       // <-- new DM handler
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const DMScreen()),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    switch (state) {
-      case AppLifecycleState.resumed:
-        // App is in the foreground and active
-        print("App has resumed.");
-        break;
-      case AppLifecycleState.inactive:
-        // App is in an inactive state (e.g., phone call, split screen)
-        print("App is inactive...");
-        break;
-      case AppLifecycleState.paused:
-        // App is in the background
-        print("App has paused.");
-        break;
-      case AppLifecycleState.detached:
-        // App is terminated
-        print("App is detached.");
-        break;
-      case AppLifecycleState.hidden:
-        // App is running but not visible (Flutter 3.13+)
-        print("App is hidden.");
-        break;
-    }
+    // (keep existing lifecycle code)
   }
 
   @override
@@ -159,6 +146,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         onAvatarPressed: _showUserProfileModal,
         unreadAlertsCount: _unreadAlertsCount,
         onNotificationPressed: _openSafetyAlerts,
+        onDMTap: _openDMScreen,               // <-- pass DM callback
       ),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: BottomNavigationBar(

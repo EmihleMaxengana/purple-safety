@@ -17,6 +17,8 @@ import 'package:purple_safety/incidents/post_choice_modal.dart';
 import 'package:purple_safety/services/sos_alert_service.dart';
 import 'package:purple_safety/services/trip_sharing_service.dart';
 import 'package:purple_safety/Invitations/invite_contact_screen.dart';
+import 'package:purple_safety/dm/dm_service.dart';
+import 'package:purple_safety/dm/dm_screen.dart';
 
 // Contact model with Firestore methods
 class Contact {
@@ -116,7 +118,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
-  // Custom map style (unchanged)
+  // Custom map style
   final String _mapStyle = '''
 [
   {
@@ -345,8 +347,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _startMapLoadTimer() {
     _mapLoadTimer?.cancel();
-    // Tumelo - I think the map needs more time to load; don't mind the 10 seconds, that was just for my convenience. But you do need to reconsider extending it a bit longer...
-    // _mapLoadTimer = Timer(const Duration(seconds: 5), () {
     _mapLoadTimer = Timer(const Duration(seconds: 10), () {
       if (_mapController == null && mounted) {
         setState(() {
@@ -357,23 +357,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupDangerZones() {
-    // _dangerZones = {
-    //   Polygon(
-    //     polygonId: const PolygonId('johannesburg_zone'),
-    //     points: const [
-    //       LatLng(-26.1, 28.0),
-    //       LatLng(-26.2, 28.1),
-    //       LatLng(-26.3, 28.0),
-    //       LatLng(-26.2, 27.9),
-    //       LatLng(-26.1, 28.0),
-    //     ],
-    //     fillColor: Colors.purple.withOpacity(0.3),
-    //     strokeColor: Colors.purple,
-    //     strokeWidth: 2,
-    //     geodesic: true,
-    //   ),
-    // };
-
     setState(() {
       _dangerZones = {
         Polygon(
@@ -474,8 +457,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude: _currentPosition!.longitude,
       );
 
-      // SMS PRIVATE ALERTS REMOVED as requested
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('✅ SOS alert sent! Help is on the way.'),
@@ -567,7 +548,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _handleTripSharing() async {
-    // 1. Check if user is logged in
     final user = AuthService().getCurrentUser();
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -579,7 +559,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // 2. Check location services and permission
     if (!_locationEnabled) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -602,13 +581,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return;
     }
 
-    // 3. Get user name
     String userName = 'User';
     final userData = await AuthService().getUserData(user.uid);
     userName = userData?['name'] ?? 'User';
 
     if (_isSharingTrip) {
-      // Stop sharing
       await TripSharingService.stopSharing();
       _tripUpdateTimer?.cancel();
       setState(() {
@@ -642,6 +619,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
         });
 
+        // AUTO SEND TRIP ID TO PRE-SELECTED DM RECIPIENTS
+        try {
+          final recipients = await DmService.getSelectedRecipients();
+          final userId = user.uid;
+          if (userId != null && recipients.isNotEmpty) {
+            for (var recipientId in recipients) {
+              await DmService.sendTripIdMessage(
+                recipientUserId: recipientId,
+                senderName: userName,
+                tripId: tripId,
+                senderId: userId,
+              );
+            }
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Trip ID auto‑sent to ${recipients.length} contact(s)'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        } catch (e) {
+          debugPrint('Auto DM error: $e');
+        }
+
+        // Show share modal (with new "Share with trusted contacts" button)
         _showTripShareDialog(tripId, userName);
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -770,6 +775,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            // NEW BUTTON: Share with trusted contacts via DM
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context); // close the share modal
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DMScreen(shareTripId: tripId),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.people, color: Color(0xFFBF7DCB)),
+                label: const Text(
+                  'Share with trusted contacts',
+                  style: TextStyle(color: Color(0xFFBF7DCB)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFBF7DCB)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
             ),
             const SizedBox(height: 8),
             Text(

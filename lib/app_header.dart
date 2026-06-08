@@ -4,6 +4,7 @@ AppBar buildAppHeader({
   VoidCallback? onAvatarPressed,
   int unreadAlertsCount = 0,
   VoidCallback? onNotificationPressed,
+  VoidCallback? onDMTap,
 }) {
   return AppBar(
     backgroundColor: const Color(0xFF6A1B9A),
@@ -11,14 +12,15 @@ AppBar buildAppHeader({
     leading: null,
     automaticallyImplyLeading: false,
     centerTitle: false,
+    titleSpacing: 0,
     title: Container(
       padding: const EdgeInsets.only(left: 8.0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             child: Image.asset(
               'assets/logo.png',
@@ -31,14 +33,14 @@ AppBar buildAppHeader({
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
                   ),
                 );
               },
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -48,14 +50,14 @@ AppBar buildAppHeader({
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
               Text(
                 'Your Personal Safety Companion',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.9),
-                  fontSize: 12,
+                  fontSize: 10,
                   fontWeight: FontWeight.w300,
                 ),
                 maxLines: 1,
@@ -67,40 +69,53 @@ AppBar buildAppHeader({
       ),
     ),
     actions: [
-      // Notification Icon
+      // DM Icon
+      if (onDMTap != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: IconButton(
+            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
+            onPressed: onDMTap,
+            tooltip: 'Direct Messages',
+          ),
+        ),
+      // Notification Icon with badge
       if (onNotificationPressed != null)
-        Stack(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.notifications, color: Colors.white),
-              onPressed: onNotificationPressed,
-            ),
-            if (unreadAlertsCount > 0)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 10,
-                  height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications, color: Colors.white, size: 20),
+                onPressed: onNotificationPressed,
+              ),
+              if (unreadAlertsCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       // User Avatar
       if (onAvatarPressed != null)
-        InkWell(
-          onTap: onAvatarPressed,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            margin: const EdgeInsets.only(right: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 2, right: 12),
+          child: InkWell(
+            onTap: onAvatarPressed,
+            borderRadius: BorderRadius.circular(16),
             child: const CircleAvatar(
-              radius: 18,
+              radius: 16,
               backgroundColor: Colors.white24,
-              child: Icon(Icons.person, color: Colors.white, size: 20),
+              child: Icon(Icons.person, color: Colors.white, size: 18),
             ),
           ),
         ),
