@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:purple_safety/services/auth_service.dart';
-// import 'package:purple_safety/login_screen.dart';
+import 'package:purple_safety/services/biometric_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ReauthScreen extends StatefulWidget {
@@ -35,29 +35,49 @@ class _ReauthScreenState extends State<ReauthScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInitStates();
+    _loadAuthMethods();
   }
 
-  Future<void> _loadInitStates() async {
+  Future<void> _loadAuthMethods() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
       _usePIN = prefs.getBool('usePinAuth') ?? false;
       _usePasswd = prefs.getBool('usePasswordAuth') ?? true;
       _useBiometrics = prefs.getBool('useBiometrics') ?? false;
     });
+    // If biometrics are enabled and available, try immediately
+    if (_useBiometrics) {
+      _tryBiometricAuth();
+    } else if (_usePasswd) {
+      _passwordFocus.requestFocus();
+    } else if (_usePIN) {
+      _pinFocus.requestFocus();
+    }
+  }
+
+  Future<void> _tryBiometricAuth() async {
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+      context: context,
+      reason: 'Authenticate to continue using Purple Safety',
+    );
+    if (authenticated) {
+      await _authService.markSessionVerified();
+      widget.onAuthenticated?.call();
+    } else {
+      setState(() {
+        _error = 'Biometric authentication failed. Use password or PIN.';
+      });
+    }
   }
 
   void _switchAuthMethod() async {
     setState(() {
       _usePasswd = !_usePasswd;
       _usePIN = !_usePIN;
-      // Clear controllers when switching methods
       _passwordController.clear();
       _pinController.clear();
       _error = '';
     });
-    // Request focus on the active input
-
     SharedPreferences prefs = await SharedPreferences.getInstance();
     prefs.setBool('usePinAuth', _usePIN);
     prefs.setBool('usePasswordAuth', _usePasswd);
@@ -71,16 +91,12 @@ class _ReauthScreenState extends State<ReauthScreen> {
 
   Future<void> _submit() async {
     if (_usePasswd) {
-      // print('Submitting password auth');
-
       final password = _passwordController.text.trim();
       if (password.isEmpty) {
         setState(() => _error = 'Enter your password');
         return;
       }
-
       setState(() => _isLoading = true);
-
       final isValid = await _authService.reauthenticateWithPassword(password);
       if (isValid) {
         await _authService.markSessionVerified();
@@ -91,20 +107,14 @@ class _ReauthScreenState extends State<ReauthScreen> {
           _isLoading = false;
         });
       }
-    }
-
-    if (_usePIN) {
+    } else if (_usePIN) {
+      final pin = _pinController.text.trim();
+      if (pin.isEmpty) {
+        setState(() => _error = 'Enter your PIN');
+        return;
+      }
+      setState(() => _isLoading = true);
       try {
-        // print('Submitting PIN auth');
-
-        final pin = _pinController.text.trim();
-        if (pin.isEmpty) {
-          setState(() => _error = 'Enter your PIN');
-          return;
-        }
-
-        setState(() => _isLoading = true);
-
         final isValid = await _authService.reauthenticateWithPIN(pin);
         if (isValid) {
           await _authService.markSessionVerified();
@@ -150,14 +160,6 @@ class _ReauthScreenState extends State<ReauthScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // IconButton(
-                  //   icon: const Icon(
-                  //     Icons.arrow_back,
-                  //     color: Color(0xFFBF7DCB),
-                  //   ),
-                  //   onPressed: () => Navigator.maybePop(context),
-                  // ),
-                  // const SizedBox.shrink(),
                   Text(
                     'Re-authenticate',
                     style: TextStyle(
@@ -201,7 +203,6 @@ class _ReauthScreenState extends State<ReauthScreen> {
               const SizedBox(height: 32),
               if (_usePasswd)
                 TextField(
-                  // autofocus: _usePasswd,
                   focusNode: _passwordFocus,
                   controller: _passwordController,
                   obscureText: _obscure,
@@ -269,29 +270,6 @@ class _ReauthScreenState extends State<ReauthScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  // Expanded(
-                  //   child: OutlinedButton(
-                  //     style: OutlinedButton.styleFrom(
-                  //       side: const BorderSide(color: Color(0xFFBF7DCB)),
-                  //       foregroundColor: _accent,
-                  //       padding: const EdgeInsets.symmetric(vertical: 14),
-                  //     ),
-                  //     onPressed: _isLoading
-                  //         ? null
-                  //         : () => Navigator.pushAndRemoveUntil(
-                  //             context,
-                  //             MaterialPageRoute(
-                  //               builder: (_) => const LoginScreen(),
-                  //             ),
-                  //             (route) => false,
-                  //           ),
-                  //     child: const Text(
-                  //       'Use different account',
-                  //       style: TextStyle(color: Color(0xFFBF7DCB)),
-                  //     ),
-                  //   ),
-                  // ),
-                  // const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
@@ -322,25 +300,14 @@ class _ReauthScreenState extends State<ReauthScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  if (!_useBiometrics) ...[
+                  if (_useBiometrics)
                     TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Fingerprint auth not yet configured',
-                                  ),
-                                ),
-                              );
-                            },
+                      onPressed: _isLoading ? null : _tryBiometricAuth,
                       child: Text(
                         'Use fingerprint',
                         style: TextStyle(color: _accent),
                       ),
                     ),
-                  ],
                   TextButton(
                     onPressed: _isLoading ? null : _switchAuthMethod,
                     child: Text(

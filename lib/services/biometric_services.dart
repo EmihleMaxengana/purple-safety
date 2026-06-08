@@ -4,20 +4,22 @@ import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 import 'package:local_auth_darwin/local_auth_darwin.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purple_safety/utils/pref_keys.dart';
 
 class BiometricService {
   static final LocalAuthentication _auth = LocalAuthentication();
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  static const String _sosFingerprintEnabledKey = 'sos_fingerprint_enabled';
+  static const String _sosFingerprintEnabledKey = PrefKeys.sosFingerprintEnabled;
   static const String _userPinKey = 'user_pin';
 
+  // ---------- Biometrics availability ----------
   static Future<bool> isFingerprintAvailable() async {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
       if (!canCheck) return false;
-      final List<BiometricType> availableTypes = await _auth
-          .getAvailableBiometrics();
+      final List<BiometricType> availableTypes = await _auth.getAvailableBiometrics();
       return availableTypes.contains(BiometricType.weak) ||
           availableTypes.contains(BiometricType.strong);
     } on PlatformException catch (e) {
@@ -34,8 +36,7 @@ class BiometricService {
     }
   }
 
-  /// Authenticate using fingerprint ONLY (no PIN fallback).
-  /// Returns true if successful, false if failed or not available.
+  // ---------- Biometric authentication (no fallback) ----------
   static Future<bool> authenticateWithBiometricOnly({
     required String reason,
   }) async {
@@ -60,7 +61,7 @@ class BiometricService {
     }
   }
 
-  /// Authenticate using PIN dialog only (no biometric attempt).
+  // ---------- PIN authentication ----------
   static Future<bool> authenticateWithPinOnly(
     BuildContext context, {
     required String reason,
@@ -68,34 +69,23 @@ class BiometricService {
     return await _showPinDialog(context, reason);
   }
 
-  /// Unified authentication: if fingerprint is enabled (SOS toggle) AND available,
-  /// use fingerprint only; otherwise use PIN.
+  // ---------- Unified authentication (fingerprint OR PIN, based on saved toggle) ----------
   static Future<bool> authenticateWithUserPreference({
     required BuildContext context,
     required String reason,
   }) async {
-    final isFingerprintEnabled = await isSOSFingerprintEnabled();
+    final isFingerprintEnabled = await isBiometricsEnabled(); // <-- use new helper
     final fingerprintAvailable = await isFingerprintAvailable();
 
     if (isFingerprintEnabled && fingerprintAvailable) {
-      // Use fingerprint only
-      final success = await authenticateWithBiometricOnly(reason: reason);
-      if (success) return true;
-      // If fingerprint fails (e.g., cancelled or error), do NOT fall back to PIN automatically.
-      // User must retry or use PIN via a different action if they want.
-      // But to avoid lockout, we can still show PIN as a secondary option? The requirement says only one must appear.
-      // We'll stick to fingerprint only and return false on failure.
-      return false;
+      return await authenticateWithBiometricOnly(reason: reason);
     } else {
-      // Use PIN only
       return await authenticateWithPinOnly(context, reason: reason);
     }
   }
 
-  static Future<bool> _showPinDialog(
-    BuildContext context,
-    String reason,
-  ) async {
+  // ---------- PIN storage & verification ----------
+  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
     String enteredPin = '';
     bool isFirstTime = await _isFirstTimePinSetup();
 
@@ -121,12 +111,8 @@ class BiometricService {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
               decoration: InputDecoration(
-                hintText: isFirstTime
-                    ? 'Enter 6-digit PIN'
-                    : 'Enter your 6-digit PIN',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 counterText: '',
               ),
               onChanged: (value) {
@@ -144,14 +130,10 @@ class BiometricService {
             onPressed: () async {
               if (enteredPin.length != 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter a 6-digit PIN'),
-                    backgroundColor: Colors.red,
-                  ),
+                  const SnackBar(content: Text('Please enter a 6-digit PIN'), backgroundColor: Colors.red),
                 );
                 return;
               }
-
               if (isFirstTime) {
                 await _savePin(enteredPin);
                 Navigator.pop(context, true);
@@ -161,10 +143,7 @@ class BiometricService {
                   Navigator.pop(context, true);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Invalid PIN. Please try again.'),
-                      backgroundColor: Colors.red,
-                    ),
+                    const SnackBar(content: Text('Invalid PIN. Please try again.'), backgroundColor: Colors.red),
                   );
                 }
               }
@@ -207,6 +186,7 @@ class BiometricService {
     return false;
   }
 
+  // ---------- SOS Fingerprint (deprecated? kept for compatibility) ----------
   static Future<bool> enableSOSFingerprint() async {
     final available = await isFingerprintAvailable();
     if (!available) return false;
@@ -236,5 +216,16 @@ class BiometricService {
     return await authenticateWithBiometricOnly(
       reason: 'FINGERPRINT SOS - Emergency services will be notified',
     );
+  }
+
+  // ---------- NEW: SharedPreferences helpers for biometrics toggle ----------
+  static Future<bool> isBiometricsEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(PrefKeys.useBiometrics) ?? false;
+  }
+
+  static Future<void> setBiometricsEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(PrefKeys.useBiometrics, enabled);
   }
 }

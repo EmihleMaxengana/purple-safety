@@ -7,6 +7,7 @@ import 'package:purple_safety/services/auth_service.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/services/biometric_services.dart';
 import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/utils/pref_keys.dart';
 import 'dart:async';
 
 class UserProfileModal extends StatefulWidget {
@@ -36,12 +37,17 @@ class _UserProfileModalState extends State<UserProfileModal> {
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
+  // Biometric toggle
+  bool _useBiometrics = false;
+
   @override
   void initState() {
     super.initState();
     _loadUser();
     _loadLocationSharingPreferences();
     _listenToContacts();
+    _loadBiometricPreference();
+    _loadProfileImage();
   }
 
   @override
@@ -72,22 +78,55 @@ class _UserProfileModalState extends State<UserProfileModal> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _shareLocationWithContacts =
-          prefs.getBool('shareLocationWithContacts') ?? true;
+          prefs.getBool(PrefKeys.shareLocationWithContacts) ?? true;
       _shareLocationWithCommunity =
-          prefs.getBool('shareLocationWithCommunity') ?? false;
+          prefs.getBool(PrefKeys.shareLocationWithCommunity) ?? false;
     });
   }
 
   Future<void> _saveLocationSharingPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(
-      'shareLocationWithContacts',
+      PrefKeys.shareLocationWithContacts,
       _shareLocationWithContacts,
     );
     await prefs.setBool(
-      'shareLocationWithCommunity',
+      PrefKeys.shareLocationWithCommunity,
       _shareLocationWithCommunity,
     );
+  }
+
+  Future<void> _loadBiometricPreference() async {
+    final enabled = await BiometricService.isBiometricsEnabled();
+    setState(() {
+      _useBiometrics = enabled;
+    });
+  }
+
+  Future<void> _toggleBiometrics(bool value) async {
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+      context: context,
+      reason: 'Authenticate to change biometrics setting',
+    );
+    if (authenticated) {
+      await BiometricService.setBiometricsEnabled(value);
+      setState(() {
+        _useBiometrics = value;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(value ? 'Biometrics enabled' : 'Biometrics disabled'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Authentication failed. Biometrics not changed.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _loadUser() async {
@@ -124,12 +163,40 @@ class _UserProfileModalState extends State<UserProfileModal> {
     }
   }
 
+  // ============================================================
+  // Profile image persistence
+  // ============================================================
+  Future<void> _saveProfileImagePath(String? path) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (path == null) {
+      await prefs.remove(PrefKeys.profileImagePath);
+    } else {
+      await prefs.setString(PrefKeys.profileImagePath, path);
+    }
+  }
+
+  Future<String?> _loadProfileImagePath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(PrefKeys.profileImagePath);
+  }
+
+  Future<void> _loadProfileImage() async {
+    final path = await _loadProfileImagePath();
+    if (path != null && File(path).existsSync()) {
+      setState(() {
+        _profileImage = File(path);
+      });
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
+      final file = File(pickedFile.path);
       setState(() {
-        _profileImage = File(pickedFile.path);
+        _profileImage = file;
       });
+      await _saveProfileImagePath(file.path);
     }
   }
 
@@ -165,13 +232,29 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 _pickImage(ImageSource.gallery);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text(
+                'Remove photo',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() {
+                  _profileImage = null;
+                });
+                _saveProfileImagePath(null);
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Updated: unified authentication (fingerprint if enabled, else PIN)
+  // ============================================================
+  // Toggle helpers with authentication
+  // ============================================================
   Future<void> _toggleWithFingerprint(
     String settingName,
     bool currentValue,
@@ -398,7 +481,7 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 height: 24,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               Text(
                 'Loading contacts...',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
@@ -654,21 +737,12 @@ class _UserProfileModalState extends State<UserProfileModal> {
               (newVal) async {
                 setState(() => _shareLocationWithContacts = newVal);
                 await _saveLocationSharingPreferences();
-                if (newVal) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Location sharing with contacts enabled'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Location sharing with contacts disabled'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(newVal ? 'Location sharing with contacts enabled' : 'Location sharing with contacts disabled'),
+                    backgroundColor: newVal ? Colors.green : Colors.orange,
+                  ),
+                );
               },
             ),
             activeColor: Colors.purple,
@@ -689,23 +763,27 @@ class _UserProfileModalState extends State<UserProfileModal> {
               (newVal) async {
                 setState(() => _shareLocationWithCommunity = newVal);
                 await _saveLocationSharingPreferences();
-                if (newVal) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Location sharing with community enabled'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Location sharing with community disabled'),
-                      backgroundColor: Colors.orange,
-                    ),
-                  );
-                }
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(newVal ? 'Location sharing with community enabled' : 'Location sharing with community disabled'),
+                    backgroundColor: newVal ? Colors.green : Colors.orange,
+                  ),
+                );
               },
             ),
+            activeColor: Colors.purple,
+          ),
+          SwitchListTile(
+            title: const Text(
+              'Use Biometrics (fingerprint / face)',
+              style: TextStyle(color: Colors.white),
+            ),
+            subtitle: const Text(
+              'Authenticate with biometrics instead of PIN',
+              style: TextStyle(color: Colors.white54, fontSize: 11),
+            ),
+            value: _useBiometrics,
+            onChanged: _toggleBiometrics,
             activeColor: Colors.purple,
           ),
           const Divider(color: Colors.white24, height: 20),

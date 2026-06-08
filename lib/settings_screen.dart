@@ -100,20 +100,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadIsBiometricEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() async {
-      _useBiometrics = prefs.getBool('useBiometrics') ?? false;
-      _isBiometricAvailable = await BiometricService.isFingerprintAvailable();
+    final available = await BiometricService.isFingerprintAvailable();
+    final enabled = await BiometricService.isBiometricsEnabled();
+    setState(() {
+      _isBiometricAvailable = available;
+      _useBiometrics = enabled;
     });
   }
 
   Future<void> _saveIsBiometricEnabled(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('useBiometrics', value);
+    await BiometricService.setBiometricsEnabled(value);
   }
 
   // ============================================================
-  // CHANGE NEXT OF KIN: Authentication AFTER changes, NO extra confirmation
+  // CHANGE NEXT OF KIN
   // ============================================================
   Future<void> _changeNextOfKin() async {
     final nameController = TextEditingController(text: _nextOfKinName);
@@ -396,7 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Manage Biometrics (SOS Fingerprint removed)
+  // Manage Biometrics
   // ============================================================
   void _showManageBiometricsDialog() {
     showModalBottomSheet(
@@ -423,7 +423,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               const SizedBox(height: 16),
               const Divider(color: Colors.white24),
-
               SwitchListTile(
                 title: const Text(
                   "Toggle Biometrics",
@@ -444,8 +443,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeThumbColor: const Color(0xFF6A1B9A),
               ),
               const SizedBox(height: 8),
-
-              // Open device settings button
               ListTile(
                 leading: const Icon(Icons.settings, color: Color(0xFFBF7DCB)),
                 title: const Text(
@@ -466,7 +463,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _openDeviceBiometricSettings();
                 },
               ),
-
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),
