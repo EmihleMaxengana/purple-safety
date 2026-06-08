@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/services/trip_sharing_service.dart';
 import 'package:purple_safety/next_of_kin_modal.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
-  
+
   const FullMapScreen({Key? key, this.initialTripId}) : super(key: key);
 
   @override
@@ -20,28 +21,39 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Set<Marker> _tripMarkers = {};
   Set<Polyline> _tripPaths = {};
   Set<Marker> _sosMarkers = {};
-  Map<String, dynamic>? _followedTrip;
-  bool _isLoading = true;
-  String? _followedTripId;
-  StreamSubscription? _tripSubscription;
+
+  // Multi‑trip tracking
+  List<String> _followedTripIds = [];
+  Map<String, StreamSubscription> _tripSubscriptions = {};
+  Map<String, Map<String, dynamic>> _tripsData = {};
+  Map<String, Color> _tripColors = {};
+  bool _isLoading = false;
+  bool _panelExpanded = false;
+
+  // Predefined colours for multiple trips
+  final List<Color> _colorPalette = [
+    Colors.green,
+    Colors.blue,
+    Colors.orange,
+    Colors.purple,
+    Colors.cyan,
+    Colors.pink,
+    Colors.yellow.shade700,
+    Colors.indigo,
+    Colors.teal,
+    Colors.deepOrange,
+  ];
 
   @override
   void initState() {
     super.initState();
     _listenToSOSEvents();
-    
-    if (widget.initialTripId != null) {
-      _followTripId(widget.initialTripId!);
-    }
+    _loadFollowedTrips();
   }
 
-  @override
-  void dispose() {
-    _tripSubscription?.cancel();
-    _mapController?.dispose();
-    super.dispose();
-  }
-
+  // -------------------------------
+  // SOS events (unchanged)
+  // -------------------------------
   void _listenToSOSEvents() {
     FirebaseFirestore.instance
         .collection('active_sos_events')
@@ -68,158 +80,215 @@ class _FullMapScreenState extends State<FullMapScreen> {
     });
   }
 
+  // -------------------------------
+  // Persistence
+  // -------------------------------
+  Future<void> _loadFollowedTrips() async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String>? saved = prefs.getStringList('followedTrips');
+    if (saved != null && saved.isNotEmpty) {
+      setState(() {
+        _followedTripIds = saved;
+        _isLoading = true;
+      });
+      for (var tripId in saved) {
+        _listenToSpecificTrip(tripId);
+      }
+    }
+    if (widget.initialTripId != null && !_followedTripIds.contains(widget.initialTripId)) {
+      _addFollowedTrip(widget.initialTripId!);
+    }
+    setState(() {});
+  }
+
+  Future<void> _saveFollowedTrips() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('followedTrips', _followedTripIds);
+  }
+
+  // -------------------------------
+  // Add / remove followed trips
+  // -------------------------------
+  void _addFollowedTrip(String tripId) {
+    if (_followedTripIds.contains(tripId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Already following this trip')),
+      );
+      return;
+    }
+    setState(() {
+      _followedTripIds.add(tripId);
+      _isLoading = true;
+    });
+    _saveFollowedTrips();
+    _listenToSpecificTrip(tripId);
+    // Show confirmation
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Now following trip. Waiting for location data...')),
+    );
+  }
+
+  void _removeFollowedTrip(String tripId, {bool showNotification = true}) {
+    if (!_followedTripIds.contains(tripId)) return;
+
+    // Cancel subscription
+    _tripSubscriptions[tripId]?.cancel();
+    _tripSubscriptions.remove(tripId);
+    // Remove data
+    _tripsData.remove(tripId);
+    _tripColors.remove(tripId);
+
+    setState(() {
+      _followedTripIds.remove(tripId);
+      _updateMarkersAndPolylines();
+    });
+    _saveFollowedTrips();
+
+    if (showNotification) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Stopped following trip: ${tripId.substring(0, 8)}...'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+    }
+  }
+
+  // -------------------------------
+  // Listen to a single trip
+  // -------------------------------
   void _listenToSpecificTrip(String tripId) {
-    _tripSubscription?.cancel();
-    
-    _tripSubscription = TripSharingService.getTrip(tripId).listen((snapshot) {
+    _tripSubscriptions[tripId]?.cancel();
+
+    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((snapshot) {
+      if (!mounted) return;
       if (snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
-        if (data['status'] == 'active') {
+        final status = data['status'] ?? 'unknown';
+
+        if (status == 'active') {
+          final tripData = {
+            'tripId': tripId,
+            'userId': data['userId'],
+            'userName': data['userName'] ?? 'Someone',
+            'latitude': data['currentLatitude'],
+            'longitude': data['currentLongitude'],
+            'lastUpdate': data['lastUpdate'],
+            'locationHistory': data['locationHistory'] ?? [],
+            'status': status,
+          };
           setState(() {
-            _followedTrip = {
-              'tripId': snapshot.id,
-              'userId': data['userId'],
-              'userName': data['userName'],
-              'latitude': data['currentLatitude'],
-              'longitude': data['currentLongitude'],
-              'lastUpdate': data['lastUpdate'],
-              'locationHistory': data['locationHistory'] ?? [],
-            };
-            _isLoading = false;
-            _updateTripMarkerAndPath();
+            _tripsData[tripId] = tripData;
+            if (!_tripColors.containsKey(tripId)) {
+              final index = _followedTripIds.indexOf(tripId);
+              _tripColors[tripId] = _colorPalette[index % _colorPalette.length];
+            }
+            _updateMarkersAndPolylines();
           });
-          
-          if (mounted) {
+          // Notify that this trip is now active (first time seeing active status)
+          if (data['userName'] != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Now following ${data['userName']}\'s trip'),
+                content: Text('${data['userName']} is now sharing their trip!'),
                 backgroundColor: Colors.green,
                 duration: const Duration(seconds: 2),
               ),
             );
           }
-        } else {
-          setState(() {
-            _followedTrip = null;
-            _isLoading = false;
-          });
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('The trip has ended'),
-                backgroundColor: Colors.orange,
-              ),
-            );
-          }
-        }
-      } else {
-        setState(() {
-          _followedTrip = null;
-          _isLoading = false;
-        });
-        if (mounted) {
+        } else if (status == 'ended' || status == 'expired') {
+          // Trip ended – notify and remove
+          final userName = data['userName'] ?? 'Someone';
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid trip ID or trip has expired'),
+            SnackBar(
+              content: Text('$userName has stopped sharing their trip.'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 4),
             ),
           );
+          _removeFollowedTrip(tripId, showNotification: false);
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Trip no longer exists (may have expired).')),
+        );
+        _removeFollowedTrip(tripId, showNotification: false);
+      }
+    });
+  }
+
+  // -------------------------------
+  // Update markers and polylines for all active trips
+  // -------------------------------
+  void _updateMarkersAndPolylines() {
+    Set<Marker> newMarkers = {};
+    Set<Polyline> newPolylines = {};
+
+    for (var entry in _tripsData.entries) {
+      final tripId = entry.key;
+      final data = entry.value;
+      final userName = data['userName'] ?? 'Someone';
+      final latitude = data['latitude'] as double;
+      final longitude = data['longitude'] as double;
+      final lastUpdate = data['lastUpdate'] as Timestamp?;
+      final locationHistory = data['locationHistory'] as List? ?? [];
+      final color = _tripColors[tripId] ?? Colors.green;
+
+      // Determine marker freshness colour
+      double hue = BitmapDescriptor.hueGreen;
+      if (lastUpdate != null) {
+        final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+        if (minutesAgo > 5) {
+          hue = BitmapDescriptor.hueRed;
+        } else if (minutesAgo > 1) {
+          hue = BitmapDescriptor.hueOrange;
         }
       }
-    });
-  }
 
-  void _followTripId(String tripId) {
-    setState(() {
-      _followedTripId = tripId;
-      _followedTrip = null;
-      _tripMarkers = {};
-      _tripPaths = {};
-      _isLoading = true;
-    });
-    _listenToSpecificTrip(tripId);
-  }
+      final marker = Marker(
+        markerId: MarkerId(tripId),
+        position: LatLng(latitude, longitude),
+        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+        infoWindow: InfoWindow(
+          title: userName,
+          snippet: 'Following this trip',
+        ),
+        onTap: () => _zoomToTrip(tripId),
+      );
+      newMarkers.add(marker);
 
-  void _updateTripMarkerAndPath() {
-    if (_followedTrip == null) return;
-
-    Set<Marker> newMarkers = {};
-    Set<Polyline> newPaths = {};
-
-    final latitude = _followedTrip!['latitude'] as double;
-    final longitude = _followedTrip!['longitude'] as double;
-    final userName = _followedTrip!['userName'] ?? 'Someone';
-    final lastUpdate = _followedTrip!['lastUpdate'] as Timestamp?;
-    final locationHistory = _followedTrip!['locationHistory'] as List? ?? [];
-
-    String statusText = 'Active now';
-    Color markerColor = Colors.green;
-    
-    if (lastUpdate != null) {
-      final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
-      if (minutesAgo > 5) {
-        statusText = 'Offline - $minutesAgo min ago';
-        markerColor = Colors.red;
-      } else if (minutesAgo > 1) {
-        statusText = '$minutesAgo min ago';
-        markerColor = Colors.orange;
-      }
-    }
-
-    double hue = BitmapDescriptor.hueGreen;
-    if (markerColor == Colors.red) {
-      hue = BitmapDescriptor.hueRed;
-    } else if (markerColor == Colors.orange) {
-      hue = BitmapDescriptor.hueOrange;
-    }
-    
-    final marker = Marker(
-      markerId: const MarkerId('followed_trip'),
-      position: LatLng(latitude, longitude),
-      icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-      infoWindow: InfoWindow(
-        title: userName,
-        snippet: 'Status: $statusText',
-      ),
-      onTap: () => _zoomToCurrentLocation(),
-    );
-    newMarkers.add(marker);
-
-    if (locationHistory.isNotEmpty) {
-      List<LatLng> pathPoints = [];
-      for (var point in locationHistory) {
-        pathPoints.add(LatLng(point['latitude'], point['longitude']));
-      }
-      
-      if (pathPoints.length > 1) {
-        final polyline = Polyline(
-          polylineId: const PolylineId('followed_trip_path'),
-          points: pathPoints,
-          color: Colors.purple.withOpacity(0.7),
-          width: 3,
-          geodesic: true,
-        );
-        newPaths.add(polyline);
+      // Draw polyline if history exists
+      if (locationHistory.isNotEmpty) {
+        List<LatLng> points = [];
+        for (var point in locationHistory) {
+          points.add(LatLng(point['latitude'], point['longitude']));
+        }
+        if (points.length > 1) {
+          final polyline = Polyline(
+            polylineId: PolylineId('${tripId}_path'),
+            points: points,
+            color: color.withOpacity(0.7),
+            width: 4,
+            geodesic: true,
+          );
+          newPolylines.add(polyline);
+        }
       }
     }
 
     setState(() {
       _tripMarkers = newMarkers;
-      _tripPaths = newPaths;
+      _tripPaths = newPolylines;
+      _isLoading = false;
     });
-
-    _zoomToCurrentLocation();
   }
 
-  void _zoomToCurrentLocation() {
-    if (_mapController != null && _followedTrip != null) {
+  void _zoomToTrip(String tripId) {
+    final data = _tripsData[tripId];
+    if (data != null && _mapController != null) {
       _mapController!.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(
-            target: LatLng(
-              _followedTrip!['latitude'],
-              _followedTrip!['longitude'],
-            ),
+            target: LatLng(data['latitude'], data['longitude']),
             zoom: 15,
           ),
         ),
@@ -227,6 +296,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
     }
   }
 
+  // -------------------------------
+  // UI: Enter Trip ID manually
+  // -------------------------------
   void _enterTripIdManually() async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -256,28 +328,14 @@ class _FullMapScreenState extends State<FullMapScreen> {
         ],
       ),
     );
-    
     if (result != null && result.isNotEmpty) {
-      _followTripId(result);
+      _addFollowedTrip(result);
     }
   }
 
-  void _clearFollowedTrip() {
-    setState(() {
-      _followedTrip = null;
-      _followedTripId = null;
-      _tripMarkers = {};
-      _tripPaths = {};
-    });
-    _tripSubscription?.cancel();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Stopped following trip'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-  }
-
+  // -------------------------------
+  // Build: Map + floating panel
+  // -------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -306,30 +364,11 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 ],
               ),
             ),
-          if (_followedTrip != null)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Text(
-                'Following',
-                style: TextStyle(color: Colors.white, fontSize: 12),
-              ),
-            ),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner, color: Colors.white),
             onPressed: _enterTripIdManually,
             tooltip: 'Enter Trip ID',
           ),
-          if (_followedTrip != null)
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: _clearFollowedTrip,
-              tooltip: 'Stop following',
-            ),
         ],
       ),
       body: Stack(
@@ -353,7 +392,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
             const Center(
               child: CircularProgressIndicator(color: Colors.purple),
             ),
-          if (_sosMarkers.isEmpty && _followedTrip == null && !_isLoading)
+          if (_sosMarkers.isEmpty && _tripsData.isEmpty && !_isLoading)
             const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -373,69 +412,110 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 ],
               ),
             ),
-          if (_followedTrip != null && !_isLoading)
-            Positioned(
-              top: 10,
-              left: 10,
-              right: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.8),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    // Avatar for followed person – tap to show next of kin
-                    GestureDetector(
-                      onTap: () {
-                        if (_followedTrip != null) {
-                          showNextOfKinModal(
-                            context,
-                            _followedTrip!['userId'],
-                            _followedTrip!['userName'] ?? 'User',
-                          );
-                        }
-                      },
-                      child: CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Colors.purple,
-                        child: Text(
-                          (_followedTrip!['userName'] ?? 'U')[0].toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
-                        ),
+          // Floating panel showing all followed trips
+          Positioned(
+            bottom: 20,
+            left: 10,
+            right: 10,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              height: _panelExpanded ? 200 : 50,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.purple.withOpacity(0.5)),
+              ),
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() => _panelExpanded = !_panelExpanded),
+                    child: Container(
+                      height: 50,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.people_alt, color: Colors.white70, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Following (${_tripsData.length})',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                          const Spacer(),
+                          Icon(
+                            _panelExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                            color: Colors.white70,
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
+                  ),
+                  if (_panelExpanded)
                     Expanded(
-                      child: Text(
-                        'Following ${_followedTrip!['userName']}',
-                        style: const TextStyle(color: Colors.white, fontSize: 12),
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      child: _tripsData.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No trips followed. Tap QR icon to follow.',
+                                style: TextStyle(color: Colors.white54, fontSize: 12),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              itemCount: _tripsData.length,
+                              itemBuilder: (context, index) {
+                                final tripId = _tripsData.keys.elementAt(index);
+                                final data = _tripsData[tripId]!;
+                                final color = _tripColors[tripId] ?? Colors.grey;
+                                final lastUpdate = data['lastUpdate'] as Timestamp?;
+                                String statusText = 'Active now';
+                                if (lastUpdate != null) {
+                                  final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+                                  if (minutesAgo > 5) {
+                                    statusText = 'Offline ($minutesAgo min ago)';
+                                  } else if (minutesAgo > 1) {
+                                    statusText = '$minutesAgo min ago';
+                                  }
+                                }
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: color,
+                                    radius: 12,
+                                    child: Text(
+                                      data['userName'][0].toUpperCase(),
+                                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    data['userName'],
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                  subtitle: Text(
+                                    statusText,
+                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                  ),
+                                  trailing: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.red, size: 18),
+                                    onPressed: () => _removeFollowedTrip(tripId),
+                                  ),
+                                  onTap: () => _zoomToTrip(tripId),
+                                );
+                              },
+                            ),
                     ),
-                    TextButton(
-                      onPressed: _zoomToCurrentLocation,
-                      child: const Text(
-                        'CENTER',
-                        style: TextStyle(color: Colors.purple, fontSize: 10),
-                      ),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    for (var sub in _tripSubscriptions.values) {
+      sub.cancel();
+    }
+    _mapController?.dispose();
+    super.dispose();
   }
 }
