@@ -12,7 +12,7 @@
 Purple Safety is a Flutter mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services.
 
 ## Features
-
+ 
 - Emergency alerts and incident reporting
 - Manage emergency contacts and next-of-kin
 - Location sharing and live map view
