@@ -11,7 +11,8 @@ class BiometricService {
   static final LocalAuthentication _auth = LocalAuthentication();
   static final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
-  static const String _sosFingerprintEnabledKey = PrefKeys.sosFingerprintEnabled;
+  static const String _sosFingerprintEnabledKey =
+      PrefKeys.sosFingerprintEnabled;
   static const String _userPinKey = 'user_pin';
 
   // ---------- Biometrics availability ----------
@@ -19,7 +20,8 @@ class BiometricService {
     try {
       final bool canCheck = await _auth.canCheckBiometrics;
       if (!canCheck) return false;
-      final List<BiometricType> availableTypes = await _auth.getAvailableBiometrics();
+      final List<BiometricType> availableTypes = await _auth
+          .getAvailableBiometrics();
       return availableTypes.contains(BiometricType.weak) ||
           availableTypes.contains(BiometricType.strong);
     } on PlatformException catch (e) {
@@ -46,6 +48,7 @@ class BiometricService {
       final bool authenticated = await _auth.authenticate(
         localizedReason: reason,
         biometricOnly: true,
+        persistAcrossBackgrounding: true,
         authMessages: [
           AndroidAuthMessages(
             signInTitle: 'Authenticate',
@@ -74,7 +77,8 @@ class BiometricService {
     required BuildContext context,
     required String reason,
   }) async {
-    final isFingerprintEnabled = await isBiometricsEnabled(); // <-- use new helper
+    final isFingerprintEnabled =
+        await isBiometricsEnabled(); // <-- use new helper
     final fingerprintAvailable = await isFingerprintAvailable();
 
     if (isFingerprintEnabled && fingerprintAvailable) {
@@ -85,7 +89,10 @@ class BiometricService {
   }
 
   // ---------- PIN storage & verification ----------
-  static Future<bool> _showPinDialog(BuildContext context, String reason) async {
+  static Future<bool> _showPinDialog(
+    BuildContext context,
+    String reason,
+  ) async {
     String enteredPin = '';
     bool isFirstTime = await _isFirstTimePinSetup();
 
@@ -111,8 +118,12 @@ class BiometricService {
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
               decoration: InputDecoration(
-                hintText: isFirstTime ? 'Enter 6-digit PIN' : 'Enter your 6-digit PIN',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                hintText: isFirstTime
+                    ? 'Enter 6-digit PIN'
+                    : 'Enter your 6-digit PIN',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 counterText: '',
               ),
               onChanged: (value) {
@@ -130,7 +141,10 @@ class BiometricService {
             onPressed: () async {
               if (enteredPin.length != 6) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a 6-digit PIN'), backgroundColor: Colors.red),
+                  const SnackBar(
+                    content: Text('Please enter a 6-digit PIN'),
+                    backgroundColor: Colors.red,
+                  ),
                 );
                 return;
               }
@@ -143,7 +157,10 @@ class BiometricService {
                   Navigator.pop(context, true);
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid PIN. Please try again.'), backgroundColor: Colors.red),
+                    const SnackBar(
+                      content: Text('Invalid PIN. Please try again.'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                 }
               }
