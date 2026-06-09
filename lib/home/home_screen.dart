@@ -633,7 +633,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Trip ID auto‑sent to ${recipients.length} contact(s)'),
+                  content: Text(
+                    'Trip ID auto‑sent to ${recipients.length} contact(s)',
+                  ),
                   backgroundColor: Colors.green,
                   duration: const Duration(seconds: 2),
                 ),
