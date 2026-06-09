@@ -8,8 +8,10 @@ import 'package:purple_safety/next_of_kin_modal.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
+  final Set<Polygon>? dangerZones;
 
-  const FullMapScreen({Key? key, this.initialTripId}) : super(key: key);
+  const FullMapScreen({Key? key, this.initialTripId, this.dangerZones})
+    : super(key: key);
 
   @override
   State<FullMapScreen> createState() => _FullMapScreenState();
@@ -21,6 +23,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Set<Marker> _tripMarkers = {};
   Set<Polyline> _tripPaths = {};
   Set<Marker> _sosMarkers = {};
+  Set<Marker> _dangerZones = {};
 
   // Multi‑trip tracking
   List<String> _followedTripIds = [];
@@ -48,7 +51,25 @@ class _FullMapScreenState extends State<FullMapScreen> {
   void initState() {
     super.initState();
     _listenToSOSEvents();
+    _convertPolygonToMarker();
     _loadFollowedTrips();
+  }
+
+  void _convertPolygonToMarker() {
+    Set<Marker> dZ = widget.dangerZones!.expand((polygon) {
+      return polygon.points.asMap().entries.map((entry) {
+        final index = entry.key;
+        final point = entry.value;
+        return Marker(
+          markerId: MarkerId('${polygon.polygonId.value}_$index'),
+          position: point,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          infoWindow: const InfoWindow(title: 'Danger Zone'),
+        );
+      });
+    }).toSet();
+
+    setState(() => _dangerZones = dZ);
   }
 
   // -------------------------------
@@ -390,8 +411,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: true,
-            markers: {..._tripMarkers, ..._sosMarkers},
+            markers: {..._tripMarkers, ..._sosMarkers, ..._dangerZones},
             polylines: _tripPaths,
+            polygons: widget.dangerZones ?? {},
           ),
           if (_isLoading)
             const Center(
