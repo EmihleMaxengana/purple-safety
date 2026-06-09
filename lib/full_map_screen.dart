@@ -60,24 +60,26 @@ class _FullMapScreenState extends State<FullMapScreen> {
         .where('status', isEqualTo: 'active')
         .snapshots()
         .listen((snapshot) {
-      final sosMarkers = <Marker>{};
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final marker = Marker(
-          markerId: MarkerId('sos_${doc.id}'),
-          position: LatLng(data['latitude'], data['longitude']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(
-            title: 'SOS EMERGENCY',
-            snippet: '${data['userName']} needs immediate help!',
-          ),
-        );
-        sosMarkers.add(marker);
-      }
-      setState(() {
-        _sosMarkers = sosMarkers;
-      });
-    });
+          final sosMarkers = <Marker>{};
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final marker = Marker(
+              markerId: MarkerId('sos_${doc.id}'),
+              position: LatLng(data['latitude'], data['longitude']),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueRed,
+              ),
+              infoWindow: InfoWindow(
+                title: 'SOS EMERGENCY',
+                snippet: '${data['userName']} needs immediate help!',
+              ),
+            );
+            sosMarkers.add(marker);
+          }
+          setState(() {
+            _sosMarkers = sosMarkers;
+          });
+        });
   }
 
   // -------------------------------
@@ -95,7 +97,8 @@ class _FullMapScreenState extends State<FullMapScreen> {
         _listenToSpecificTrip(tripId);
       }
     }
-    if (widget.initialTripId != null && !_followedTripIds.contains(widget.initialTripId)) {
+    if (widget.initialTripId != null &&
+        !_followedTripIds.contains(widget.initialTripId)) {
       _addFollowedTrip(widget.initialTripId!);
     }
     setState(() {});
@@ -124,7 +127,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
     _listenToSpecificTrip(tripId);
     // Show confirmation
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Now following trip. Waiting for location data...')),
+      const SnackBar(
+        content: Text('Now following trip. Waiting for location data...'),
+      ),
     );
   }
 
@@ -160,7 +165,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
   void _listenToSpecificTrip(String tripId) {
     _tripSubscriptions[tripId]?.cancel();
 
-    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((snapshot) {
+    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((
+      snapshot,
+    ) {
       if (!mounted) return;
       if (snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
@@ -209,7 +216,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Trip no longer exists (may have expired).')),
+          const SnackBar(
+            content: Text('Trip no longer exists (may have expired).'),
+          ),
         );
         _removeFollowedTrip(tripId, showNotification: false);
       }
@@ -236,7 +245,9 @@ class _FullMapScreenState extends State<FullMapScreen> {
       // Determine marker freshness colour
       double hue = BitmapDescriptor.hueGreen;
       if (lastUpdate != null) {
-        final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+        final minutesAgo = DateTime.now()
+            .difference(lastUpdate.toDate())
+            .inMinutes;
         if (minutesAgo > 5) {
           hue = BitmapDescriptor.hueRed;
         } else if (minutesAgo > 1) {
@@ -248,10 +259,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
         markerId: MarkerId(tripId),
         position: LatLng(latitude, longitude),
         icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-        infoWindow: InfoWindow(
-          title: userName,
-          snippet: 'Following this trip',
-        ),
+        infoWindow: InfoWindow(title: userName, snippet: 'Following this trip'),
         onTap: () => _zoomToTrip(tripId),
       );
       newMarkers.add(marker);
@@ -382,10 +390,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: true,
-            markers: {
-              ..._tripMarkers,
-              ..._sosMarkers,
-            },
+            markers: {..._tripMarkers, ..._sosMarkers},
             polylines: _tripPaths,
           ),
           if (_isLoading)
@@ -426,23 +431,34 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 border: Border.all(color: Colors.purple.withOpacity(0.5)),
               ),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   GestureDetector(
-                    onTap: () => setState(() => _panelExpanded = !_panelExpanded),
+                    onTap: () =>
+                        setState(() => _panelExpanded = !_panelExpanded),
                     child: Container(
-                      height: 50,
+                      // height: 50,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          const Icon(Icons.people_alt, color: Colors.white70, size: 20),
+                          const Icon(
+                            Icons.people_alt,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Following (${_tripsData.length})',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const Spacer(),
                           Icon(
-                            _panelExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                            _panelExpanded
+                                ? Icons.keyboard_arrow_down
+                                : Icons.keyboard_arrow_up,
                             color: Colors.white70,
                           ),
                         ],
@@ -455,22 +471,32 @@ class _FullMapScreenState extends State<FullMapScreen> {
                           ? const Center(
                               child: Text(
                                 'No trips followed. Tap QR icon to follow.',
-                                style: TextStyle(color: Colors.white54, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               itemCount: _tripsData.length,
                               itemBuilder: (context, index) {
                                 final tripId = _tripsData.keys.elementAt(index);
                                 final data = _tripsData[tripId]!;
-                                final color = _tripColors[tripId] ?? Colors.grey;
-                                final lastUpdate = data['lastUpdate'] as Timestamp?;
+                                final color =
+                                    _tripColors[tripId] ?? Colors.grey;
+                                final lastUpdate =
+                                    data['lastUpdate'] as Timestamp?;
                                 String statusText = 'Active now';
                                 if (lastUpdate != null) {
-                                  final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+                                  final minutesAgo = DateTime.now()
+                                      .difference(lastUpdate.toDate())
+                                      .inMinutes;
                                   if (minutesAgo > 5) {
-                                    statusText = 'Offline ($minutesAgo min ago)';
+                                    statusText =
+                                        'Offline ($minutesAgo min ago)';
                                   } else if (minutesAgo > 1) {
                                     statusText = '$minutesAgo min ago';
                                   }
@@ -481,7 +507,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
                                     radius: 12,
                                     child: Text(
                                       data['userName'][0].toUpperCase(),
-                                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                      ),
                                     ),
                                   ),
                                   title: Text(
@@ -490,11 +519,19 @@ class _FullMapScreenState extends State<FullMapScreen> {
                                   ),
                                   subtitle: Text(
                                     statusText,
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.red, size: 18),
-                                    onPressed: () => _removeFollowedTrip(tripId),
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: Colors.red,
+                                      size: 18,
+                                    ),
+                                    onPressed: () =>
+                                        _removeFollowedTrip(tripId),
                                   ),
                                   onTap: () => _zoomToTrip(tripId),
                                 );
