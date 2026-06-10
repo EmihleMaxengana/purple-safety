@@ -225,10 +225,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         await _auth.updateNextOfKin(
           user.uid,
-          name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : null,
-          phone: phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : null,
-          relation: relationController.text.trim().isNotEmpty ? relationController.text.trim() : null,
-          altPhone: altPhoneController.text.trim().isNotEmpty ? altPhoneController.text.trim() : null,
+          name: nameController.text.trim().isNotEmpty
+              ? nameController.text.trim()
+              : null,
+          phone: phoneController.text.trim().isNotEmpty
+              ? phoneController.text.trim()
+              : null,
+          relation: relationController.text.trim().isNotEmpty
+              ? relationController.text.trim()
+              : null,
+          altPhone: altPhoneController.text.trim().isNotEmpty
+              ? altPhoneController.text.trim()
+              : null,
         );
         setState(() {
           _nextOfKinName = nameController.text.trim();
@@ -386,6 +394,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
+              foregroundColor: Colors.white,
               backgroundColor: const Color(0xFF6A1B9A),
             ),
             child: const Text('Change Password'),
@@ -996,7 +1005,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _nextOfKinRelation.isNotEmpty ? _nextOfKinRelation : 'Contact',
+                    _nextOfKinRelation.isNotEmpty
+                        ? _nextOfKinRelation
+                        : 'Contact',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
                 ),
@@ -1164,6 +1175,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ElevatedButton(
                   onPressed: _isLoading ? null : _saveUserData,
                   style: ElevatedButton.styleFrom(
+                    foregroundColor: Colors.white,
                     backgroundColor: const Color(0xFF6A1B9A),
                     minimumSize: const Size(double.infinity, 48),
                   ),

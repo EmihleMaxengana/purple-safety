@@ -114,6 +114,7 @@ class BiometricService {
             TextField(
               obscureText: true,
               maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 24, letterSpacing: 8),
@@ -121,6 +122,7 @@ class BiometricService {
                 hintText: isFirstTime
                     ? 'Enter 6-digit PIN'
                     : 'Enter your 6-digit PIN',
+                hintStyle: TextStyle(letterSpacing: 0),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
