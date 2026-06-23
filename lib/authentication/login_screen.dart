@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'main_screen.dart';
+import '../navigation/main_screen.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_modal.dart';
-import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);

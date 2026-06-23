@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/edit_contact_screen.dart';
+import 'package:purple_safety/contacts/edit_contact_screen.dart';
 import 'package:purple_safety/Invitations/invite_contact_screen.dart';
 
 class ManageContactsModal extends StatefulWidget {

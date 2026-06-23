@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/biometric_services.dart';
-import 'package:purple_safety/login_screen.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
+import 'package:purple_safety/authentication/login_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_settings/app_settings.dart';

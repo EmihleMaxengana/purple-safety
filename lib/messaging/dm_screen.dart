@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:purple_safety/dm/dm_service.dart';
-import 'package:purple_safety/dm/chat_screen.dart';
-import 'package:purple_safety/full_map_screen.dart';
+import 'package:purple_safety/messaging/dm_service.dart';
+import 'package:purple_safety/messaging/chat_screen.dart';
+import 'package:purple_safety/trip/full_map_screen.dart';
 
 class DMScreen extends StatefulWidget {
   final String? shareTripId; // If provided, Auto‑share tab shows "Share" button

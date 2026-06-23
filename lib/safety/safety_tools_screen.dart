@@ -12,11 +12,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
-import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
-import 'package:purple_safety/services/sos_alert_service.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/emergency/sos_alert_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;

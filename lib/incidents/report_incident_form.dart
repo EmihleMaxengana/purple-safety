@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/incident_model.dart';
-import '../services/incident_service.dart';
+import 'incident_service.dart';
 
 class ReportIncidentForm extends StatefulWidget {
   final bool isAnonymous;

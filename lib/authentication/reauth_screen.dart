@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ReauthScreen extends StatefulWidget {

@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
 import '../models/incident_model.dart';
-import '../services/incident_service.dart';
+import 'incident_service.dart';
 
 class IncidentDetailScreen extends StatefulWidget {
   final Incident incident;

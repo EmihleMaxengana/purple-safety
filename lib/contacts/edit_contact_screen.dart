@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
 
 class EditContactScreen extends StatefulWidget {
   final Contact contact;

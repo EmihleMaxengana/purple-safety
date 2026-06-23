@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:purple_safety/services/otp_service.dart';
-import 'fingerprint_setup_screen.dart';
+import 'package:purple_safety/authentication/otp_service.dart';
+import 'package:purple_safety/navigation/main_screen.dart'; // ← CORRECT PATH
 
 class OTPVerificationScreen extends StatefulWidget {
   final String phoneNumber;
@@ -89,7 +89,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     if (isValid) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => const FingerprintSetupScreen()),
+        MaterialPageRoute(builder: (context) => MainScreen()),
       );
     } else {
       setState(() => _errorMessage = 'Invalid OTP. Please try again.');

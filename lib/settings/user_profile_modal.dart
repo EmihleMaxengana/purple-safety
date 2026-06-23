@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/services/biometric_services.dart';
-import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/utils/pref_keys.dart';
 import 'dart:async';
 

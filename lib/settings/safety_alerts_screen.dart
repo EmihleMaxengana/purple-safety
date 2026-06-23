@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/incidents/incident_detail_screen.dart';
-import 'package:purple_safety/services/incident_service.dart';
+import 'package:purple_safety/incidents/incident_service.dart';
 import 'package:purple_safety/Invitations/pending_invitations_screen.dart';
 
 class SafetyAlertsScreen extends StatefulWidget {

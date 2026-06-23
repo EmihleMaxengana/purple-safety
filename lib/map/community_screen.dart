@@ -4,11 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'models/incident_model.dart';
-import 'services/incident_service.dart';
-import 'services/sos_alert_service.dart';
-import 'incidents/incident_detail_screen.dart';
-import 'next_of_kin_modal.dart';
+import '../models/incident_model.dart';
+import '../incidents/incident_service.dart';
+import '../emergency/sos_alert_service.dart';
+import '../incidents/incident_detail_screen.dart';
+import '../settings/next_of_kin_modal.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);

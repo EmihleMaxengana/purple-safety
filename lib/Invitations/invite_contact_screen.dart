@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/invitation_service.dart';
-import 'package:purple_safety/services/firestore_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/contacts/invitation_service.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
 
 class InviteContactScreen extends StatefulWidget {
   const InviteContactScreen({Key? key}) : super(key: key);

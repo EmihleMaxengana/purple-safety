@@ -7,18 +7,18 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
-import 'package:purple_safety/full_map_screen.dart';
-import 'package:purple_safety/manage_contacts_modal.dart';
-import 'package:purple_safety/add_contact_screen.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/services/firestore_service.dart';
-import 'package:purple_safety/services/biometric_services.dart';
+import 'package:purple_safety/trip/full_map_screen.dart';
+import 'package:purple_safety/contacts/manage_contacts_modal.dart';
+import 'package:purple_safety/contacts/add_contact_screen.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/incidents/post_choice_modal.dart';
-import 'package:purple_safety/services/sos_alert_service.dart';
-import 'package:purple_safety/services/trip_sharing_service.dart';
+import 'package:purple_safety/emergency/sos_alert_service.dart';
+import 'package:purple_safety/trip/trip_sharing_service.dart';
 import 'package:purple_safety/Invitations/invite_contact_screen.dart';
-import 'package:purple_safety/dm/dm_service.dart';
-import 'package:purple_safety/dm/dm_screen.dart';
+import 'package:purple_safety/messaging/dm_service.dart';
+import 'package:purple_safety/messaging/dm_screen.dart';
 
 // Contact model with Firestore methods
 class Contact {

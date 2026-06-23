@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:purple_safety/dm/dm_service.dart';
+import 'package:purple_safety/messaging/dm_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String recipientId;

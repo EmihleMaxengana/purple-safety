@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:purple_safety/services/trip_sharing_service.dart';
-import 'package:purple_safety/next_of_kin_modal.dart';
+import 'package:purple_safety/trip/trip_sharing_service.dart';
+import 'package:purple_safety/settings/next_of_kin_modal.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;

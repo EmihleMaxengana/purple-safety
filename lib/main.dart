@@ -3,11 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:purple_safety/login_screen.dart';
-import 'package:purple_safety/main_screen.dart';
-import 'package:purple_safety/reauth_screen.dart';
-import 'package:purple_safety/services/incident_service.dart';
-import 'package:purple_safety/services/auth_service.dart';
+import 'package:purple_safety/authentication/login_screen.dart';
+import 'package:purple_safety/navigation/main_screen.dart';
+import 'package:purple_safety/authentication/reauth_screen.dart';
+import 'package:purple_safety/incidents/incident_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

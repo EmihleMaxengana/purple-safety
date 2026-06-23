@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/services/invitation_service.dart';
+import 'package:purple_safety/contacts/invitation_service.dart';
 
 class PendingInvitationsScreen extends StatefulWidget {
   const PendingInvitationsScreen({Key? key}) : super(key: key);

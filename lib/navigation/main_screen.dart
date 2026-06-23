@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/login_screen.dart';
+import 'package:purple_safety/authentication/login_screen.dart';
 import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/emergency/emergency_mode_screen.dart';
-import 'package:purple_safety/app_header.dart';
-import 'package:purple_safety/community_screen.dart';
-import 'package:purple_safety/safety_tools_screen.dart';
-import 'package:purple_safety/settings_screen.dart';
-import 'package:purple_safety/user_profile_modal.dart';
-import 'package:purple_safety/safety_alerts_screen.dart';
-import 'package:purple_safety/full_map_screen.dart';
-import 'package:purple_safety/services/firestore_service.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/dm/dm_screen.dart';          // <-- import DM screen
+import 'package:purple_safety/core/widgets/app_header.dart';
+import 'package:purple_safety/map/community_screen.dart';
+import 'package:purple_safety/safety/safety_tools_screen.dart';
+import 'package:purple_safety/settings/settings_screen.dart';
+import 'package:purple_safety/settings/user_profile_modal.dart';
+import 'package:purple_safety/settings/safety_alerts_screen.dart';
+import 'package:purple_safety/trip/full_map_screen.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/messaging/dm_screen.dart';          // <-- import DM screen
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
