@@ -1,13 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-class EmergencyModeScreen extends StatelessWidget {
+class EmergencyModeScreen extends StatefulWidget {
   const EmergencyModeScreen({Key? key}) : super(key: key);
 
-  final List<Map<String, dynamic>> services = const [
+  @override
+  State<EmergencyModeScreen> createState() => _EmergencyModeScreenState();
+}
+
+class _EmergencyModeScreenState extends State<EmergencyModeScreen> {
+  // Section 1: Emergency Services (Police, Ambulance, Fire)
+  final List<Map<String, dynamic>> emergencyServices = const [
     {'name': 'Police', 'number': '10111', 'icon': Icons.local_police},
     {'name': 'Ambulance', 'number': '10177', 'icon': Icons.local_hospital},
     {'name': 'Fire', 'number': '10177', 'icon': Icons.fire_hydrant},
+  ];
+
+  // Section 2: Helplines
+  final List<Map<String, dynamic>> helplines = const [
     {
       'name': 'Gender-Based Violence Command Centre',
       'number': '0800 428 428',
@@ -31,7 +41,7 @@ class EmergencyModeScreen extends StatelessWidget {
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     } else {
-      throw 'Could not launch $url';
+      debugPrint('Could not launch $url');
     }
   }
 
@@ -45,40 +55,75 @@ class EmergencyModeScreen extends StatelessWidget {
           colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
         ),
       ),
-      child: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: services.length,
-        itemBuilder: (context, index) {
-          final service = services[index];
-          return Card(
-            color: const Color(0xFF1a0f2e),
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: Colors.purple.withOpacity(0.3)),
-            ),
-            child: ListTile(
-              leading: Icon(
-                service['icon'],
-                color: Colors.purple.shade300,
-                size: 28,
-              ),
-              title: Text(
-                service['name'],
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text(
-                service['number'],
-                style: const TextStyle(color: Colors.white70),
-              ),
-              trailing: const Icon(Icons.phone, color: Colors.green),
-              onTap: () => _callNumber(service['number']),
-            ),
-          );
-        },
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // SECTION 1: Emergency Services
+              const SectionTitle(title: 'EMERGENCY SERVICES'),
+              const SizedBox(height: 12),
+              ...emergencyServices.map((service) => _buildServiceCard(service)),
+              const SizedBox(height: 24),
+
+              // SECTION 2: Helplines
+              const SectionTitle(title: 'HELPLINES'),
+              const SizedBox(height: 12),
+              ...helplines.map((service) => _buildServiceCard(service)),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildServiceCard(Map<String, dynamic> service) {
+    return Card(
+      color: const Color(0xFF1a0f2e),
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+      ),
+      child: ListTile(
+        leading: Icon(
+          service['icon'],
+          color: Colors.purple.shade300,
+          size: 28,
+        ),
+        title: Text(
+          service['name'],
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Text(
+          service['number'],
+          style: const TextStyle(color: Colors.white70),
+        ),
+        trailing: const Icon(Icons.phone, color: Colors.green),
+        onTap: () => _callNumber(service['number']),
+      ),
+    );
+  }
+}
+
+class SectionTitle extends StatelessWidget {
+  final String title;
+  const SectionTitle({Key? key, required this.title}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Color(0xFFa078c0),
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
       ),
     );
   }

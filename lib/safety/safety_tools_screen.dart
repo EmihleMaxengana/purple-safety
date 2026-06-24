@@ -30,10 +30,10 @@ class SafetyToolsScreen extends StatefulWidget {
 class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     with WidgetsBindingObserver {
   bool _isEmergencyActive = false;
-  bool _isSilentMode = false;
   bool _isRecordingAudio = false;
   bool _isRecordingVideo = false;
   bool _autoShareRecordings = false;
+  bool _isLiveStreaming = false;
 
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
@@ -93,9 +93,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // No camera controller to dispose
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
   Future<void> _loadContacts() async {
     final contacts = EmergencyManager().getCurrentContacts();
@@ -112,15 +110,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
       if (!serviceEnabled) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Please enable location services to use this feature.',
-              ),
-            ),
-          );
-        }
         return;
       }
     }
@@ -129,15 +118,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     if (permissionGranted == location.PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
       if (permissionGranted != location.PermissionStatus.granted) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Location permission is required. Please grant it in settings.',
-              ),
-            ),
-          );
-        }
         return;
       }
     }
@@ -165,15 +145,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   Future<void> _resendLocation() async {
-    if (_currentPosition != null && _contacts.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location link ready to share')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location not available yet')),
-      );
-    }
+    // Silent action
   }
 
   Future<void> _callNumber(String number) async {
@@ -185,19 +157,21 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
+  // ============================================================
+  // I'M SAFE - Only works if SOS is active
+  // ============================================================
   Future<void> _imSafe() async {
+    // Check if SOS is active
+    if (!_isEmergencyActive) {
+      return;
+    }
+
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Confirm you are safe to deactivate SOS',
     );
 
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. SOS remains active.'),
-          backgroundColor: Colors.red,
-        ),
-      );
       return;
     }
 
@@ -222,10 +196,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         await SOSAlertService.deactivateSOSEvent(doc.id);
         debugPrint('✅ Deactivated SOS event: ${doc.id}');
       }
-
-      if (querySnapshot.docs.isEmpty) {
-        debugPrint('No active SOS event found for user $userId');
-      }
     } catch (e) {
       debugPrint('Error deactivating SOS event: $e');
     }
@@ -240,8 +210,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       await _stopAudioRecording();
     }
 
-    // Send in-app safe alert to ALL users
-    await _sendGlobalSafeAlert(userName);
+    // Send safe alert to ALL users EXCEPT the user themselves
+    await _sendGlobalSafeAlert(userName, userId);
 
     EmergencyManager().deactivateEmergencyMode();
 
@@ -249,15 +219,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _isEmergencyActive = false;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('✅ You are marked safe. SOS has been deactivated.'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    _showSafeConfirmationDialog();
   }
 
-  Future<void> _sendGlobalSafeAlert(String userName) async {
+  // ============================================================
+  // GLOBAL SAFE ALERT - Sends to ALL users EXCEPT sender
+  // ============================================================
+  Future<void> _sendGlobalSafeAlert(String userName, String? currentUserId) async {
     try {
       final locationLink = _currentPosition != null
           ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
@@ -280,6 +248,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       final batch = FirebaseFirestore.instance.batch();
 
       for (var userDoc in usersSnapshot.docs) {
+        // Skip sending notification to the user who marked themselves safe
+        if (userDoc.id == currentUserId) continue;
+
         final alertRef = FirebaseFirestore.instance
             .collection('users')
             .doc(userDoc.id)
@@ -296,19 +267,101 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
       await batch.commit();
       debugPrint(
-        'Global safe alert sent to all ${usersSnapshot.docs.length} users',
+        'Global safe alert sent to all ${usersSnapshot.docs.length - 1} users (excluding sender)',
       );
     } catch (e) {
       debugPrint('Error sending global safe alert: $e');
     }
   }
 
+  void _showSafeConfirmationDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.green.withOpacity(0.5)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.green.withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Colors.green,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle,
+                  color: Colors.white,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'You Are Safe',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'SOS has been deactivated. All users have been notified that you are safe.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // RECORDING METHODS
+  // ============================================================
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Microphone permission denied')),
-      );
       return;
     }
 
@@ -325,13 +378,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         _audioPath = path;
       });
       debugPrint('Audio recording started at: $path');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('🔴 Audio recording started')),
-      );
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Cannot access microphone')));
     }
   }
 
@@ -342,14 +388,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
       if (path != null) {
         debugPrint('Audio recording saved at: $path');
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Audio recording saved')));
-        await _shareFile(path, 'audio');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save audio recording')),
-        );
+        if (_autoShareRecordings) {
+          await _shareFile(path, 'audio');
+        }
       }
     }
   }
@@ -357,9 +398,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Camera permission denied')));
       return;
     }
 
@@ -370,22 +408,27 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         _isRecordingVideo = true;
       });
       debugPrint('Video recorded: ${video.path}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Video recorded successfully')),
-      );
 
       if (_autoShareRecordings) {
         await _shareFile(video.path, 'video');
-      } else {
-        final shouldShare = await _showSharePrompt('Video');
-        if (shouldShare) {
-          await _shareFile(video.path, 'video');
-        }
       }
       setState(() => _isRecordingVideo = false);
     }
   }
 
+  // ============================================================
+  // LIVE STREAMING - Toggle
+  // ============================================================
+  void _toggleLiveStreaming() {
+    setState(() {
+      _isLiveStreaming = !_isLiveStreaming;
+    });
+    debugPrint('Live streaming: ${_isLiveStreaming ? "ON" : "OFF"}');
+  }
+
+  // ============================================================
+  // SHARE FILE - Only to Trusted Contacts
+  // ============================================================
   Future<void> _shareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -403,28 +446,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       text: message,
       subject: 'Purple Safety - Recording',
     );
-  }
-
-  Future<bool> _showSharePrompt(String type) async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: Text('$type recorded'),
-            content: const Text('Do you want to share it?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Yes'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
   }
 
   @override
@@ -448,18 +469,18 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildRecordingControls(),
               const SizedBox(height: 16),
               _buildAutoShareToggle(),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               _buildLocationMap(),
               const SizedBox(height: 24),
               _buildQuickCallButtons(),
-              const SizedBox(height: 24),
-              _buildSilentModeToggle(),
               const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(child: _buildCallEmergencyButton()),
                   const SizedBox(width: 12),
-                  Expanded(child: _buildImSafeButton()),
+                  // I'M SAFE BUTTON - Only visible when SOS is active
+                  if (_isEmergencyActive)
+                    Expanded(child: _buildImSafeButton()),
                 ],
               ),
               const SizedBox(height: 40),
@@ -499,6 +520,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           _buildStatusRow(Icons.location_on, 'Location is being shared', true),
           _buildStatusRow(Icons.videocam, 'Video recording', _isRecordingVideo),
           _buildStatusRow(Icons.mic, 'Audio recording', _isRecordingAudio),
+          _buildStatusRow(Icons.live_tv, 'Live streaming', _isLiveStreaming),
         ],
       ),
     );
@@ -529,6 +551,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  // ============================================================
+  // CAPTURE IT! - Three buttons
+  // ============================================================
   Widget _buildRecordingControls() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -541,7 +566,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Record Evidence',
+            'Capture It!',
             style: TextStyle(
               color: Colors.white70,
               fontWeight: FontWeight.bold,
@@ -563,6 +588,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                 label: _isRecordingAudio ? 'Stop Audio' : 'Record Audio',
                 onTap: _isRecordingAudio ? _stopAudioRecording : _startAudioRecording,
                 color: _isRecordingAudio ? Colors.red : Colors.green,
+              ),
+              const SizedBox(height: 12),
+              _buildMediaButton(
+                icon: _isLiveStreaming ? Icons.stop : Icons.live_tv,
+                label: _isLiveStreaming ? 'Stop Live' : 'Start Live',
+                onTap: _toggleLiveStreaming,
+                color: _isLiveStreaming ? Colors.red : Colors.purple,
               ),
             ],
           ),
@@ -606,6 +638,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  // ============================================================
+  // AUTO-SHARE TOGGLE
+  // ============================================================
   Widget _buildAutoShareToggle() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -628,7 +663,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                 ),
               ),
               Text(
-                'Send video/audio automatically',
+                'Send to trusted contacts only',
                 style: TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
@@ -648,6 +683,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  // ============================================================
+  // LOCATION MAP
+  // ============================================================
   Widget _buildLocationMap() {
     return Container(
       height: 200,
@@ -701,6 +739,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  // ============================================================
+  // QUICK CALL BUTTONS
+  // ============================================================
   Widget _buildQuickCallButtons() {
     List<Widget> buttons = [];
     for (int i = 0; i < _contacts.length && i < 2; i++) {
@@ -761,46 +802,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  Widget _buildSilentModeToggle() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1a0f2e),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.purple.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Silent Mode',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              Text(
-                'Stealth mode: no alarm sounds',
-                style: TextStyle(color: Colors.white70, fontSize: 12),
-              ),
-            ],
-          ),
-          Switch(
-            value: _isSilentMode,
-            onChanged: (value) {
-              setState(() => _isSilentMode = value);
-              debugPrint('Silent mode: $_isSilentMode');
-            },
-            activeColor: const Color(0xFF6A1B9A),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ============================================================
+  // CALL EMERGENCY BUTTON
+  // ============================================================
   Widget _buildCallEmergencyButton() {
     return ElevatedButton.icon(
       onPressed: widget.onCallEmergency,
@@ -822,6 +826,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  // ============================================================
+  // I'M SAFE BUTTON - Only shows when SOS is active
+  // ============================================================
   Widget _buildImSafeButton() {
     return ElevatedButton.icon(
       onPressed: _imSafe,

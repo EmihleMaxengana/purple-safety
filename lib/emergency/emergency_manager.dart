@@ -45,4 +45,8 @@ class EmergencyManager {
       _emergencyStatusController.add(false);
     }
   }
+
+  void dispose() {
+    _emergencyStatusController.close();
+  }
 }
