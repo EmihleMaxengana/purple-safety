@@ -34,6 +34,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
 
   bool _useBiometrics = false;
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   String _password = '';
   PasswordStrength _passwordStrength = PasswordStrength.weak;
@@ -134,6 +136,15 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                           ),
                           const SizedBox(height: 25),
+
+                          if (_errorMessage.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                _errorMessage,
+                                style: const TextStyle(color: Colors.red, fontSize: 13),
+                              ),
+                            ),
 
                           // Full Name
                           const Text(
@@ -453,7 +464,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          // Name - REQUIRED
                           TextFormField(
                             controller: _nextOfKinNameController,
                             style: const TextStyle(color: Colors.white),
@@ -497,7 +507,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // Phone - REQUIRED
                           TextFormField(
                             controller: _nextOfKinPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -556,7 +565,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // Relationship - REQUIRED
                           TextFormField(
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
@@ -600,7 +608,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // Alternative Phone - OPTIONAL (no validator)
                           TextFormField(
                             controller: _nextOfKinAltPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -901,10 +908,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
-                                SharedPreferences prefs =
-                                    await SharedPreferences.getInstance();
-
                                 if (_formKey.currentState!.validate()) {
+                                  setState(() {
+                                    _isLoading = true;
+                                    _errorMessage = '';
+                                  });
+
                                   final auth = AuthService();
                                   final user = await auth.registerWithEmail(
                                     _nameController.text,
@@ -925,31 +934,32 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                         : null,
                                     gender: _selectedGender,
                                   );
+
+                                  setState(() {
+                                    _isLoading = false;
+                                  });
+
                                   if (user != null) {
+                                    final prefs = await SharedPreferences.getInstance();
                                     await prefs.setBool(
                                       "useBiometrics",
                                       _useBiometrics,
                                     );
 
-                                    // Navigate to Email Verification Screen (pass email)
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => OTPVerificationScreen(
-                                          email: _emailController.text.trim(),
+                                    if (mounted) {
+                                      Navigator.pushReplacement(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => OTPVerificationScreen(
+                                            email: _emailController.text.trim(),
+                                          ),
                                         ),
-                                      ),
-                                    );
+                                      );
+                                    }
                                   } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Registration failed. Please try again.',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: Duration(seconds: 4),
-                                      ),
-                                    );
+                                    setState(() {
+                                      _errorMessage = 'Registration failed. Please try again.';
+                                    });
                                   }
                                 }
                               },
@@ -964,20 +974,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 ),
                                 elevation: 3,
                               ),
-                              child: const Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Continue to Verification',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
+                              child: _isLoading
+                                  ? const CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    )
+                                  : const Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          'Continue to Verification',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SizedBox(width: 10),
+                                        Icon(Icons.verified, size: 22),
+                                      ],
                                     ),
-                                  ),
-                                  SizedBox(width: 10),
-                                  Icon(Icons.verified, size: 22),
-                                ],
-                              ),
                             ),
                           ),
                           const SizedBox(height: 20),
