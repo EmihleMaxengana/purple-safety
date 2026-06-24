@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 
 class Alert {
   final String id;

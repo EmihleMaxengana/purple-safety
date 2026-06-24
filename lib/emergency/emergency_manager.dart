@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../home/home_screen.dart';
-import 'emergency_mode_screen.dart';
+import 'package:purple_safety/emergency/emergency_mode_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 
 class EmergencyManager {
   static final EmergencyManager _instance = EmergencyManager._internal();

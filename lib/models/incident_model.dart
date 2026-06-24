@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 
 enum IncidentType {
   missingPerson,
@@ -40,10 +41,10 @@ class Incident {
   final bool isResolved;
   
   // Found/Delete fields
-  final bool isFound;           // Whether person has been found
-  final DateTime? foundAt;      // When they were marked as found
-  final DateTime? expiresAt;    // When post should be deleted (24 hours after creation)
-  final DateTime? deleteAt;     // When marked as found, delete after 2 hours
+  final bool isFound;
+  final DateTime? foundAt;
+  final DateTime? expiresAt;
+  final DateTime? deleteAt;
 
   Incident({
     required this.id,
@@ -140,9 +141,6 @@ class Incident {
   }
 }
 
-// ============================================================
-// INCIDENT COMMENT CLASS
-// ============================================================
 class IncidentComment {
   final String id;
   final String incidentId;
@@ -182,6 +180,57 @@ class IncidentComment {
       'isAnonymous': isAnonymous,
       'comment': comment,
       'timestamp': Timestamp.fromDate(timestamp),
+    };
+  }
+}
+
+// ============================================================
+// CONTACT MODEL (moved from home_screen.dart)
+// ============================================================
+class Contact {
+  final String id;
+  String name;
+  String initials;
+  Color color;
+  bool active;
+  String? phone;
+  String? relationship;
+  Map<String, String> socialLinks;
+
+  Contact({
+    required this.id,
+    required this.name,
+    required this.initials,
+    required this.color,
+    this.active = true,
+    this.phone,
+    this.relationship,
+    this.socialLinks = const {},
+  });
+
+  factory Contact.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Contact(
+      id: doc.id,
+      name: data['name'],
+      initials: data['initials'],
+      color: Color(data['color']),
+      active: data['active'],
+      phone: data['phone'],
+      relationship: data['relationship'],
+      socialLinks: Map<String, String>.from(data['socialLinks'] ?? {}),
+    );
+  }
+
+  Map<String, dynamic> toFirestore() {
+    return {
+      'name': name,
+      'initials': initials,
+      'color': color.value,
+      'active': active,
+      'phone': phone,
+      'relationship': relationship,
+      'socialLinks': socialLinks,
     };
   }
 }

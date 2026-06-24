@@ -12,7 +12,7 @@ import 'package:purple_safety/settings/safety_alerts_screen.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
-import 'package:purple_safety/messaging/dm_screen.dart';          // <-- import DM screen
+import 'package:purple_safety/messaging/dm_screen.dart';
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
@@ -117,7 +117,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _openDMScreen() {                       // <-- new DM handler
+  void _openDMScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const DMScreen()),
@@ -127,7 +127,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    // (keep existing lifecycle code)
   }
 
   @override
@@ -146,7 +145,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         onAvatarPressed: _showUserProfileModal,
         unreadAlertsCount: _unreadAlertsCount,
         onNotificationPressed: _openSafetyAlerts,
-        onDMTap: _openDMScreen,               // <-- pass DM callback
+        onDMTap: _openDMScreen,
       ),
       body: IndexedStack(index: _selectedIndex, children: _pages),
       bottomNavigationBar: BottomNavigationBar(

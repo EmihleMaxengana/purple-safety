@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 
 class AddContactScreen extends StatefulWidget {
   final Function(Contact) onAdd;
@@ -109,7 +109,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
           }
         }
         
-        // Set the phone number and show form
         _phoneController.text = selectedNumber;
         setState(() {
           _isLoading = false;
@@ -232,7 +231,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
       ),
     );
     
-    // Go back to home screen
     Navigator.pop(context);
   }
 
@@ -366,7 +364,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Name field
           Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
@@ -386,7 +383,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Phone number field
           Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
@@ -407,7 +403,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 12),
 
-          // Relationship dropdown
           Container(
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
@@ -439,7 +434,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Add contact button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(

@@ -1,14 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
-import 'package:purple_safety/home/home_screen.dart';
-import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
+import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/utils/pref_keys.dart';
-import 'dart:async';
+import 'package:purple_safety/models/incident_model.dart';
 
 class UserProfileModal extends StatefulWidget {
   final List<Contact>? contacts;
@@ -26,18 +26,14 @@ class _UserProfileModalState extends State<UserProfileModal> {
   File? _profileImage;
   final ImagePicker _picker = ImagePicker();
 
-  // Real contacts from Firestore
   List<Contact> _realContacts = [];
   bool _isLoadingContacts = true;
 
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _contactsSubscription;
 
-  // Location sharing preferences
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
-
-  // Biometric toggle
   bool _useBiometrics = false;
 
   @override
@@ -163,9 +159,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
     }
   }
 
-  // ============================================================
-  // Profile image persistence
-  // ============================================================
   Future<void> _saveProfileImagePath(String? path) async {
     final prefs = await SharedPreferences.getInstance();
     if (path == null) {
@@ -252,9 +245,6 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
-  // ============================================================
-  // Toggle helpers with authentication
-  // ============================================================
   Future<void> _toggleWithFingerprint(
     String settingName,
     bool currentValue,

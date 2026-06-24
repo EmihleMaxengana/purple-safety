@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/contacts/edit_contact_screen.dart';
 import 'package:purple_safety/Invitations/invite_contact_screen.dart';
 
@@ -260,7 +260,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
                     ),
             ),
             const SizedBox(height: 16),
-            // Invite button - fixed sizing
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -289,7 +288,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
               ),
             ),
             const SizedBox(height: 12),
-            // Close button - fixed sizing
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(

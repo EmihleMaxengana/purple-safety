@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../home/home_screen.dart';
 
 class SOSAlertService {
@@ -193,6 +194,36 @@ class SOSAlertService {
       
     } catch (e) {
       debugPrint('❌ Error responding to SOS: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // SMS FALLBACK - Send SMS via device (opens SMS app)
+  // ============================================================
+  static Future<void> sendSMS({
+    required String phoneNumber,
+    required String message,
+  }) async {
+    try {
+      // Clean phone number (remove spaces, keep digits and +)
+      final cleanedNumber = phoneNumber.replaceAll(' ', '').replaceAll('+', '');
+      
+      // Build SMS URI
+      final Uri smsUri = Uri(
+        scheme: 'sms',
+        path: cleanedNumber,
+        query: 'body=${Uri.encodeComponent(message)}',
+      );
+      
+      if (await canLaunchUrl(smsUri)) {
+        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+        debugPrint('📱 SMS compose opened for $phoneNumber');
+      } else {
+        throw Exception('Could not launch SMS app');
+      }
+    } catch (e) {
+      debugPrint('❌ SMS send error: $e');
       rethrow;
     }
   }

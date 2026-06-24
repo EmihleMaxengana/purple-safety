@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../home/home_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 
 class LocationSharingService {
   static Timer? _shareTimer;

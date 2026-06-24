@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/home/home_screen.dart';
+import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/safety/biometric_services.dart';
 
 class EditContactScreen extends StatefulWidget {
@@ -62,9 +62,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
   Future<void> _saveChanges() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
-  context: context,
-  reason: 'Authenticate to save contact changes',
-);
+      context: context,
+      reason: 'Authenticate to save contact changes',
+    );
 
     if (!authenticated) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -86,7 +86,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
       active: widget.contact.active,
       phone: _formatPhoneNumber(_phoneController.text.trim()),
       relationship: _selectedRelationship,
-      socialLinks: {}, // WhatsApp removed
+      socialLinks: {},
     );
 
     widget.onUpdate(updatedContact);
@@ -119,9 +119,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     if (confirmed == true) {
       final authenticated = await BiometricService.authenticateWithUserPreference(
-  context: context,
-  reason: 'Authenticate to delete this contact',
-);
+        context: context,
+        reason: 'Authenticate to delete this contact',
+      );
 
       if (authenticated) {
         widget.onDelete();
