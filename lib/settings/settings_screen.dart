@@ -69,12 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Authenticate to update your profile',
     );
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Silent fail – no snackbar
       return;
     }
 
@@ -87,13 +82,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'email': _emailController.text,
         'phone': _phoneController.text,
       });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Profile updated')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      // Silent fail
     } finally {
       setState(() => _isLoading = false);
     }
@@ -121,7 +111,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final relationController = TextEditingController(text: _nextOfKinRelation);
     final altPhoneController = TextEditingController(text: _nextOfKinAltPhone);
 
-    final formKey = GlobalKey<FormState>();
     bool hasChanges = false;
 
     final result = await showDialog<bool>(
@@ -131,55 +120,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder: (context, setState) {
           return AlertDialog(
             title: const Text('Change Next of Kin'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Full Name',
-                        hintText: 'Next of kin full name',
-                        prefixIcon: Icon(Icons.person),
-                      ),
-                      onChanged: (_) => setState(() => hasChanges = true),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Full Name',
+                      hintText: 'Next of kin full name',
+                      prefixIcon: Icon(Icons.person),
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: phoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        hintText: 'Primary contact number',
-                        prefixIcon: Icon(Icons.phone),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      onChanged: (_) => setState(() => hasChanges = true),
+                    onChanged: (_) => setState(() => hasChanges = true),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      hintText: 'Primary contact number',
+                      prefixIcon: Icon(Icons.phone),
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: relationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Relationship',
-                        hintText: 'e.g., Spouse, Parent, Sibling',
-                        prefixIcon: Icon(Icons.people),
-                      ),
-                      onChanged: (_) => setState(() => hasChanges = true),
+                    keyboardType: TextInputType.phone,
+                    onChanged: (_) => setState(() => hasChanges = true),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: relationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Relationship',
+                      hintText: 'e.g., Spouse, Parent, Sibling',
+                      prefixIcon: Icon(Icons.people),
                     ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: altPhoneController,
-                      decoration: const InputDecoration(
-                        labelText: 'Alternative Phone (Optional)',
-                        hintText: 'Secondary contact number',
-                        prefixIcon: Icon(Icons.phone_android),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      onChanged: (_) => setState(() => hasChanges = true),
+                    onChanged: (_) => setState(() => hasChanges = true),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: altPhoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Alternative Phone (Optional)',
+                      hintText: 'Secondary contact number',
+                      prefixIcon: Icon(Icons.phone_android),
                     ),
-                  ],
-                ),
+                    keyboardType: TextInputType.phone,
+                    onChanged: (_) => setState(() => hasChanges = true),
+                  ),
+                ],
               ),
             ),
             actions: [
@@ -188,7 +174,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () async {
+                onPressed: () {
                   if (!hasChanges) {
                     Navigator.pop(context, false);
                     return;
@@ -210,12 +196,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Authenticate to save next of kin changes',
     );
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. Changes not saved.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Silent fail
       return;
     }
 
@@ -225,18 +206,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       try {
         await _auth.updateNextOfKin(
           user.uid,
-          name: nameController.text.trim().isNotEmpty
-              ? nameController.text.trim()
-              : null,
-          phone: phoneController.text.trim().isNotEmpty
-              ? phoneController.text.trim()
-              : null,
-          relation: relationController.text.trim().isNotEmpty
-              ? relationController.text.trim()
-              : null,
-          altPhone: altPhoneController.text.trim().isNotEmpty
-              ? altPhoneController.text.trim()
-              : null,
+          name: nameController.text.trim().isNotEmpty ? nameController.text.trim() : null,
+          phone: phoneController.text.trim().isNotEmpty ? phoneController.text.trim() : null,
+          relation: relationController.text.trim().isNotEmpty ? relationController.text.trim() : null,
+          altPhone: altPhoneController.text.trim().isNotEmpty ? altPhoneController.text.trim() : null,
         );
         setState(() {
           _nextOfKinName = nameController.text.trim();
@@ -244,23 +217,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _nextOfKinRelation = relationController.text.trim();
           _nextOfKinAltPhone = altPhoneController.text.trim();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Next of kin updated'),
-            backgroundColor: Colors.green,
-          ),
-        );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        // Silent fail
       }
     }
     setState(() => _isLoading = false);
   }
 
   // ============================================================
-  // Change Password
+  // CHANGE PASSWORD
   // ============================================================
   void _showChangePasswordDialog() {
     final currentPasswordController = TextEditingController();
@@ -313,30 +278,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (newPasswordController.text != confirmController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('New passwords do not match'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                // Silent fail
                 return;
               }
               if (newPasswordController.text.length < 6) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Password must be at least 6 characters'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                // Silent fail
                 return;
               }
               if (currentPasswordController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please enter your current password'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
+                // Silent fail
                 return;
               }
 
@@ -359,42 +309,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await user.updatePassword(newPasswordController.text);
                   Navigator.pop(context);
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Password changed successfully'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }
-              } on FirebaseAuthException catch (e) {
-                Navigator.pop(context);
-                if (e.code == 'wrong-password') {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Current password is incorrect'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: ${e.message}'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
                 }
               } catch (e) {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
               }
             },
             style: ElevatedButton.styleFrom(
-              foregroundColor: Colors.white,
               backgroundColor: const Color(0xFF6A1B9A),
             ),
             child: const Text('Change Password'),
@@ -405,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Manage Biometrics
+  // MANAGE BIOMETRICS
   // ============================================================
   void _showManageBiometricsDialog() {
     showModalBottomSheet(
@@ -492,17 +412,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AppSettings.openAppSettings(type: AppSettingsType.security);
     } else if (Platform.isIOS) {
       AppSettings.openAppSettings();
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Open your device settings to manage fingerprints'),
-        ),
-      );
     }
   }
 
   // ============================================================
-  // Privacy Policy
+  // PRIVACY POLICY
   // ============================================================
   void _showPrivacyPolicy() {
     showDialog(
@@ -606,41 +520,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // Delete Account
+  // DELETE ACCOUNT - WITH BIOMETRIC / PIN AUTHENTICATION
   // ============================================================
-  void _confirmDeleteAccount() async {
+  Future<void> _confirmDeleteAccount() async {
+    // Step 1: Authenticate with Biometric or PIN
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to delete your account',
     );
+
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. Account not deleted.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Silent fail
       return;
     }
 
+    // Step 2: Show final confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          '⚠️ WARNING: This action is PERMANENT and CANNOT be undone.\n\n'
-          'All your data will be deleted:\n'
-          '• Your profile information\n'
-          '• Your trusted contacts\n'
-          '• Your safety alerts\n'
-          '• Your account credentials\n\n'
-          'You will need to create a new account to use the app again.\n\n'
-          'Are you absolutely sure?',
+        title: const Text(
+          'Delete Account',
+          style: TextStyle(color: Colors.red),
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.warning_amber, color: Colors.red, size: 48),
+            SizedBox(height: 16),
+            Text(
+              '⚠️ WARNING: This action is PERMANENT and CANNOT be undone.',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 12),
+            Text(
+              'All your data will be deleted:\n'
+              '• Your profile information\n'
+              '• Your trusted contacts\n'
+              '• Your safety alerts\n'
+              '• Your account credentials\n\n'
+              'You will need to create a new account to use the app again.\n\n'
+              'Are you absolutely sure?',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Color(0xFFBF7DCB)),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -648,76 +580,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Delete Permanently'),
           ),
         ],
+        backgroundColor: const Color(0xFF1a0f2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.red.withOpacity(0.5)),
+        ),
       ),
     );
 
     if (confirm == true) {
       await _deleteAccount();
     }
-  }
-
-  Future<String?> _showPasswordDialog() async {
-    String password = '';
-
-    return await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Confirm Deletion'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.warning_amber, color: Colors.red, size: 48),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'WARNING: This action is permanent!',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'All your data will be permanently deleted.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    obscureText: true,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Enter your password to confirm',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                    onChanged: (value) {
-                      password = value;
-                      setState(() {});
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, null),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: password.isEmpty
-                      ? null
-                      : () => Navigator.pop(context, password),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  child: const Text('Delete Forever'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<void> _deleteAccount() async {
@@ -727,12 +600,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user != null && user.email != null) {
-        final password = await _showPasswordDialog();
-        if (password == null) {
-          setState(() => _isLoading = false);
-          return;
-        }
-
+        // Show loading dialog
         if (mounted) {
           showDialog(
             context: context,
@@ -753,15 +621,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
 
-        final credential = EmailAuthProvider.credential(
-          email: user.email!,
-          password: password,
-        );
-        await user.reauthenticateWithCredential(credential);
+        // Delete Firestore data
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .delete();
+
+        // Delete contacts subcollection
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -769,9 +635,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .get();
         if (contactsSnapshot.docs.isNotEmpty) {
           final batch = FirebaseFirestore.instance.batch();
-          for (var doc in contactsSnapshot.docs) batch.delete(doc.reference);
+          for (var doc in contactsSnapshot.docs) {
+            batch.delete(doc.reference);
+          }
           await batch.commit();
         }
+
+        // Delete alerts subcollection
         final alertsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -779,72 +649,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .get();
         if (alertsSnapshot.docs.isNotEmpty) {
           final alertsBatch = FirebaseFirestore.instance.batch();
-          for (var doc in alertsSnapshot.docs)
+          for (var doc in alertsSnapshot.docs) {
             alertsBatch.delete(doc.reference);
+          }
           await alertsBatch.commit();
         }
+
+        // Clear SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
+
+        // Delete Firebase Auth user
         await user.delete();
 
         if (mounted) {
-          Navigator.of(context).pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account permanently deleted'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        if (mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
           await _navigateToLoginWithAnimation();
         }
       }
-    } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted && Navigator.of(context).canPop())
-        Navigator.of(context).pop();
-      if (e.code == 'wrong-password') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Incorrect password. Account not deleted.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } else if (e.code == 'requires-recent-login') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Please log out and log in again before deleting your account',
-            ),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 4),
-          ),
-        );
-      } else if (e.code == 'user-not-found') {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account already deleted or not found'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        await _navigateToLoginWithAnimation();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted && Navigator.of(context).canPop())
+      if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      }
     }
   }
 
@@ -905,17 +732,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           (route) => false,
         );
       }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. Logout cancelled.'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
-  // Helper build methods
+  // ============================================================
+  // BUILD METHODS
+  // ============================================================
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -1005,9 +827,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _nextOfKinRelation.isNotEmpty
-                        ? _nextOfKinRelation
-                        : 'Contact',
+                    _nextOfKinRelation.isNotEmpty ? _nextOfKinRelation : 'Contact',
                     style: const TextStyle(color: Colors.white70, fontSize: 10),
                   ),
                 ),
@@ -1175,7 +995,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ElevatedButton(
                   onPressed: _isLoading ? null : _saveUserData,
                   style: ElevatedButton.styleFrom(
-                    foregroundColor: Colors.white,
                     backgroundColor: const Color(0xFF6A1B9A),
                     minimumSize: const Size(double.infinity, 48),
                   ),
