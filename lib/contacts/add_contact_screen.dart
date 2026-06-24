@@ -23,6 +23,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   String? _selectedRelationship;
+  String _errorMessage = '';
   
   bool _isLoading = false;
   bool _showForm = false;
@@ -47,17 +48,15 @@ class _AddContactScreenState extends State<AddContactScreen> {
     try {
       final status = await Permission.contacts.request();
       if (!status.isGranted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contacts permission is required to add contacts'),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        setState(() {
+          _errorMessage = 'Contacts permission is required to add contacts';
+        });
         return;
       }
 
       setState(() {
         _isLoading = true;
+        _errorMessage = '';
       });
 
       final dynamic contact = await _contactPicker.selectContact();
@@ -66,14 +65,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
         List<String> phoneNumbers = _getPhoneNumbers(contact);
         
         if (phoneNumbers.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('This contact has no phone number'),
-              backgroundColor: Colors.red,
-            ),
-          );
           setState(() {
             _isLoading = false;
+            _errorMessage = 'This contact has no phone number';
           });
           return;
         }
@@ -113,6 +107,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
         setState(() {
           _isLoading = false;
           _showForm = true;
+          _errorMessage = '';
         });
         
       } else {
@@ -124,13 +119,8 @@ class _AddContactScreenState extends State<AddContactScreen> {
       print('Error picking contact: $e');
       setState(() {
         _isLoading = false;
+        _errorMessage = 'Error picking contact: $e';
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error picking contact: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
     }
   }
 
@@ -178,33 +168,20 @@ class _AddContactScreenState extends State<AddContactScreen> {
   }
 
   void _saveContact() {
+    setState(() => _errorMessage = '');
+
     if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the contact name'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() => _errorMessage = 'Please enter the contact name');
       return;
     }
     
     if (_phoneController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Phone number is required'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() => _errorMessage = 'Phone number is required');
       return;
     }
     
     if (_selectedRelationship == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a relationship'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() => _errorMessage = 'Please select a relationship');
       return;
     }
 
@@ -224,13 +201,6 @@ class _AddContactScreenState extends State<AddContactScreen> {
     );
 
     widget.onAdd(newContact);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${newContact.name} added to trusted contacts'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    
     Navigator.pop(context);
   }
 
@@ -241,6 +211,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
     setState(() {
       _showForm = false;
       _isLoading = false;
+      _errorMessage = '';
     });
   }
 
@@ -318,6 +289,14 @@ class _AddContactScreenState extends State<AddContactScreen> {
                 fontSize: 14,
               ),
             ),
+            if (_errorMessage.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 32),
             
             if (_isLoading)
@@ -363,6 +342,15 @@ class _AddContactScreenState extends State<AddContactScreen> {
             ),
           ),
           const SizedBox(height: 24),
+
+          if (_errorMessage.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+              ),
+            ),
 
           Container(
             decoration: BoxDecoration(

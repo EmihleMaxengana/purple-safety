@@ -13,6 +13,7 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
   final AuthService _auth = AuthService();
   bool _isLoading = false;
   bool _emailSent = false;
+  String _errorMessage = '';
 
   @override
   void dispose() {
@@ -24,27 +25,22 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
     final email = _emailController.text.trim();
     
     if (email.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'Please enter your email address';
+      });
       return;
     }
 
     if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid email address'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'Please enter a valid email address';
+      });
       return;
     }
 
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     final success = await _auth.sendPasswordResetEmail(email);
@@ -58,12 +54,9 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
         _emailSent = true;
       });
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send reset email. Please check your email address.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'Failed to send reset email. Please try again.';
+      });
     }
   }
 
@@ -82,7 +75,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Icon
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -96,8 +88,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Title
             const Text(
               'Reset Password',
               style: TextStyle(
@@ -107,8 +97,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
               ),
             ),
             const SizedBox(height: 8),
-
-            // Description
             Text(
               _emailSent
                   ? 'Check your email for the reset link'
@@ -119,10 +107,16 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                 fontSize: 14,
               ),
             ),
+            if (_errorMessage.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage,
+                style: const TextStyle(color: Colors.red, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ],
             const SizedBox(height: 24),
-
             if (!_emailSent) ...[
-              // Email input field
               TextField(
                 controller: _emailController,
                 style: const TextStyle(color: Colors.white),
@@ -140,10 +134,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: Color(0xFFD105FF)),
@@ -151,8 +141,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Send button (loading state)
               if (_isLoading)
                 const Center(
                   child: CircularProgressIndicator(
@@ -182,8 +170,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                   ),
                 ),
               const SizedBox(height: 12),
-
-              // Cancel button
               TextButton(
                 onPressed: () => Navigator.pop(context),
                 child: const Text(
@@ -192,7 +178,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                 ),
               ),
             ] else ...[
-              // Success state - email sent
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -233,8 +218,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    
-                    // Spam folder warning box
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -267,8 +250,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              // Close button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -294,7 +275,6 @@ class _ForgotPasswordModalState extends State<ForgotPasswordModal> {
           ],
         ),
       ),
-      
     );
   }
 }

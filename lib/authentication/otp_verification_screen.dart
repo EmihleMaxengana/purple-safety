@@ -55,7 +55,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   void _startVerificationCheck() {
-    // Check every 2 seconds for up to 60 seconds (30 checks)
     _verificationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
       _checkVerificationStatus();
       _checkCount++;
@@ -75,7 +74,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         _isVerified = true;
       });
       _verificationTimer?.cancel();
-      // Navigate to Main Screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -96,17 +94,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     });
 
     if (success) {
-      // Reset timer
       _checkCount = 0;
       _verificationTimer?.cancel();
       _startVerificationCheck();
-      // Show confirmation (you could use a popup or dialog)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Verification email resent! Please check your inbox.'),
-          backgroundColor: Colors.green,
-        ),
-      );
     } else {
       setState(() {
         _errorMessage = 'Failed to resend verification email. Please try again.';
@@ -248,7 +238,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       const SizedBox(height: 12),
                       TextButton(
                         onPressed: () async {
-                          // Force check verification status
                           setState(() {
                             _isLoading = true;
                           });

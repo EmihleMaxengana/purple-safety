@@ -63,14 +63,6 @@ class _ManageContactsModalState extends State<ManageContactsModal> {
       setState(() {
         _contacts.removeWhere((contact) => contact.id == contactId);
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contact deleted'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
     }
   }
 

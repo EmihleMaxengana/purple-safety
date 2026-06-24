@@ -22,6 +22,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late String _selectedRelationship;
+  String _errorMessage = '';
 
   final List<String> _relationshipOptions = [
     'Family',
@@ -61,18 +62,17 @@ class _EditContactScreenState extends State<EditContactScreen> {
   }
 
   Future<void> _saveChanges() async {
+    setState(() => _errorMessage = '');
+
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to save contact changes',
     );
 
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Authentication failed. Changes not saved.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _errorMessage = 'Authentication failed. Changes not saved.';
+      });
       return;
     }
 
@@ -91,9 +91,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     widget.onUpdate(updatedContact);
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Contact updated successfully')),
-    );
   }
 
   Future<void> _deleteContact() async {
@@ -126,16 +123,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
       if (authenticated) {
         widget.onDelete();
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Contact deleted')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Authentication failed. Contact not deleted.'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
     }
   }
@@ -256,6 +243,15 @@ class _EditContactScreenState extends State<EditContactScreen> {
                   ),
                 ),
                 const SizedBox(height: 30),
+
+                if (_errorMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      _errorMessage,
+                      style: const TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  ),
 
                 SizedBox(
                   width: double.infinity,
