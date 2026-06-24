@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purple_safety/authentication/otp_service.dart';
-import 'package:purple_safety/navigation/main_screen.dart'; // ← CORRECT PATH
+import 'package:purple_safety/navigation/main_screen.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
-  final String phoneNumber;
+  final String email;
 
-  const OTPVerificationScreen({Key? key, required this.phoneNumber})
+  const OTPVerificationScreen({Key? key, required this.email})
     : super(key: key);
 
   @override
@@ -14,91 +16,101 @@ class OTPVerificationScreen extends StatefulWidget {
 }
 
 class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
-  final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
+  bool _isVerified = false;
+  Timer? _verificationTimer;
   String _errorMessage = '';
+  int _checkCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _sendOtp();
+    _sendVerificationEmail();
+    _startVerificationCheck();
   }
 
-  Future<void> _sendOtp() async {
+  @override
+  void dispose() {
+    _verificationTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _sendVerificationEmail() async {
     setState(() {
       _isLoading = true;
       _errorMessage = '';
     });
-    final success = await OTPService.sendOtp(widget.phoneNumber);
-    setState(() => _isLoading = false);
-    if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('OTP sent successfully!')));
-    } else {
-      setState(() => _errorMessage = 'Failed to send OTP. Please try again.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to send OTP'),
-          backgroundColor: Colors.red,
-        ),
-      );
+
+    final success = await OTPService.sendEmailVerification();
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (!success) {
+      setState(() {
+        _errorMessage = 'Failed to send verification email. Please try again.';
+      });
     }
   }
 
-  Future<void> _resendOtp() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
+  void _startVerificationCheck() {
+    // Check every 2 seconds for up to 60 seconds (30 checks)
+    _verificationTimer = Timer.periodic(const Duration(seconds: 2), (timer) {
+      _checkVerificationStatus();
+      _checkCount++;
+      if (_checkCount >= 30) {
+        timer.cancel();
+        setState(() {
+          _errorMessage = 'Verification timed out. Please check your email and try again.';
+        });
+      }
     });
-    final success = await OTPService.resendOtp(widget.phoneNumber);
-    setState(() => _isLoading = false);
-    if (success) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('OTP resent successfully!')));
-    } else {
-      setState(() => _errorMessage = 'Failed to resend OTP.');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to resend OTP'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
   }
 
-  Future<void> _verifyOtp() async {
-    if (_otpController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the OTP'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-    final isValid = await OTPService.verifyOtp(_otpController.text);
-    setState(() => _isLoading = false);
-
-    if (isValid) {
+  Future<void> _checkVerificationStatus() async {
+    final isVerified = await OTPService.checkEmailVerified();
+    if (isVerified && !_isVerified) {
+      setState(() {
+        _isVerified = true;
+      });
+      _verificationTimer?.cancel();
+      // Navigate to Main Screen
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => MainScreen()),
+        MaterialPageRoute(builder: (context) => const MainScreen()),
       );
-    } else {
-      setState(() => _errorMessage = 'Invalid OTP. Please try again.');
+    }
+  }
+
+  Future<void> _resendVerification() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    final success = await OTPService.resendEmailVerification();
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (success) {
+      // Reset timer
+      _checkCount = 0;
+      _verificationTimer?.cancel();
+      _startVerificationCheck();
+      // Show confirmation (you could use a popup or dialog)
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Invalid OTP. Please try again.'),
-          backgroundColor: Colors.red,
+          content: Text('Verification email resent! Please check your inbox.'),
+          backgroundColor: Colors.green,
         ),
       );
+    } else {
+      setState(() {
+        _errorMessage = 'Failed to resend verification email. Please try again.';
+      });
     }
   }
 
@@ -106,7 +118,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Verify Your Number'),
+        title: const Text('Verify Your Email'),
         backgroundColor: const Color(0xFF6A1B9A),
         foregroundColor: Colors.white,
       ),
@@ -135,10 +147,14 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.sms, size: 60, color: Colors.white),
+                      const Icon(
+                        Icons.email,
+                        size: 60,
+                        color: Colors.white,
+                      ),
                       const SizedBox(height: 20),
                       const Text(
-                        'Verification Code',
+                        'Verify Your Email',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,
@@ -147,7 +163,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'We sent a 6-digit code to ${widget.phoneNumber}',
+                        'We sent a verification link to:\n${widget.email}',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white70,
@@ -155,60 +171,103 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      TextFormField(
-                        controller: _otpController,
-                        style: const TextStyle(color: Colors.white),
-                        keyboardType: TextInputType.number,
-                        maxLength: 6,
-                        decoration: InputDecoration(
-                          hintText: 'Enter 6-digit code',
-                          hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
-                          filled: true,
-                          fillColor: Colors.white.withOpacity(0.1),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.2),
                           ),
                         ),
-                      ),
-                      if (_errorMessage.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            _errorMessage,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontSize: 12,
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              color: Colors.white70,
+                              size: 20,
                             ),
-                          ),
-                        ),
-                      const SizedBox(height: 20),
-                      if (_isLoading)
-                        const CircularProgressIndicator()
-                      else
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _verifyOtp,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFD105FF),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                _isLoading
+                                    ? 'Sending verification email...'
+                                    : 'Please click the link in the email to verify your account.',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
-                            child: const Text(
-                              'Verify & Continue',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                          ],
+                        ),
+                      ),
+                      if (_isLoading)
+                        const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ),
+                      if (_errorMessage.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Text(
+                            _errorMessage,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontSize: 13,
                             ),
                           ),
                         ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _resendVerification,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFD105FF),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text(
+                                'Resend Email',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       TextButton(
-                        onPressed: _resendOtp,
+                        onPressed: () async {
+                          // Force check verification status
+                          setState(() {
+                            _isLoading = true;
+                          });
+                          await _checkVerificationStatus();
+                          setState(() {
+                            _isLoading = false;
+                          });
+                        },
                         child: const Text(
-                          'Resend Code',
+                          'I already verified',
                           style: TextStyle(color: Color(0xFFCCCCFF)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Check your spam folder if you don\'t see the email.',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 11,
                         ),
                       ),
                     ],

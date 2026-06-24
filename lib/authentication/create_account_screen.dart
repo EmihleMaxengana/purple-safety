@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
-import 'otp_verification_screen.dart';
+import 'package:purple_safety/authentication/otp_verification_screen.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -180,10 +180,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please enter your full name';
-                              if (value.split(' ').length < 2)
-                                return 'Please enter your full name ';
+                              }
+                              if (value.split(' ').length < 2) {
+                                return 'Please enter your full name (first and last)';
+                              }
                               return null;
                             },
                           ),
@@ -235,12 +237,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please enter your email';
+                              }
                               if (!RegExp(
                                 r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                              ).hasMatch(value))
+                              ).hasMatch(value)) {
                                 return 'Please enter a valid email';
+                              }
                               return null;
                             },
                           ),
@@ -310,10 +314,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please confirm your email';
-                              if (value != _emailController.text)
+                              }
+                              if (value != _emailController.text) {
                                 return 'Emails do not match';
+                              }
                               return null;
                             },
                           ),
@@ -372,22 +378,24 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               prefixStyle: const TextStyle(color: Colors.white),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please enter your phone number';
+                              }
                               final digits = value.replaceAll(
                                 RegExp(r'\D'),
                                 '',
                               );
-                              if (digits.length != 9)
+                              if (digits.length != 9) {
                                 return 'Please enter a valid 9-digit SA number';
+                              }
                               return null;
                             },
                           ),
                           const SizedBox(height: 20),
 
-                          // GENDER FIELD - NEW
+                          // GENDER - REQUIRED
                           const Text(
-                            'Gender',
+                            'Gender *',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -422,15 +430,21 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   _selectedGender = value;
                                 });
                               },
+                              validator: (value) {
+                                if (value == null) {
+                                  return 'Please select your gender';
+                                }
+                                return null;
+                              },
                             ),
                           ),
                           const SizedBox(height: 20),
 
-                          // NEXT OF KIN SECTION (Optional)
+                          // NEXT OF KIN - REQUIRED
                           Container(
                             margin: const EdgeInsets.only(top: 8),
                             child: const Text(
-                              'Next of Kin (Optional)',
+                              'Next of Kin *',
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w600,
@@ -439,11 +453,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
+                          // Name - REQUIRED
                           TextFormField(
                             controller: _nextOfKinNameController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              hintText: 'Full name of next of kin',
+                              hintText: 'Full name of next of kin *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -473,8 +488,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 color: Color(0xFFBF7DCB),
                               ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter next of kin name';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 12),
+
+                          // Phone - REQUIRED
                           TextFormField(
                             controller: _nextOfKinPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -482,9 +505,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(9),
+                              _SouthAfricanPhoneFormatter(),
                             ],
                             decoration: InputDecoration(
-                              hintText: 'Phone number (e.g., 712345678)',
+                              hintText: 'Phone number (e.g., 71 234 5678) *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -517,23 +541,27 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               prefixStyle: const TextStyle(color: Colors.white),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) return null;
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter next of kin phone number';
+                              }
                               final digits = value.replaceAll(
                                 RegExp(r'\D'),
                                 '',
                               );
-                              if (digits.length != 9)
-                                return 'Enter a valid 9-digit SA number';
+                              if (digits.length != 9) {
+                                return 'Please enter a valid 9-digit SA number';
+                              }
                               return null;
                             },
                           ),
                           const SizedBox(height: 12),
+
+                          // Relationship - REQUIRED
                           TextFormField(
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              hintText:
-                                  'Relation (e.g., Spouse, Parent, Sibling)',
+                              hintText: 'Relationship (e.g., Spouse, Parent, Sibling) *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -563,8 +591,16 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 color: Color(0xFFBF7DCB),
                               ),
                             ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter relationship';
+                              }
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 12),
+
+                          // Alternative Phone - OPTIONAL (no validator)
                           TextFormField(
                             controller: _nextOfKinAltPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -572,6 +608,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(9),
+                              _SouthAfricanPhoneFormatter(),
                             ],
                             decoration: InputDecoration(
                               hintText: 'Alternative phone number (optional)',
@@ -674,20 +711,26 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please create a password';
-                              if (value.length < 8)
+                              }
+                              if (value.length < 8) {
                                 return 'Password must be at least 8 characters';
-                              if (!RegExp(r'[A-Z]').hasMatch(value))
+                              }
+                              if (!RegExp(r'[A-Z]').hasMatch(value)) {
                                 return 'Include at least one uppercase letter';
-                              if (!RegExp(r'[a-z]').hasMatch(value))
+                              }
+                              if (!RegExp(r'[a-z]').hasMatch(value)) {
                                 return 'Include at least one lowercase letter';
-                              if (!RegExp(r'[0-9]').hasMatch(value))
+                              }
+                              if (!RegExp(r'[0-9]').hasMatch(value)) {
                                 return 'Include at least one number';
+                              }
                               if (!RegExp(
                                 r'[!@#$%^&*(),.?":{}|<>]',
-                              ).hasMatch(value))
+                              ).hasMatch(value)) {
                                 return 'Include at least one special character';
+                              }
                               return null;
                             },
                           ),
@@ -815,10 +858,12 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty)
+                              if (value == null || value.isEmpty) {
                                 return 'Please confirm your password';
-                              if (value != _passwordController.text)
+                              }
+                              if (value != _passwordController.text) {
                                 return 'Passwords do not match';
+                              }
                               return null;
                             },
                           ),
@@ -867,32 +912,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                     _passwordController.text,
                                     _phoneController.text,
                                     nextOfKinName:
-                                        _nextOfKinNameController.text
-                                            .trim()
-                                            .isNotEmpty
-                                        ? _nextOfKinNameController.text.trim()
-                                        : null,
+                                        _nextOfKinNameController.text.trim(),
                                     nextOfKinPhone:
-                                        _nextOfKinPhoneController.text
-                                            .trim()
-                                            .isNotEmpty
-                                        ? _nextOfKinPhoneController.text.trim()
-                                        : null,
+                                        _nextOfKinPhoneController.text.trim(),
                                     nextOfKinRelation:
-                                        _nextOfKinRelationController.text
-                                            .trim()
-                                            .isNotEmpty
-                                        ? _nextOfKinRelationController.text
-                                              .trim()
-                                        : null,
+                                        _nextOfKinRelationController.text.trim(),
                                     nextOfKinAltPhone:
                                         _nextOfKinAltPhoneController.text
                                             .trim()
                                             .isNotEmpty
-                                        ? _nextOfKinAltPhoneController.text
-                                              .trim()
+                                        ? _nextOfKinAltPhoneController.text.trim()
                                         : null,
-                                    gender: _selectedGender, // ADD GENDER
+                                    gender: _selectedGender,
                                   );
                                   if (user != null) {
                                     await prefs.setBool(
@@ -900,19 +931,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       _useBiometrics,
                                     );
 
-                                    final phoneDigits = _phoneController.text
-                                        .replaceAll(RegExp(r'\D'), '');
-                                    final formattedPhone = '+27$phoneDigits';
-                                    print(
-                                      'Navigating to OTP with phone: $formattedPhone',
-                                    );
+                                    // Navigate to Email Verification Screen (pass email)
                                     Navigator.pushReplacement(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) =>
-                                            OTPVerificationScreen(
-                                              phoneNumber: formattedPhone,
-                                            ),
+                                        builder: (context) => OTPVerificationScreen(
+                                          email: _emailController.text.trim(),
+                                        ),
                                       ),
                                     );
                                   } else {

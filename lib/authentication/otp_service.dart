@@ -2,89 +2,58 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class OTPService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
-  static String? _verificationId;
-  static int? _resendToken;
 
-  // Send OTP via SMS
-  static Future<bool> sendOtp(String phoneNumber) async {
+  // Send email verification link to the current user
+  static Future<bool> sendEmailVerification() async {
     try {
-      print('Sending OTP to phone number: $phoneNumber');
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          print('Verification auto-completed');
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          print('Verification failed error code: ${e.code}');
-          print('Verification failed message: ${e.message}');
-          throw Exception('Verification failed: ${e.message}');
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          print('Code sent successfully. Verification ID: $verificationId');
-          _verificationId = verificationId;
-          _resendToken = resendToken;
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          print('Auto-retrieval timeout. Verification ID: $verificationId');
-          _verificationId = verificationId;
-        },
-      );
+      final user = _auth.currentUser;
+      if (user == null) {
+        print('No user logged in to send email verification');
+        return false;
+      }
+      await user.sendEmailVerification();
+      print('✅ Email verification sent to ${user.email}');
       return true;
     } catch (e) {
-      print('Error sending OTP: $e');
+      print('❌ Error sending email verification: $e');
       return false;
     }
   }
 
-  // Verify the OTP entered by the user
-  static Future<bool> verifyOtp(String enteredOtp) async {
-    if (_verificationId == null) {
-      print('No verification ID found - OTP was not sent successfully');
-      return false;
-    }
+  // Check if the user's email is verified (call this periodically)
+  static Future<bool> checkEmailVerified() async {
     try {
-      print('Verifying OTP with verification ID: $_verificationId');
-      PhoneAuthCredential credential = PhoneAuthProvider.credential(
-        verificationId: _verificationId!,
-        smsCode: enteredOtp,
-      );
-      await _auth.signInWithCredential(credential);
-      print('OTP verified successfully');
-      return true;
+      final user = _auth.currentUser;
+      if (user == null) {
+        return false;
+      }
+      // Reload user to get latest verification status from Firebase
+      await user.reload();
+      // Refresh the currentUser instance
+      final refreshedUser = _auth.currentUser;
+      if (refreshedUser == null) {
+        return false;
+      }
+      return refreshedUser.emailVerified;
     } catch (e) {
-      print('OTP verification error: $e');
+      print('❌ Error checking email verification: $e');
       return false;
     }
   }
 
-  // Resend OTP
-  static Future<bool> resendOtp(String phoneNumber) async {
+  // Resend email verification link
+  static Future<bool> resendEmailVerification() async {
     try {
-      print('Resending OTP to phone number: $phoneNumber');
-      await _auth.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        timeout: const Duration(seconds: 60),
-        verificationCompleted: (_) {
-          print('Verification auto-completed on resend');
-        },
-        verificationFailed: (e) {
-          print('Resend verification failed: ${e.message}');
-          throw Exception(e.message);
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          print('Resend code sent successfully');
-          _verificationId = verificationId;
-          _resendToken = resendToken;
-        },
-        codeAutoRetrievalTimeout: (_) {
-          print('Resend auto-retrieval timeout');
-        },
-        forceResendingToken: _resendToken,
-      );
+      final user = _auth.currentUser;
+      if (user == null) {
+        print('No user logged in to resend email verification');
+        return false;
+      }
+      await user.sendEmailVerification();
+      print('✅ Email verification resent to ${user.email}');
       return true;
     } catch (e) {
-      print('Error resending OTP: $e');
+      print('❌ Error resending email verification: $e');
       return false;
     }
   }
