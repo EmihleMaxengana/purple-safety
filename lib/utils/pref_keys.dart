@@ -11,4 +11,5 @@ class PrefKeys {
   static const String requireReauth = 'require_reauth';
   static const String usePinAuth = 'usePinAuth';
   static const String usePasswordAuth = 'usePasswordAuth';
+  static const String discreetMode = 'discreetMode';
 }
