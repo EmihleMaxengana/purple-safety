@@ -4,7 +4,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/trip/trip_sharing_service.dart';
-import 'package:purple_safety/settings/next_of_kin_modal.dart';
+import 'package:purple_safety/models/incident_model.dart';
+import 'package:purple_safety/emergency/emergency_manager.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
@@ -23,7 +24,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Set<Marker> _tripMarkers = {};
   Set<Polyline> _tripPaths = {};
   Set<Marker> _sosMarkers = {};
-  Set<Marker> _dangerZones = {};
+  Set<Polygon> _dangerZones = {};
 
   // Multi‑trip tracking
   List<String> _followedTripIds = [];
@@ -32,6 +33,11 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Map<String, Color> _tripColors = {};
   bool _isLoading = false;
   bool _panelExpanded = false;
+
+  // Pop-up message
+  String? _popupMessage;
+  Color? _popupColor;
+  Timer? _popupTimer;
 
   // Predefined colours for multiple trips
   final List<Color> _colorPalette = [
@@ -51,31 +57,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
   void initState() {
     super.initState();
     _listenToSOSEvents();
-    _convertPolygonToMarker();
     _loadFollowedTrips();
+    _loadDangerZones();
   }
 
-  void _convertPolygonToMarker() {
-    if (widget.dangerZones == null) return;
-    Set<Marker> dZ = widget.dangerZones!.expand((polygon) {
-      return polygon.points.asMap().entries.map((entry) {
-        final index = entry.key;
-        final point = entry.value;
-        return Marker(
-          markerId: MarkerId('${polygon.polygonId.value}_$index'),
-          position: point,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'Danger Zone'),
-        );
-      });
-    }).toSet();
-
-    setState(() => _dangerZones = dZ);
-  }
-
-  // -------------------------------
-  // SOS events
-  // -------------------------------
   void _listenToSOSEvents() {
     FirebaseFirestore.instance
         .collection('active_sos_events')
@@ -102,9 +87,12 @@ class _FullMapScreenState extends State<FullMapScreen> {
     });
   }
 
-  // -------------------------------
-  // Persistence
-  // -------------------------------
+  void _loadDangerZones() {
+    if (widget.dangerZones != null) {
+      _dangerZones = widget.dangerZones!;
+    }
+  }
+
   Future<void> _loadFollowedTrips() async {
     final prefs = await SharedPreferences.getInstance();
     final List<String>? saved = prefs.getStringList('followedTrips');
@@ -129,14 +117,8 @@ class _FullMapScreenState extends State<FullMapScreen> {
     await prefs.setStringList('followedTrips', _followedTripIds);
   }
 
-  // -------------------------------
-  // Add / remove followed trips
-  // -------------------------------
   void _addFollowedTrip(String tripId) {
     if (_followedTripIds.contains(tripId)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Already following this trip')),
-      );
       return;
     }
     setState(() {
@@ -145,11 +127,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
     });
     _saveFollowedTrips();
     _listenToSpecificTrip(tripId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Now following trip. Waiting for location data...'),
-      ),
-    );
   }
 
   void _removeFollowedTrip(String tripId, {bool showNotification = true}) {
@@ -167,20 +144,15 @@ class _FullMapScreenState extends State<FullMapScreen> {
     _saveFollowedTrips();
 
     if (showNotification) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Stopped following trip: ${tripId.substring(0, 8)}...'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      // Silent removal – no pop-up
     }
   }
 
-  // -------------------------------
-  // Listen to a single trip
-  // -------------------------------
   void _listenToSpecificTrip(String tripId) {
     _tripSubscriptions[tripId]?.cancel();
+
+    bool _notifiedStart = false;
+    bool _notifiedEnd = false;
 
     _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen(
       (snapshot) {
@@ -208,41 +180,36 @@ class _FullMapScreenState extends State<FullMapScreen> {
               }
               _updateMarkersAndPolylines();
             });
-            if (data['userName'] != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${data['userName']} is now sharing their trip!'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
-                ),
+            // Show pop-up ONCE when person starts sharing
+            if (!_notifiedStart) {
+              _notifiedStart = true;
+              _notifiedEnd = false;
+              final userName = data['userName'] ?? 'Someone';
+              _showPopupMessage(
+                '$userName is now sharing their trip!',
+                Colors.green,
               );
             }
           } else if (status == 'ended' || status == 'expired') {
             final userName = data['userName'] ?? 'Someone';
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('$userName has stopped sharing their trip.'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
+            // Show pop-up ONCE when person stops sharing
+            if (!_notifiedEnd) {
+              _notifiedEnd = true;
+              _notifiedStart = false;
+              _showPopupMessage(
+                '$userName has stopped sharing their trip.',
+                Colors.orange,
+              );
+            }
             _removeFollowedTrip(tripId, showNotification: false);
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Trip no longer exists (may have expired).'),
-            ),
-          );
           _removeFollowedTrip(tripId, showNotification: false);
         }
       },
     );
   }
 
-  // -------------------------------
-  // Update markers and polylines for all active trips
-  // -------------------------------
   void _updateMarkersAndPolylines() {
     Set<Marker> newMarkers = {};
     Set<Polyline> newPolylines = {};
@@ -317,9 +284,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
     }
   }
 
-  // -------------------------------
-  // UI: Enter Trip ID manually
-  // -------------------------------
   void _enterTripIdManually() async {
     final controller = TextEditingController();
     final result = await showDialog<String>(
@@ -354,9 +318,26 @@ class _FullMapScreenState extends State<FullMapScreen> {
     }
   }
 
-  // -------------------------------
-  // Build: Map + floating panel (compact)
-  // -------------------------------
+  // ============================================================
+  // POP-UP MESSAGE
+  // ============================================================
+  void _showPopupMessage(String message, Color color) {
+    setState(() {
+      _popupMessage = message;
+      _popupColor = color;
+    });
+
+    _popupTimer?.cancel();
+    _popupTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) {
+        setState(() {
+          _popupMessage = null;
+          _popupColor = null;
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -403,15 +384,14 @@ class _FullMapScreenState extends State<FullMapScreen> {
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: true,
-            markers: {..._tripMarkers, ..._sosMarkers, ..._dangerZones},
+            markers: {..._tripMarkers, ..._sosMarkers},
             polylines: _tripPaths,
-            polygons: widget.dangerZones ?? {},
+            polygons: _dangerZones,
           ),
           if (_isLoading)
             const Center(
               child: CircularProgressIndicator(color: Colors.purple),
             ),
-          // Compact following panel - doesn't obscure map controls
           Positioned(
             bottom: 10,
             left: 10,
@@ -460,7 +440,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
               ),
             ),
           ),
-          // Expanded panel (appears above the compact bar when tapped)
           if (_panelExpanded)
             Positioned(
               bottom: 50,
@@ -558,6 +537,48 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 ),
               ),
             ),
+          if (_popupMessage != null)
+            Positioned(
+              top: 50,
+              left: 16,
+              right: 16,
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(12),
+                color: _popupColor ?? Colors.grey,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _popupMessage!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          _popupTimer?.cancel();
+                          setState(() {
+                            _popupMessage = null;
+                            _popupColor = null;
+                          });
+                        },
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -569,6 +590,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
       sub.cancel();
     }
     _mapController?.dispose();
+    _popupTimer?.cancel();
     super.dispose();
   }
 }

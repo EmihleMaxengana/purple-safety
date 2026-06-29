@@ -24,6 +24,8 @@ import 'package:purple_safety/messaging/dm_service.dart';
 import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
 
+// ... (the Contact class is now in models/incident_model.dart, so remove it from here)
+
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToEmergency;
   final VoidCallback? onNavigateToTools;
@@ -375,14 +377,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (_currentPosition == null) {
-      // No location – still try to send with default? We'll just return.
-      // In a real scenario you might show a silent error but we removed all popups.
+      // No location – we can't send SOS
       return;
     }
 
     final lat = _currentPosition!.latitude;
     final lng = _currentPosition!.longitude;
 
+    // Try Firebase first
     try {
       await SOSAlertService.sendCommunitySOSAlert(
         userId: userId,
@@ -391,9 +393,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude: lng,
       );
     } catch (e) {
-      // If Firebase fails, try SMS fallback to trusted contacts
+      // If Firebase fails, try SMS fallback
       await _sendSMSFallback(userName, lat, lng);
     }
+
+    // ✅ ACTIVATE EMERGENCY MODE SO "I'M SAFE" BUTTON APPEARS
+    EmergencyManager().activateEmergencyMode(context, contacts: _contacts);
 
     // Navigate to Tools page
     widget.onNavigateToTools?.call();
