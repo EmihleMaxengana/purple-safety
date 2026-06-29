@@ -3,14 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/authentication/login_screen.dart';
 import 'package:purple_safety/navigation/main_screen.dart';
 import 'package:purple_safety/authentication/reauth_screen.dart';
-import 'package:purple_safety/services/incident_service.dart';
-import 'package:purple_safety/services/auth_service.dart';
-import 'package:purple_safety/utils/pref_keys.dart';
-import 'package:purple_safety/safety/discreet_calculator_screen.dart';
+import 'package:purple_safety/incidents/incident_service.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +15,7 @@ void main() async {
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+  // Start periodic cleanup of expired incidents
   final incidentService = IncidentService();
   incidentService.deleteExpiredIncidents();
   Timer.periodic(const Duration(hours: 1), (timer) {
@@ -38,14 +36,12 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
     with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   bool _needsReauth = false;
-  bool _isDiscreetMode = false;
-  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _checkDiscreetMode();
+    // Check if reauth was requested from previous run
     _checkReauthRequired();
   }
 
@@ -55,17 +51,9 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
     super.dispose();
   }
 
-  Future<void> _checkDiscreetMode() async {
-    final prefs = await SharedPreferences.getInstance();
-    final discreetMode = prefs.getBool(PrefKeys.discreetMode) ?? false;
-    setState(() {
-      _isDiscreetMode = discreetMode;
-      _isLoading = false;
-    });
-  }
-
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // When the app is backgrounded or detached, require re-auth on next resume.
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
@@ -86,14 +74,6 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const MaterialApp(
-        home: Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-      );
-    }
-
     return MaterialApp(
       title: 'Purple Safety',
       debugShowCheckedModeBanner: false,
@@ -108,11 +88,6 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
             if (user == null) {
               _needsReauth = false;
               return const LoginScreen();
-            }
-
-            // ✅ Discreet Calculator Mode
-            if (_isDiscreetMode) {
-              return const DiscreetCalculatorScreen();
             }
 
             if (_needsReauth) {
@@ -136,3 +111,6 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
     );
   }
 }
+
+
+//reminder:have to code it fully too accomodate the new discrete mode/screen 

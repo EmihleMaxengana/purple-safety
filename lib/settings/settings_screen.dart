@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io';
+import 'package:purple_safety/utils/pref_keys.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -69,7 +70,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Authenticate to update your profile',
     );
     if (!authenticated) {
-      // Silent fail – no snackbar
       return;
     }
 
@@ -196,7 +196,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Authenticate to save next of kin changes',
     );
     if (!authenticated) {
-      // Silent fail
       return;
     }
 
@@ -278,15 +277,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (newPasswordController.text != confirmController.text) {
-                // Silent fail
                 return;
               }
               if (newPasswordController.text.length < 6) {
-                // Silent fail
                 return;
               }
               if (currentPasswordController.text.isEmpty) {
-                // Silent fail
                 return;
               }
 
@@ -520,21 +516,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ============================================================
-  // DELETE ACCOUNT - WITH BIOMETRIC / PIN AUTHENTICATION
+  // DELETE ACCOUNT
   // ============================================================
   Future<void> _confirmDeleteAccount() async {
-    // Step 1: Authenticate with Biometric or PIN
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Authenticate to delete your account',
     );
 
     if (!authenticated) {
-      // Silent fail
       return;
     }
 
-    // Step 2: Show final confirmation dialog
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -600,7 +593,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user != null && user.email != null) {
-        // Show loading dialog
         if (mounted) {
           showDialog(
             context: context,
@@ -621,13 +613,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
 
-        // Delete Firestore data
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .delete();
 
-        // Delete contacts subcollection
         final contactsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -641,7 +631,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await batch.commit();
         }
 
-        // Delete alerts subcollection
         final alertsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -655,11 +644,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           await alertsBatch.commit();
         }
 
-        // Clear SharedPreferences
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
 
-        // Delete Firebase Auth user
         await user.delete();
 
         if (mounted) {
@@ -948,6 +935,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // ============================================================
+  // DISCREET MODE SECTION
+  // ============================================================
+  Widget _buildDiscreetModeSection() {
+    bool _discreetMode = false;
+
+    return StatefulBuilder(
+      builder: (context, setState) {
+        Future<void> _loadDiscreetSetting() async {
+          final prefs = await SharedPreferences.getInstance();
+          setState(() {
+            _discreetMode = prefs.getBool(PrefKeys.discreetMode) ?? false;
+          });
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _loadDiscreetSetting();
+        });
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildSectionTitle('Discreet Mode'),
+            const SizedBox(height: 8),
+            Card(
+              color: const Color(0xFF1a0f2e),
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    SwitchListTile(
+                      title: const Text(
+                        'Enable Discreet Calculator Mode',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        _discreetMode
+                            ? 'App will open as a calculator. Press = to trigger SOS, 5 to go to Tools, C to exit to app.'
+                            : 'App opens normally as Purple Safety',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      value: _discreetMode,
+                      onChanged: (value) async {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setBool(PrefKeys.discreetMode, value);
+                        setState(() {
+                          _discreetMode = value;
+                        });
+                      },
+                      activeColor: const Color(0xFF6A1B9A),
+                    ),
+                    if (_discreetMode) ...[
+                      const Divider(color: Colors.white24, height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.orange),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Calculator SOS trigger:\n1. Press numbers & operators\n2. Press = to trigger SOS\n3. Press 5 to go to Tools page\n4. Press C to exit to app',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1035,6 +1115,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
 
                 const SizedBox(height: 24),
+
+                // Discreet Mode Section
+                _buildDiscreetModeSection(),
 
                 // Account Actions Row
                 _buildSectionTitle('Account Actions'),
