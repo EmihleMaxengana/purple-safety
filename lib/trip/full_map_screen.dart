@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/map.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/trip/trip_sharing_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
@@ -12,7 +13,7 @@ class FullMapScreen extends StatefulWidget {
   final Set<Polygon>? dangerZones;
 
   const FullMapScreen({Key? key, this.initialTripId, this.dangerZones})
-      : super(key: key);
+    : super(key: key);
 
   @override
   State<FullMapScreen> createState() => _FullMapScreenState();
@@ -67,24 +68,26 @@ class _FullMapScreenState extends State<FullMapScreen> {
         .where('status', isEqualTo: 'active')
         .snapshots()
         .listen((snapshot) {
-      final sosMarkers = <Marker>{};
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        final marker = Marker(
-          markerId: MarkerId('sos_${doc.id}'),
-          position: LatLng(data['latitude'], data['longitude']),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: InfoWindow(
-            title: 'SOS EMERGENCY',
-            snippet: '${data['userName']} needs immediate help!',
-          ),
-        );
-        sosMarkers.add(marker);
-      }
-      setState(() {
-        _sosMarkers = sosMarkers;
-      });
-    });
+          final sosMarkers = <Marker>{};
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final marker = Marker(
+              markerId: MarkerId('sos_${doc.id}'),
+              position: LatLng(data['latitude'], data['longitude']),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueRed,
+              ),
+              infoWindow: InfoWindow(
+                title: 'SOS EMERGENCY',
+                snippet: '${data['userName']} needs immediate help!',
+              ),
+            );
+            sosMarkers.add(marker);
+          }
+          setState(() {
+            _sosMarkers = sosMarkers;
+          });
+        });
   }
 
   void _loadDangerZones() {
@@ -154,60 +157,60 @@ class _FullMapScreenState extends State<FullMapScreen> {
     bool _notifiedStart = false;
     bool _notifiedEnd = false;
 
-    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen(
-      (snapshot) {
-        if (!mounted) return;
-        if (snapshot.exists) {
-          final data = snapshot.data() as Map<String, dynamic>;
-          final status = data['status'] ?? 'unknown';
+    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((
+      snapshot,
+    ) {
+      if (!mounted) return;
+      if (snapshot.exists) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        final status = data['status'] ?? 'unknown';
 
-          if (status == 'active') {
-            final tripData = {
-              'tripId': tripId,
-              'userId': data['userId'],
-              'userName': data['userName'] ?? 'Someone',
-              'latitude': data['currentLatitude'],
-              'longitude': data['currentLongitude'],
-              'lastUpdate': data['lastUpdate'],
-              'locationHistory': data['locationHistory'] ?? [],
-              'status': status,
-            };
-            setState(() {
-              _tripsData[tripId] = tripData;
-              if (!_tripColors.containsKey(tripId)) {
-                final index = _followedTripIds.indexOf(tripId);
-                _tripColors[tripId] = _colorPalette[index % _colorPalette.length];
-              }
-              _updateMarkersAndPolylines();
-            });
-            // Show pop-up ONCE when person starts sharing
-            if (!_notifiedStart) {
-              _notifiedStart = true;
-              _notifiedEnd = false;
-              final userName = data['userName'] ?? 'Someone';
-              _showPopupMessage(
-                '$userName is now sharing their trip!',
-                Colors.green,
-              );
+        if (status == 'active') {
+          final tripData = {
+            'tripId': tripId,
+            'userId': data['userId'],
+            'userName': data['userName'] ?? 'Someone',
+            'latitude': data['currentLatitude'],
+            'longitude': data['currentLongitude'],
+            'lastUpdate': data['lastUpdate'],
+            'locationHistory': data['locationHistory'] ?? [],
+            'status': status,
+          };
+          setState(() {
+            _tripsData[tripId] = tripData;
+            if (!_tripColors.containsKey(tripId)) {
+              final index = _followedTripIds.indexOf(tripId);
+              _tripColors[tripId] = _colorPalette[index % _colorPalette.length];
             }
-          } else if (status == 'ended' || status == 'expired') {
+            _updateMarkersAndPolylines();
+          });
+          // Show pop-up ONCE when person starts sharing
+          if (!_notifiedStart) {
+            _notifiedStart = true;
+            _notifiedEnd = false;
             final userName = data['userName'] ?? 'Someone';
-            // Show pop-up ONCE when person stops sharing
-            if (!_notifiedEnd) {
-              _notifiedEnd = true;
-              _notifiedStart = false;
-              _showPopupMessage(
-                '$userName has stopped sharing their trip.',
-                Colors.orange,
-              );
-            }
-            _removeFollowedTrip(tripId, showNotification: false);
+            _showPopupMessage(
+              '$userName is now sharing their trip!',
+              Colors.green,
+            );
           }
-        } else {
+        } else if (status == 'ended' || status == 'expired') {
+          final userName = data['userName'] ?? 'Someone';
+          // Show pop-up ONCE when person stops sharing
+          if (!_notifiedEnd) {
+            _notifiedEnd = true;
+            _notifiedStart = false;
+            _showPopupMessage(
+              '$userName has stopped sharing their trip.',
+              Colors.orange,
+            );
+          }
           _removeFollowedTrip(tripId, showNotification: false);
         }
-      },
-    );
+      } else {
+        _removeFollowedTrip(tripId, showNotification: false);
+      }
+    });
   }
 
   void _updateMarkersAndPolylines() {
@@ -375,15 +378,25 @@ class _FullMapScreenState extends State<FullMapScreen> {
       ),
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _initialPosition,
-              zoom: 5.0,
-            ),
-            onMapCreated: (controller) => _mapController = controller,
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: true,
+          // GoogleMap(
+          //   initialCameraPosition: CameraPosition(
+          //     target: _initialPosition,
+          //     zoom: 5.0,
+          //   ),
+          //   onMapCreated: (controller) => _mapController = controller,
+          //   myLocationEnabled: true,
+          //   myLocationButtonEnabled: true,
+          //   zoomControlsEnabled: true,
+          //   markers: {..._tripMarkers, ..._sosMarkers},
+          //   polylines: _tripPaths,
+          //   polygons: _dangerZones,
+          // ),
+          MapWidget(
+            currentPosition: _initialPosition,
+            onMapCreate: (controller) => _mapController = controller,
+            myLocation: true,
+            myLocationButton: true,
+            zoomControls: true,
             markers: {..._tripMarkers, ..._sosMarkers},
             polylines: _tripPaths,
             polygons: _dangerZones,
@@ -406,7 +419,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
                   onTap: () => setState(() => _panelExpanded = !_panelExpanded),
                   borderRadius: BorderRadius.circular(30),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     constraints: const BoxConstraints(maxWidth: 200),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -455,10 +471,17 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 child: Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: [
-                          const Icon(Icons.people_alt, color: Colors.white70, size: 20),
+                          const Icon(
+                            Icons.people_alt,
+                            color: Colors.white70,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Following (${_tripsData.length})',
@@ -469,8 +492,13 @@ class _FullMapScreenState extends State<FullMapScreen> {
                           ),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                            onPressed: () => setState(() => _panelExpanded = false),
+                            icon: const Icon(
+                              Icons.close,
+                              color: Colors.white70,
+                              size: 20,
+                            ),
+                            onPressed: () =>
+                                setState(() => _panelExpanded = false),
                           ),
                         ],
                       ),
@@ -481,24 +509,32 @@ class _FullMapScreenState extends State<FullMapScreen> {
                           ? const Center(
                               child: Text(
                                 'No trips followed. Tap QR icon to follow.',
-                                style: TextStyle(color: Colors.white54, fontSize: 12),
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               itemCount: _tripsData.length,
                               itemBuilder: (context, index) {
                                 final tripId = _tripsData.keys.elementAt(index);
                                 final data = _tripsData[tripId]!;
-                                final color = _tripColors[tripId] ?? Colors.grey;
-                                final lastUpdate = data['lastUpdate'] as Timestamp?;
+                                final color =
+                                    _tripColors[tripId] ?? Colors.grey;
+                                final lastUpdate =
+                                    data['lastUpdate'] as Timestamp?;
                                 String statusText = 'Active now';
                                 if (lastUpdate != null) {
                                   final minutesAgo = DateTime.now()
                                       .difference(lastUpdate.toDate())
                                       .inMinutes;
                                   if (minutesAgo > 5) {
-                                    statusText = 'Offline ($minutesAgo min ago)';
+                                    statusText =
+                                        'Offline ($minutesAgo min ago)';
                                   } else if (minutesAgo > 1) {
                                     statusText = '$minutesAgo min ago';
                                   }
@@ -518,15 +554,26 @@ class _FullMapScreenState extends State<FullMapScreen> {
                                   ),
                                   title: Text(
                                     data['userName'],
-                                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                    ),
                                   ),
                                   subtitle: Text(
                                     statusText,
-                                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 11,
+                                    ),
                                   ),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.red, size: 18),
-                                    onPressed: () => _removeFollowedTrip(tripId),
+                                    icon: const Icon(
+                                      Icons.close,
+                                      color: Colors.red,
+                                      size: 18,
+                                    ),
+                                    onPressed: () =>
+                                        _removeFollowedTrip(tripId),
                                   ),
                                   onTap: () => _zoomToTrip(tripId),
                                 );
@@ -547,7 +594,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 borderRadius: BorderRadius.circular(12),
                 color: _popupColor ?? Colors.grey,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
