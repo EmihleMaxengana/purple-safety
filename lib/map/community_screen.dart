@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,18 +21,18 @@ class CommunityScreen extends StatefulWidget {
 class _CommunityScreenState extends State<CommunityScreen> {
   final IncidentService _incidentService = IncidentService();
   String _selectedView = 'list';
-  
+
   // Map related
   GoogleMapController? _mapController;
   Set<Marker> _sosMarkers = {};
   Set<Marker> _incidentMarkers = {};
   bool _isMapReady = false;
   bool _mapLoadFailed = false;
-  
+
   // Active SOS events list
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
-  
+
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
   @override
@@ -64,31 +65,31 @@ class _CommunityScreenState extends State<CommunityScreen> {
         .where('status', isEqualTo: 'active')
         .snapshots()
         .listen((snapshot) {
-      setState(() {
-        _isLoadingSOS = false;
-        _activeSOSEvents = snapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'id': doc.id,
-            'userId': data['userId'],
-            'userName': data['userName'] ?? 'Someone',
-            'latitude': data['latitude'],
-            'longitude': data['longitude'],
-            'locationLink': data['locationLink'],
-            'timestamp': data['timestamp'],
-            'responderCount': data['responderCount'] ?? 0,
-          };
-        }).toList();
-        
-        _updateSOSMarkers();
-      });
-    });
+          setState(() {
+            _isLoadingSOS = false;
+            _activeSOSEvents = snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'userId': data['userId'],
+                'userName': data['userName'] ?? 'Someone',
+                'latitude': data['latitude'],
+                'longitude': data['longitude'],
+                'locationLink': data['locationLink'],
+                'timestamp': data['timestamp'],
+                'responderCount': data['responderCount'] ?? 0,
+              };
+            }).toList();
+
+            _updateSOSMarkers();
+          });
+        });
   }
-  
+
   void _updateSOSMarkers() {
     setState(() {
       _sosMarkers = {};
-      
+
       for (var event in _activeSOSEvents) {
         final markerId = MarkerId(event['id']);
         final marker = Marker(
@@ -97,14 +98,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
             title: '🚨 SOS ACTIVE!',
-            snippet: '${event['userName']} needs immediate help!\nTap to respond',
+            snippet:
+                '${event['userName']} needs immediate help!\nTap to respond',
           ),
           onTap: () => _showSOSResponderModal(event),
         );
         _sosMarkers.add(marker);
       }
-      
-      debugPrint('📍 Updated SOS markers: ${_sosMarkers.length} active SOS events');
+
+      debugPrint(
+        '📍 Updated SOS markers: ${_sosMarkers.length} active SOS events',
+      );
     });
   }
 
@@ -112,24 +116,28 @@ class _CommunityScreenState extends State<CommunityScreen> {
     _incidentService.getAllIncidents().listen((incidents) {
       setState(() {
         _incidentMarkers = {};
-        
+
         for (var incident in incidents) {
           if (incident.latitude != null && incident.longitude != null) {
             final markerId = MarkerId(incident.id);
-            
+
             final marker = Marker(
               markerId: markerId,
               position: LatLng(incident.latitude!, incident.longitude!),
-              icon: BitmapDescriptor.defaultMarkerWithHue(_getMarkerHue(incident.type)),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                _getMarkerHue(incident.type),
+              ),
               infoWindow: InfoWindow(
                 title: incident.title,
-                snippet: '${incident.type.toString().split('.').last}\nTap for details',
+                snippet:
+                    '${incident.type.toString().split('.').last}\nTap for details',
               ),
               onTap: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => IncidentDetailScreen(incident: incident),
+                    builder: (context) =>
+                        IncidentDetailScreen(incident: incident),
                   ),
                 );
               },
@@ -271,7 +279,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ),
     );
   }
-  
+
   Future<void> _respondToSOS(Map<String, dynamic> sosEvent) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -283,7 +291,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             .get();
         responderName = userDoc.data()?['name'] ?? 'A helper';
       }
-      
+
       await SOSAlertService.respondToSOS(
         sosEventId: sosEvent['id'],
         responderId: user?.uid ?? 'anonymous',
@@ -291,7 +299,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
         responderLatitude: 0,
         responderLongitude: 0,
       );
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -304,9 +312,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
       debugPrint('Error responding to SOS: $e');
     }
   }
-  
+
   void _openNavigationToSOS(Map<String, dynamic> sosEvent) async {
-    final url = 'https://www.google.com/maps/dir//${sosEvent['latitude']},${sosEvent['longitude']}';
+    final url =
+        'https://www.google.com/maps/dir//${sosEvent['latitude']},${sosEvent['longitude']}';
     final Uri uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -333,7 +342,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
             if (_activeSOSEvents.isNotEmpty)
               Container(
                 margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(20),
@@ -344,7 +356,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     const SizedBox(width: 4),
                     Text(
                       '${_activeSOSEvents.length}',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -356,7 +371,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   _selectedView = _selectedView == 'list' ? 'map' : 'list';
                 });
               },
-              tooltip: _selectedView == 'list' ? 'Switch to Map View' : 'Switch to List View',
+              tooltip: _selectedView == 'list'
+                  ? 'Switch to Map View'
+                  : 'Switch to List View',
             ),
           ],
         ),
@@ -374,7 +391,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             decoration: BoxDecoration(
               color: Colors.red.withOpacity(0.2),
-              border: Border(bottom: BorderSide(color: Colors.red.withOpacity(0.3))),
+              border: Border(
+                bottom: BorderSide(color: Colors.red.withOpacity(0.3)),
+              ),
             ),
             child: Row(
               children: [
@@ -389,14 +408,17 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '${_activeSOSEvents.length} active SOS ${_activeSOSEvents.length == 1 ? 'alert' : 'alerts'} nearby',
-                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const Spacer(),
                 const Icon(Icons.warning, color: Colors.red, size: 16),
               ],
             ),
           ),
-        
+
         Expanded(
           child: Stack(
             children: [
@@ -426,35 +448,50 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                 )
               else
-                GoogleMap(
-                  onMapCreated: (controller) {
+                // GoogleMap(
+                //   onMapCreated: (controller) {
+                //     _mapController = controller;
+                //     setState(() => _isMapReady = true);
+                //   },
+                //   initialCameraPosition: const CameraPosition(
+                //     target: _saCenter,
+                //     zoom: 5.0,
+                //   ),
+                //   markers: {
+                //     ..._sosMarkers,
+                //     ..._incidentMarkers,
+                //   },
+                //   myLocationEnabled: true,
+                //   myLocationButtonEnabled: true,
+                //   zoomControlsEnabled: true,
+                //   compassEnabled: true,
+                // ),
+                MapWidget(
+                  onMapCreate: (controller) {
                     _mapController = controller;
                     setState(() => _isMapReady = true);
                   },
-                  initialCameraPosition: const CameraPosition(
-                    target: _saCenter,
-                    zoom: 5.0,
-                  ),
-                  markers: {
-                    ..._sosMarkers,
-                    ..._incidentMarkers,
-                  },
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                  zoomControlsEnabled: true,
-                  compassEnabled: true,
+                  currentPosition: _saCenter,
+                  markers: {..._sosMarkers, ..._incidentMarkers},
+                  myLocation: true,
+                  myLocationButton: true,
+                  zoomControls: true,
+                  compass: true,
                 ),
-              
+
               if (_isLoadingSOS && !_mapLoadFailed)
                 const Center(
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
-              
+
               Positioned(
                 bottom: 80,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.7),
                     borderRadius: BorderRadius.circular(8),
@@ -468,17 +505,14 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ],
     );
   }
-  
+
   Widget _buildLegendItem(Color color, String label) {
     return Row(
       children: [
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
         Text(
@@ -498,7 +532,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
               setState(() => _selectedView = 'map');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                  content: Text('Switch to Map View to see active SOS locations'),
+                  content: Text(
+                    'Switch to Map View to see active SOS locations',
+                  ),
                   backgroundColor: Colors.red,
                 ),
               );
@@ -508,7 +544,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               decoration: BoxDecoration(
                 color: Colors.red.withOpacity(0.2),
-                border: Border(bottom: BorderSide(color: Colors.red.withOpacity(0.3))),
+                border: Border(
+                  bottom: BorderSide(color: Colors.red.withOpacity(0.3)),
+                ),
               ),
               child: Row(
                 children: [
@@ -537,7 +575,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
           ),
-        
+
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
@@ -548,7 +586,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              
+
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return const Center(
                   child: Column(
@@ -569,8 +607,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                 );
               }
-              
-              final incidents = snapshot.data!.docs.map((doc) => Incident.fromFirestore(doc)).toList();
+
+              final incidents = snapshot.data!.docs
+                  .map((doc) => Incident.fromFirestore(doc))
+                  .toList();
               return ListView.builder(
                 padding: const EdgeInsets.all(8),
                 itemCount: incidents.length,
@@ -588,7 +628,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   Widget _buildIncidentCard(Incident incident) {
     Color typeColor = _getTypeColor(incident.type);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       color: const Color(0xFF1a0f2e),
@@ -614,7 +654,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: typeColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
@@ -649,7 +692,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                 style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
               const SizedBox(height: 8),
-              if (incident.type == IncidentType.missingPerson && incident.missingPersonName != null)
+              if (incident.type == IncidentType.missingPerson &&
+                  incident.missingPersonName != null)
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -662,11 +706,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.person_search, color: Colors.orange, size: 16),
+                          const Icon(
+                            Icons.person_search,
+                            color: Colors.orange,
+                            size: 16,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'MISSING: ${incident.missingPersonName}',
-                            style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.orange,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -675,7 +727,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
                             'Age: ${incident.missingPersonAge}',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                       if (incident.lastSeenLocation != null)
@@ -683,7 +738,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
                             'Last seen: ${incident.lastSeenLocation}',
-                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
                           ),
                         ),
                     ],
@@ -692,12 +750,19 @@ class _CommunityScreenState extends State<CommunityScreen> {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(Icons.location_on, color: Colors.white54, size: 12),
+                  const Icon(
+                    Icons.location_on,
+                    color: Colors.white54,
+                    size: 12,
+                  ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       incident.location,
-                      style: const TextStyle(color: Colors.white54, fontSize: 11),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 ],
@@ -708,7 +773,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   const Icon(Icons.person, color: Colors.white54, size: 12),
                   const SizedBox(width: 4),
                   Text(
-                    incident.isAnonymous ? 'Anonymous' : (incident.userName ?? 'User'),
+                    incident.isAnonymous
+                        ? 'Anonymous'
+                        : (incident.userName ?? 'User'),
                     style: const TextStyle(color: Colors.white54, fontSize: 11),
                   ),
                 ],
@@ -723,7 +790,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => IncidentDetailScreen(incident: incident),
+                          builder: (context) =>
+                              IncidentDetailScreen(incident: incident),
                         ),
                       );
                     },
@@ -803,7 +871,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
   }
 
   Future<void> _shareIncident(Incident incident) async {
-    final message = '''
+    final message =
+        '''
 🚨 ${incident.title}
 
 ${incident.description}
@@ -815,10 +884,10 @@ ${incident.description}
 ${incident.type == IncidentType.missingPerson ? '🔍 MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
 Please share to help spread awareness.
 ''';
-    
+
     await Share.share(message);
     await _incidentService.shareIncident(incident.id);
-    
+
     setState(() {});
   }
 }

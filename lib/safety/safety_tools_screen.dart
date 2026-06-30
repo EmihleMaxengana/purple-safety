@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
+import 'package:purple_safety/map.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
@@ -225,7 +226,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   // ============================================================
   // GLOBAL SAFE ALERT - Sends to ALL users EXCEPT sender
   // ============================================================
-  Future<void> _sendGlobalSafeAlert(String userName, String? currentUserId) async {
+  Future<void> _sendGlobalSafeAlert(
+    String userName,
+    String? currentUserId,
+  ) async {
     try {
       final locationLink = _currentPosition != null
           ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
@@ -342,10 +346,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                   ),
                   child: const Text(
                     'OK',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -479,8 +480,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                   Expanded(child: _buildCallEmergencyButton()),
                   const SizedBox(width: 12),
                   // I'M SAFE BUTTON - Only visible when SOS is active
-                  if (_isEmergencyActive)
-                    Expanded(child: _buildImSafeButton()),
+                  if (_isEmergencyActive) Expanded(child: _buildImSafeButton()),
                 ],
               ),
               const SizedBox(height: 40),
@@ -586,7 +586,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               _buildMediaButton(
                 icon: _isRecordingAudio ? Icons.stop : Icons.mic,
                 label: _isRecordingAudio ? 'Stop Audio' : 'Record Audio',
-                onTap: _isRecordingAudio ? _stopAudioRecording : _startAudioRecording,
+                onTap: _isRecordingAudio
+                    ? _stopAudioRecording
+                    : _startAudioRecording,
                 color: _isRecordingAudio ? Colors.red : Colors.green,
               ),
               const SizedBox(height: 12),
@@ -698,15 +700,31 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         child: Stack(
           children: [
             if (_locationEnabled && _currentPosition != null)
-              GoogleMap(
-                onMapCreated: (controller) => _mapController = controller,
-                initialCameraPosition: CameraPosition(
-                  target: _currentPosition!,
-                  zoom: 15,
-                ),
-                myLocationEnabled: true,
-                myLocationButtonEnabled: false,
-                zoomControlsEnabled: false,
+              // GoogleMap(
+              //   onMapCreated: (controller) => _mapController = controller,
+              //   initialCameraPosition: CameraPosition(
+              //     target: _currentPosition!,
+              //     zoom: 15,
+              //   ),
+              //   myLocationEnabled: true,
+              //   myLocationButtonEnabled: false,
+              //   zoomControlsEnabled: false,
+              //   markers: {
+              //     Marker(
+              //       markerId: const MarkerId('current'),
+              //       position: _currentPosition!,
+              //       icon: BitmapDescriptor.defaultMarkerWithHue(
+              //         BitmapDescriptor.hueViolet,
+              //       ),
+              //     ),
+              //   },
+              // )
+              MapWidget(
+                onMapCreate: (controller) => _mapController = controller,
+                currentPosition: _currentPosition,
+                myLocation: true,
+                myLocationButton: false,
+                zoomControls: false,
                 markers: {
                   Marker(
                     markerId: const MarkerId('current'),

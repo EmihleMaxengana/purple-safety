@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -756,9 +757,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         child: Center(
                           child: Text(
-                            _isCountdownActive
-                                ? '$_sosCountdown'
-                                : 'SOS',
+                            _isCountdownActive ? '$_sosCountdown' : 'SOS',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 28,
@@ -863,12 +862,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   scrollDirection: Axis.horizontal,
                   children: [
                     ..._contacts.map(
-                      (c) => _buildContact(
-                        c.initials,
-                        c.name,
-                        c.color,
-                        c.active,
-                      ),
+                      (c) =>
+                          _buildContact(c.initials, c.name, c.color, c.active),
                     ),
                     if (!isMaxContacts) _buildAddContact(),
                   ],
@@ -932,14 +927,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!_locationEnabled) {
       return Stack(
         children: [
-          GoogleMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _defaultPosition,
-              zoom: 5.5,
-            ),
-            myLocationEnabled: false,
-            zoomControlsEnabled: false,
+          // GoogleMap(
+          //   onMapCreated: _onMapCreated,
+          //   initialCameraPosition: CameraPosition(
+          //     target: _defaultPosition,
+          //     zoom: 5.5,
+          //   ),
+          //   myLocationEnabled: false,
+          //   zoomControlsEnabled: false,
+          // ),
+          MapWidget(
+            onMapCreate: _onMapCreated,
+            currentPosition: _defaultPosition,
+            myLocation: false,
+            zoomControls: false,
           ),
           Center(
             child: Container(
@@ -959,25 +960,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (!hasLocation) {
-      return GoogleMap(
-        onMapCreated: _onMapCreated,
-        initialCameraPosition: CameraPosition(
-          target: _defaultPosition,
-          zoom: 5.5,
-        ),
-        myLocationEnabled: true,
-        myLocationButtonEnabled: false,
-        zoomControlsEnabled: false,
+      // return GoogleMap(
+      //   onMapCreated: _onMapCreated,
+      //   initialCameraPosition: CameraPosition(
+      //     target: _defaultPosition,
+      //     zoom: 5.5,
+      //   ),
+      //   myLocationEnabled: true,
+      //   myLocationButtonEnabled: false,
+      //   zoomControlsEnabled: false,
+      //   polygons: _dangerZones,
+      // );
+
+      return MapWidget(
+        onMapCreate: _onMapCreated,
+        currentPosition: _defaultPosition,
+        myLocation: true,
+        myLocationButton: false,
+        zoomControls: false,
         polygons: _dangerZones,
       );
     }
 
-    return GoogleMap(
-      onMapCreated: _onMapCreated,
-      initialCameraPosition: CameraPosition(target: targetPosition, zoom: 14),
-      myLocationEnabled: true,
-      myLocationButtonEnabled: false,
-      zoomControlsEnabled: false,
+    // return GoogleMap(
+    //   onMapCreated: _onMapCreated,
+    //   initialCameraPosition: CameraPosition(target: targetPosition, zoom: 14),
+    //   myLocationEnabled: true,
+    //   myLocationButtonEnabled: false,
+    //   zoomControlsEnabled: false,
+    //   polygons: _dangerZones,
+    //   markers: {
+    //     Marker(
+    //       markerId: const MarkerId('current'),
+    //       position: targetPosition,
+    //       icon: BitmapDescriptor.defaultMarkerWithHue(
+    //         BitmapDescriptor.hueViolet,
+    //       ),
+    //     ),
+    //   },
+    // );
+
+    return MapWidget(
+      onMapCreate: _onMapCreated,
+      currentPosition: targetPosition,
+      myLocation: true,
+      myLocationButton: false,
+      zoomControls: false,
       polygons: _dangerZones,
       markers: {
         Marker(
