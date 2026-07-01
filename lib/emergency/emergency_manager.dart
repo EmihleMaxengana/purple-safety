@@ -24,6 +24,15 @@ class EmergencyManager {
     _currentContacts = contacts;
   }
 
+  // Use this to activate emergency mode WITHOUT pushing the Emergency screen
+  void setEmergencyActive(bool active) {
+    if (active != _emergencyActive) {
+      _emergencyActive = active;
+      _emergencyStatusController.add(active);
+    }
+  }
+
+  // Legacy method – pushes EmergencyModeScreen (used by the "Call Emergency" button)
   void activateEmergencyMode(BuildContext context, {List<Contact>? contacts}) {
     if (!_emergencyActive) {
       _emergencyActive = true;

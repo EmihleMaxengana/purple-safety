@@ -25,8 +25,6 @@ import 'package:purple_safety/messaging/dm_service.dart';
 import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
 
-// ... (the Contact class is now in models/incident_model.dart, so remove it from here)
-
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToEmergency;
   final VoidCallback? onNavigateToTools;
@@ -360,6 +358,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
+  // ============================================================
+  // FIXED: SOS triggers Tools page (not Emergency)
+  // ============================================================
   void _triggerSOS() async {
     // Reset countdown state
     setState(() {
@@ -398,10 +399,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       await _sendSMSFallback(userName, lat, lng);
     }
 
-    // ✅ ACTIVATE EMERGENCY MODE SO "I'M SAFE" BUTTON APPEARS
-    EmergencyManager().activateEmergencyMode(context, contacts: _contacts);
+    // ✅ SET EMERGENCY ACTIVE (NO SCREEN PUSH)
+    EmergencyManager().setEmergencyActive(true);
 
-    // Navigate to Tools page
+    // ✅ NAVIGATE DIRECTLY TO TOOLS PAGE (index 3)
     widget.onNavigateToTools?.call();
   }
 
@@ -927,15 +928,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!_locationEnabled) {
       return Stack(
         children: [
-          // GoogleMap(
-          //   onMapCreated: _onMapCreated,
-          //   initialCameraPosition: CameraPosition(
-          //     target: _defaultPosition,
-          //     zoom: 5.5,
-          //   ),
-          //   myLocationEnabled: false,
-          //   zoomControlsEnabled: false,
-          // ),
           MapWidget(
             onMapCreate: _onMapCreated,
             currentPosition: _defaultPosition,
@@ -960,18 +952,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     if (!hasLocation) {
-      // return GoogleMap(
-      //   onMapCreated: _onMapCreated,
-      //   initialCameraPosition: CameraPosition(
-      //     target: _defaultPosition,
-      //     zoom: 5.5,
-      //   ),
-      //   myLocationEnabled: true,
-      //   myLocationButtonEnabled: false,
-      //   zoomControlsEnabled: false,
-      //   polygons: _dangerZones,
-      // );
-
       return MapWidget(
         onMapCreate: _onMapCreated,
         currentPosition: _defaultPosition,
@@ -981,24 +961,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         polygons: _dangerZones,
       );
     }
-
-    // return GoogleMap(
-    //   onMapCreated: _onMapCreated,
-    //   initialCameraPosition: CameraPosition(target: targetPosition, zoom: 14),
-    //   myLocationEnabled: true,
-    //   myLocationButtonEnabled: false,
-    //   zoomControlsEnabled: false,
-    //   polygons: _dangerZones,
-    //   markers: {
-    //     Marker(
-    //       markerId: const MarkerId('current'),
-    //       position: targetPosition,
-    //       icon: BitmapDescriptor.defaultMarkerWithHue(
-    //         BitmapDescriptor.hueViolet,
-    //       ),
-    //     ),
-    //   },
-    // );
 
     return MapWidget(
       onMapCreate: _onMapCreated,

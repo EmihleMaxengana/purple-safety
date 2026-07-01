@@ -36,10 +36,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _emergencyManager.emergencyStatusStream.listen((isEmergency) {
       setState(() {
         _isEmergencyMode = isEmergency;
-        // ✅ REMOVED: Auto-switch to Emergency tab – user decides where to go
-        // if (isEmergency) {
-        //   _selectedIndex = 1;   // <-- this caused the automatic switch
-        // }
+        if (isEmergency) {
+          _selectedIndex = 1;
+        }
       });
     });
     _listenToAlerts();

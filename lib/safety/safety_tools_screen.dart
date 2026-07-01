@@ -465,8 +465,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_isEmergencyActive) _buildStatusIndicator(),
-              const SizedBox(height: 24),
+              // SOS STATUS INDICATOR REMOVED
+
               _buildRecordingControls(),
               const SizedBox(height: 16),
               _buildAutoShareToggle(),
@@ -487,66 +487,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatusIndicator() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.red.withOpacity(0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.sos, color: Colors.redAccent, size: 24),
-              SizedBox(width: 8),
-              Text(
-                '🚨 SOS ACTIVE',
-                style: TextStyle(
-                  color: Colors.redAccent,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _buildStatusRow(Icons.location_on, 'Location is being shared', true),
-          _buildStatusRow(Icons.videocam, 'Video recording', _isRecordingVideo),
-          _buildStatusRow(Icons.mic, 'Audio recording', _isRecordingAudio),
-          _buildStatusRow(Icons.live_tv, 'Live streaming', _isLiveStreaming),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusRow(IconData icon, String text, bool active) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, color: active ? Colors.green : Colors.grey, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              color: active ? Colors.white : Colors.white54,
-              fontSize: 14,
-            ),
-          ),
-          const Spacer(),
-          Icon(
-            active ? Icons.check_circle : Icons.cancel,
-            color: active ? Colors.green : Colors.red,
-            size: 16,
-          ),
-        ],
       ),
     );
   }
@@ -700,25 +640,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         child: Stack(
           children: [
             if (_locationEnabled && _currentPosition != null)
-              // GoogleMap(
-              //   onMapCreated: (controller) => _mapController = controller,
-              //   initialCameraPosition: CameraPosition(
-              //     target: _currentPosition!,
-              //     zoom: 15,
-              //   ),
-              //   myLocationEnabled: true,
-              //   myLocationButtonEnabled: false,
-              //   zoomControlsEnabled: false,
-              //   markers: {
-              //     Marker(
-              //       markerId: const MarkerId('current'),
-              //       position: _currentPosition!,
-              //       icon: BitmapDescriptor.defaultMarkerWithHue(
-              //         BitmapDescriptor.hueViolet,
-              //       ),
-              //     ),
-              //   },
-              // )
               MapWidget(
                 onMapCreate: (controller) => _mapController = controller,
                 currentPosition: _currentPosition,
