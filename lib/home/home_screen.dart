@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,7 +13,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/manage_contacts_modal.dart';
-import 'package:purple_safety/contacts/add_contact_screen.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/safety/biometric_services.dart';
@@ -24,6 +23,7 @@ import 'package:purple_safety/Invitations/invite_contact_screen.dart';
 import 'package:purple_safety/messaging/dm_service.dart';
 import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
+import 'package:purple_safety/map/map.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToEmergency;
@@ -51,12 +51,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _tripUpdateTimer;
 
   // Map state
-  GoogleMapController? _mapController;
+  MapController? _mapController;
   final location.Location _location = location.Location();
   bool _locationEnabled = false;
   bool _isLocationLoading = false;
-  LatLng? _currentPosition;
-  Set<Polygon> _dangerZones = {};
+  latlong.LatLng? _currentPosition;
+  List<Polygon> _dangerZones = [];
   StreamSubscription<location.LocationData>? _locationSubscription;
 
   // Map retry
@@ -71,130 +71,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   StreamSubscription? _contactsSubscription;
 
   // Default map position (center of South Africa)
-  static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
+  static const latlong.LatLng _defaultPosition = latlong.LatLng(-30.5595, 22.9375);
 
-  // Custom map style
-  final String _mapStyle = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#1d2c3d"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8ec3b0"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#1a3646"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "geometry.stroke",
-    "stylers": [
-      {
-        "color": "#4b2e6b"
-      },
-      {
-        "weight": 1.5
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#b9daa4"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#8ec3b0"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry.fill",
-    "stylers": [
-      {
-        "color": "#2a5c4a"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#3c2b4f"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#d4bfff"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#5a3e7a"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#f3d9ff"
-      }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#b9daa4"
-      }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry.fill",
-    "stylers": [
-      {
-        "color": "#2e5c8a"
-      }
-    ]
-  }
-]
-  ''';
   bool _hasCenteredMap = false;
 
   @override
@@ -259,16 +137,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _locationSubscription = _location.onLocationChanged.listen((event) {
       if (event.latitude != null && event.longitude != null) {
         setState(() {
-          _currentPosition = LatLng(event.latitude!, event.longitude!);
+          _currentPosition = latlong.LatLng(event.latitude!, event.longitude!);
           _isLocationLoading = false;
         });
         if (!_hasCenteredMap && _mapController != null) {
           _hasCenteredMap = true;
-          _mapController!.animateCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(target: _currentPosition!, zoom: 14),
-            ),
-          );
+          _mapController!.move(_currentPosition!, 14.0);
         }
 
         if (_isSharingTrip && TripSharingService.isSharing) {
@@ -293,27 +167,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupDangerZones() {
-    _dangerZones = {
+    _dangerZones = [
       Polygon(
-        polygonId: const PolygonId('johannesburg_zone'),
-        points: const [
-          LatLng(-26.1, 28.0),
-          LatLng(-26.2, 28.1),
-          LatLng(-26.3, 28.0),
-          LatLng(-26.2, 27.9),
-          LatLng(-26.1, 28.0),
+        points: [
+          latlong.LatLng(-26.1, 28.0),
+          latlong.LatLng(-26.2, 28.1),
+          latlong.LatLng(-26.3, 28.0),
+          latlong.LatLng(-26.2, 27.9),
+          latlong.LatLng(-26.1, 28.0),
         ],
-        fillColor: Colors.purple.withOpacity(0.3),
-        strokeColor: Colors.purple,
-        strokeWidth: 2,
-        geodesic: true,
+        color: Colors.purple.withOpacity(0.3),
+        borderColor: Colors.purple,
+        borderStrokeWidth: 2,
       ),
-    };
+    ];
   }
 
-  void _onMapCreated(GoogleMapController controller) {
+  void _onMapCreated(MapController controller) {
     _mapController = controller;
-    _mapController!.setMapStyle(_mapStyle);
     _mapLoadTimer?.cancel();
     setState(() {
       _mapLoadFailed = false;
@@ -321,11 +192,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (_currentPosition != null && !_hasCenteredMap) {
       _hasCenteredMap = true;
-      controller.moveCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 14),
-        ),
-      );
+      controller.move(_currentPosition!, 14.0);
     }
   }
 
@@ -358,11 +225,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  // ============================================================
-  // FIXED: SOS triggers Tools page (not Emergency)
-  // ============================================================
   void _triggerSOS() async {
-    // Reset countdown state
     setState(() {
       _isCountdownActive = false;
       _sosCountdown = 0;
@@ -378,15 +241,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       userName = userData?['name'] ?? 'A user';
     }
 
-    if (_currentPosition == null) {
-      // No location – we can't send SOS
-      return;
-    }
+    if (_currentPosition == null) return;
 
     final lat = _currentPosition!.latitude;
     final lng = _currentPosition!.longitude;
 
-    // Try Firebase first
     try {
       await SOSAlertService.sendCommunitySOSAlert(
         userId: userId,
@@ -395,14 +254,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         longitude: lng,
       );
     } catch (e) {
-      // If Firebase fails, try SMS fallback
       await _sendSMSFallback(userName, lat, lng);
     }
 
-    // ✅ SET EMERGENCY ACTIVE (NO SCREEN PUSH)
     EmergencyManager().setEmergencyActive(true);
-
-    // ✅ NAVIGATE DIRECTLY TO TOOLS PAGE (index 3)
     widget.onNavigateToTools?.call();
   }
 
@@ -437,7 +292,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FullMapScreen(dangerZones: _dangerZones),
+        builder: (context) => FullMapScreen(
+          dangerZones: _dangerZones,
+        ),
       ),
     );
   }
@@ -482,9 +339,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _handleTripSharing() async {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
-
     if (!_locationEnabled) return;
-
     if (_currentPosition == null) return;
 
     String userName = 'User';
@@ -509,7 +364,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _isSharingTrip = true;
         });
 
-        // Periodic location updates - 15 seconds
         _tripUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
           if (_currentPosition != null && TripSharingService.isSharing) {
             TripSharingService.updateLocation(
@@ -519,7 +373,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
         });
 
-        // Auto send trip ID to pre-selected DM recipients
         try {
           final recipients = await DmService.getSelectedRecipients();
           final userId = user.uid;
@@ -537,7 +390,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           debugPrint('Auto DM error: $e');
         }
 
-        // Show share modal (unchanged)
         _showTripShareDialog(tripId, userName);
       } catch (e) {
         debugPrint('Trip sharing error: $e');
@@ -879,8 +731,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMapContent() {
-    final LatLng targetPosition = _currentPosition ?? _defaultPosition;
-    final bool hasLocation = _currentPosition != null;
+    final targetPosition = _currentPosition ?? _defaultPosition;
+    final hasLocation = _currentPosition != null;
 
     if (_mapLoadFailed) {
       return Center(
@@ -929,9 +781,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       return Stack(
         children: [
           MapWidget(
-            onMapCreate: _onMapCreated,
             currentPosition: _defaultPosition,
+            onMapCreate: _onMapCreated,
             myLocation: false,
+            myLocationButton: false,
             zoomControls: false,
           ),
           Center(
@@ -953,8 +806,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (!hasLocation) {
       return MapWidget(
-        onMapCreate: _onMapCreated,
         currentPosition: _defaultPosition,
+        onMapCreate: _onMapCreated,
         myLocation: true,
         myLocationButton: false,
         zoomControls: false,
@@ -963,21 +816,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return MapWidget(
-      onMapCreate: _onMapCreated,
       currentPosition: targetPosition,
+      onMapCreate: _onMapCreated,
       myLocation: true,
       myLocationButton: false,
       zoomControls: false,
       polygons: _dangerZones,
-      markers: {
+      markers: [
         Marker(
-          markerId: const MarkerId('current'),
-          position: targetPosition,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueViolet,
-          ),
+          width: 80.0,
+          height: 80.0,
+          point: targetPosition,
+          child: const Icon(Icons.location_on, color: Colors.purple, size: 40),
         ),
-      },
+      ],
     );
   }
 

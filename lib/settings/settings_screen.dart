@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io';
 import 'package:purple_safety/utils/pref_keys.dart';
+import 'offline_maps_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -935,8 +936,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // DISCREET MODE SECTION REMOVED
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1022,10 +1021,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Read how we protect your data',
                   onTap: _showPrivacyPolicy,
                 ),
+                // ✅ NEW: Offline Maps
+                _buildSettingTile(
+                  icon: Icons.map_outlined,
+                  title: 'Offline Maps',
+                  subtitle: 'Download maps for offline use',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const OfflineMapsScreen()),
+                    );
+                  },
+                ),
 
                 const SizedBox(height: 24),
 
-                // Account Actions Row – Discreet Mode removed
+                // Account Actions Row
                 _buildSectionTitle('Account Actions'),
                 const SizedBox(height: 12),
                 Row(

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
-import 'package:purple_safety/map.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,6 +18,7 @@ import 'package:purple_safety/emergency/sos_alert_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
+import 'package:purple_safety/map/map.dart';
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
@@ -40,8 +41,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   String? _audioPath;
 
   location.Location _location = location.Location();
-  GoogleMapController? _mapController;
-  LatLng? _currentPosition;
+  MapController? _mapController;
+  latlong.LatLng? _currentPosition;
   StreamSubscription<location.LocationData>? _locationSubscription;
   bool _locationEnabled = false;
 
@@ -110,17 +111,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await _location.requestService();
-      if (!serviceEnabled) {
-        return;
-      }
+      if (!serviceEnabled) return;
     }
 
     permissionGranted = await _location.hasPermission();
     if (permissionGranted == location.PermissionStatus.denied) {
       permissionGranted = await _location.requestPermission();
-      if (permissionGranted != location.PermissionStatus.granted) {
-        return;
-      }
+      if (permissionGranted != location.PermissionStatus.granted) return;
     }
 
     setState(() => _locationEnabled = true);
@@ -128,7 +125,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _locationSubscription = _location.onLocationChanged.listen((event) {
       if (event.latitude != null && event.longitude != null) {
         setState(() {
-          _currentPosition = LatLng(event.latitude!, event.longitude!);
+          _currentPosition = latlong.LatLng(event.latitude!, event.longitude!);
         });
         _updateMapCamera();
       }
@@ -137,11 +134,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   void _updateMapCamera() {
     if (_mapController != null && _currentPosition != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 15),
-        ),
-      );
+      _mapController!.move(_currentPosition!, 15.0);
     }
   }
 
@@ -162,19 +155,14 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   // I'M SAFE - Only works if SOS is active
   // ============================================================
   Future<void> _imSafe() async {
-    // Check if SOS is active
-    if (!_isEmergencyActive) {
-      return;
-    }
+    if (!_isEmergencyActive) return;
 
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
       reason: 'Confirm you are safe to deactivate SOS',
     );
 
-    if (!authenticated) {
-      return;
-    }
+    if (!authenticated) return;
 
     final user = AuthService().getCurrentUser();
     String userName = 'Someone';
@@ -185,7 +173,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userId = user.uid;
     }
 
-    // Deactivate SOS event
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('active_sos_events')
@@ -201,17 +188,14 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       debugPrint('Error deactivating SOS event: $e');
     }
 
-    // Stop location sharing if active
     if (LocationSharingService.isSharing) {
       LocationSharingService.stopSharing();
     }
 
-    // Stop any ongoing recordings
     if (_isRecordingAudio) {
       await _stopAudioRecording();
     }
 
-    // Send safe alert to ALL users EXCEPT the user themselves
     await _sendGlobalSafeAlert(userName, userId);
 
     EmergencyManager().deactivateEmergencyMode();
@@ -223,13 +207,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _showSafeConfirmationDialog();
   }
 
-  // ============================================================
-  // GLOBAL SAFE ALERT - Sends to ALL users EXCEPT sender
-  // ============================================================
-  Future<void> _sendGlobalSafeAlert(
-    String userName,
-    String? currentUserId,
-  ) async {
+  Future<void> _sendGlobalSafeAlert(String userName, String? currentUserId) async {
     try {
       final locationLink = _currentPosition != null
           ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
@@ -246,13 +224,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         'locationLink': locationLink,
       });
 
-      final usersSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .get();
+      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
       final batch = FirebaseFirestore.instance.batch();
 
       for (var userDoc in usersSnapshot.docs) {
-        // Skip sending notification to the user who marked themselves safe
         if (userDoc.id == currentUserId) continue;
 
         final alertRef = FirebaseFirestore.instance
@@ -362,9 +337,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   // ============================================================
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      return;
-    }
+    if (!micStatus.isGranted) return;
 
     if (await _audioRecorder.hasPermission()) {
       final dir = Directory.systemTemp;
@@ -398,9 +371,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
-    if (!cameraStatus.isGranted) {
-      return;
-    }
+    if (!cameraStatus.isGranted) return;
 
     final picker = ImagePicker();
     final XFile? video = await picker.pickVideo(source: ImageSource.camera);
@@ -465,8 +436,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // SOS STATUS INDICATOR REMOVED
-
               _buildRecordingControls(),
               const SizedBox(height: 16),
               _buildAutoShareToggle(),
@@ -479,7 +448,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                 children: [
                   Expanded(child: _buildCallEmergencyButton()),
                   const SizedBox(width: 12),
-                  // I'M SAFE BUTTON - Only visible when SOS is active
                   if (_isEmergencyActive) Expanded(child: _buildImSafeButton()),
                 ],
               ),
@@ -629,6 +597,22 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   // LOCATION MAP
   // ============================================================
   Widget _buildLocationMap() {
+    if (!_locationEnabled || _currentPosition == null) {
+      return Container(
+        height: 200,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: const Center(
+          child: Text(
+            'Location not available',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ),
+      );
+    }
+
     return Container(
       height: 200,
       decoration: BoxDecoration(
@@ -639,33 +623,25 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         borderRadius: BorderRadius.circular(12),
         child: Stack(
           children: [
-            if (_locationEnabled && _currentPosition != null)
-              MapWidget(
-                onMapCreate: (controller) => _mapController = controller,
-                currentPosition: _currentPosition,
-                myLocation: true,
-                myLocationButton: false,
-                zoomControls: false,
-                markers: {
-                  Marker(
-                    markerId: const MarkerId('current'),
-                    position: _currentPosition!,
-                    icon: BitmapDescriptor.defaultMarkerWithHue(
-                      BitmapDescriptor.hueViolet,
-                    ),
-                  ),
-                },
-              )
-            else
-              const Center(
-                child: Text(
-                  'Location not available',
-                  style: TextStyle(color: Colors.white70),
+            MapWidget(
+              currentPosition: _currentPosition!,
+              onMapCreate: (controller) => _mapController = controller,
+              myLocation: true,
+              myLocationButton: true,
+              zoomControls: false,
+              markers: [
+                Marker(
+                  width: 80.0,
+                  height: 80.0,
+                  point: _currentPosition!,
+                  child: const Icon(Icons.location_on, color: Colors.purple, size: 40),
                 ),
-              ),
+              ],
+            ),
+            // Share button – bottom‑left
             Positioned(
               bottom: 8,
-              right: 8,
+              left: 8,
               child: FloatingActionButton.small(
                 onPressed: _resendLocation,
                 backgroundColor: const Color(0xFF6A1B9A),

@@ -1,38 +1,47 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
+import 'package:flutter_map/flutter_map.dart';
+import 'package:location/location.dart' as location;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/trip/trip_sharing_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
+import 'package:purple_safety/map/map.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
-  final Set<Polygon>? dangerZones;
+  final List<Polygon>? dangerZones;
 
   const FullMapScreen({Key? key, this.initialTripId, this.dangerZones})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<FullMapScreen> createState() => _FullMapScreenState();
 }
 
 class _FullMapScreenState extends State<FullMapScreen> {
-  GoogleMapController? _mapController;
-  final LatLng _initialPosition = const LatLng(-30.5595, 22.9375);
-  Set<Marker> _tripMarkers = {};
-  Set<Polyline> _tripPaths = {};
-  Set<Marker> _sosMarkers = {};
-  Set<Polygon> _dangerZones = {};
+  MapController? _mapController;
+  final location.Location _location = location.Location();
+  latlong.LatLng? _currentPosition;
+  bool _isLoading = true;
+  bool _locationEnabled = false;
+
+  // Fallback position (center of South Africa) - used only if location fails
+  final latlong.LatLng _fallbackPosition = latlong.LatLng(-30.5595, 22.9375);
+
+  List<Marker> _tripMarkers = [];
+  List<Polyline> _tripPaths = [];
+  List<Marker> _sosMarkers = [];
+  List<Polygon> _dangerZones = [];
 
   // Multi‑trip tracking
   List<String> _followedTripIds = [];
   Map<String, StreamSubscription> _tripSubscriptions = {};
   Map<String, Map<String, dynamic>> _tripsData = {};
   Map<String, Color> _tripColors = {};
-  bool _isLoading = false;
+  bool _isLoadingTrips = false;
   bool _panelExpanded = false;
 
   // Pop-up message
@@ -40,7 +49,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Color? _popupColor;
   Timer? _popupTimer;
 
-  // Predefined colours for multiple trips
   final List<Color> _colorPalette = [
     Colors.green,
     Colors.blue,
@@ -57,9 +65,79 @@ class _FullMapScreenState extends State<FullMapScreen> {
   @override
   void initState() {
     super.initState();
+    _initLocation();
     _listenToSOSEvents();
-    _loadFollowedTrips();
     _loadDangerZones();
+  }
+
+  // ============================================================
+  // LOCATION - Get user's current position
+  // ============================================================
+  Future<void> _initLocation() async {
+    setState(() => _isLoading = true);
+
+    bool serviceEnabled = await _location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await _location.requestService();
+      if (!serviceEnabled) {
+        setState(() {
+          _isLoading = false;
+          _locationEnabled = false;
+        });
+        return;
+      }
+    }
+
+    final permission = await _location.hasPermission();
+    if (permission == location.PermissionStatus.denied) {
+      final requested = await _location.requestPermission();
+      if (requested != location.PermissionStatus.granted) {
+        setState(() {
+          _isLoading = false;
+          _locationEnabled = false;
+        });
+        return;
+      }
+    }
+
+    _locationEnabled = true;
+
+    // Get current position
+    final currentLocation = await _location.getLocation();
+    if (currentLocation.latitude != null && currentLocation.longitude != null) {
+      setState(() {
+        _currentPosition = latlong.LatLng(
+          currentLocation.latitude!,
+          currentLocation.longitude!,
+        );
+        _isLoading = false;
+      });
+      // Center map on current position
+      if (_mapController != null) {
+        _mapController!.move(_currentPosition!, 14.0);
+      }
+    } else {
+      setState(() {
+        _isLoading = false;
+        _currentPosition = _fallbackPosition;
+      });
+    }
+
+    // Listen for location changes
+    _location.onLocationChanged.listen((event) {
+      if (event.latitude != null && event.longitude != null) {
+        final newPos = latlong.LatLng(event.latitude!, event.longitude!);
+        setState(() {
+          _currentPosition = newPos;
+        });
+        if (_mapController != null) {
+          _mapController!.move(newPos, 14.0);
+        }
+      }
+    });
+
+    // After location is set, load followed trips
+    _loadFollowedTrips();
   }
 
   void _listenToSOSEvents() {
@@ -68,31 +146,23 @@ class _FullMapScreenState extends State<FullMapScreen> {
         .where('status', isEqualTo: 'active')
         .snapshots()
         .listen((snapshot) {
-          final sosMarkers = <Marker>{};
-          for (var doc in snapshot.docs) {
-            final data = doc.data();
-            final marker = Marker(
-              markerId: MarkerId('sos_${doc.id}'),
-              position: LatLng(data['latitude'], data['longitude']),
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueRed,
-              ),
-              infoWindow: InfoWindow(
-                title: 'SOS EMERGENCY',
-                snippet: '${data['userName']} needs immediate help!',
-              ),
-            );
-            sosMarkers.add(marker);
-          }
           setState(() {
-            _sosMarkers = sosMarkers;
+            _sosMarkers = snapshot.docs.map((doc) {
+              final data = doc.data();
+              return Marker(
+                width: 80.0,
+                height: 80.0,
+                point: latlong.LatLng(data['latitude'], data['longitude']),
+                child: const Icon(Icons.warning, color: Colors.red, size: 40),
+              );
+            }).toList();
           });
         });
   }
 
   void _loadDangerZones() {
     if (widget.dangerZones != null) {
-      _dangerZones = widget.dangerZones!;
+      _dangerZones = List.from(widget.dangerZones!);
     }
   }
 
@@ -102,7 +172,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
     if (saved != null && saved.isNotEmpty) {
       setState(() {
         _followedTripIds = saved;
-        _isLoading = true;
+        _isLoadingTrips = true;
       });
       for (var tripId in saved) {
         _listenToSpecificTrip(tripId);
@@ -121,12 +191,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
   }
 
   void _addFollowedTrip(String tripId) {
-    if (_followedTripIds.contains(tripId)) {
-      return;
-    }
+    if (_followedTripIds.contains(tripId)) return;
     setState(() {
       _followedTripIds.add(tripId);
-      _isLoading = true;
+      _isLoadingTrips = true;
     });
     _saveFollowedTrips();
     _listenToSpecificTrip(tripId);
@@ -134,32 +202,23 @@ class _FullMapScreenState extends State<FullMapScreen> {
 
   void _removeFollowedTrip(String tripId, {bool showNotification = true}) {
     if (!_followedTripIds.contains(tripId)) return;
-
     _tripSubscriptions[tripId]?.cancel();
     _tripSubscriptions.remove(tripId);
     _tripsData.remove(tripId);
     _tripColors.remove(tripId);
-
     setState(() {
       _followedTripIds.remove(tripId);
       _updateMarkersAndPolylines();
     });
     _saveFollowedTrips();
-
-    if (showNotification) {
-      // Silent removal – no pop-up
-    }
   }
 
   void _listenToSpecificTrip(String tripId) {
     _tripSubscriptions[tripId]?.cancel();
-
     bool _notifiedStart = false;
     bool _notifiedEnd = false;
 
-    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((
-      snapshot,
-    ) {
+    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((snapshot) {
       if (!mounted) return;
       if (snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
@@ -184,26 +243,18 @@ class _FullMapScreenState extends State<FullMapScreen> {
             }
             _updateMarkersAndPolylines();
           });
-          // Show pop-up ONCE when person starts sharing
           if (!_notifiedStart) {
             _notifiedStart = true;
             _notifiedEnd = false;
             final userName = data['userName'] ?? 'Someone';
-            _showPopupMessage(
-              '$userName is now sharing their trip!',
-              Colors.green,
-            );
+            _showPopupMessage('$userName is now sharing their trip!', Colors.green);
           }
         } else if (status == 'ended' || status == 'expired') {
           final userName = data['userName'] ?? 'Someone';
-          // Show pop-up ONCE when person stops sharing
           if (!_notifiedEnd) {
             _notifiedEnd = true;
             _notifiedStart = false;
-            _showPopupMessage(
-              '$userName has stopped sharing their trip.',
-              Colors.orange,
-            );
+            _showPopupMessage('$userName has stopped sharing their trip.', Colors.orange);
           }
           _removeFollowedTrip(tripId, showNotification: false);
         }
@@ -214,8 +265,8 @@ class _FullMapScreenState extends State<FullMapScreen> {
   }
 
   void _updateMarkersAndPolylines() {
-    Set<Marker> newMarkers = {};
-    Set<Polyline> newPolylines = {};
+    List<Marker> newMarkers = [];
+    List<Polyline> newPolylines = [];
 
     for (var entry in _tripsData.entries) {
       final tripId = entry.key;
@@ -227,41 +278,32 @@ class _FullMapScreenState extends State<FullMapScreen> {
       final locationHistory = data['locationHistory'] as List? ?? [];
       final color = _tripColors[tripId] ?? Colors.green;
 
-      double hue = BitmapDescriptor.hueGreen;
+      IconData iconData = Icons.location_on;
+      Color markerColor = Colors.green;
       if (lastUpdate != null) {
-        final minutesAgo = DateTime.now()
-            .difference(lastUpdate.toDate())
-            .inMinutes;
-        if (minutesAgo > 5) {
-          hue = BitmapDescriptor.hueRed;
-        } else if (minutesAgo > 1) {
-          hue = BitmapDescriptor.hueOrange;
-        }
+        final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+        if (minutesAgo > 5) markerColor = Colors.red;
+        else if (minutesAgo > 1) markerColor = Colors.orange;
       }
 
       final marker = Marker(
-        markerId: MarkerId(tripId),
-        position: LatLng(latitude, longitude),
-        icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-        infoWindow: InfoWindow(title: userName, snippet: 'Following this trip'),
-        onTap: () => _zoomToTrip(tripId),
+        width: 80.0,
+        height: 80.0,
+        point: latlong.LatLng(latitude, longitude),
+        child: Icon(iconData, color: markerColor, size: 40),
       );
       newMarkers.add(marker);
 
       if (locationHistory.isNotEmpty) {
-        List<LatLng> points = [];
-        for (var point in locationHistory) {
-          points.add(LatLng(point['latitude'], point['longitude']));
-        }
+        List<latlong.LatLng> points = locationHistory.map<latlong.LatLng>((point) {
+          return latlong.LatLng(point['latitude'], point['longitude']);
+        }).toList();
         if (points.length > 1) {
-          final polyline = Polyline(
-            polylineId: PolylineId('${tripId}_path'),
+          newPolylines.add(Polyline(
             points: points,
             color: color.withOpacity(0.7),
-            width: 4,
-            geodesic: true,
-          );
-          newPolylines.add(polyline);
+            strokeWidth: 4,
+          ));
         }
       }
     }
@@ -269,21 +311,14 @@ class _FullMapScreenState extends State<FullMapScreen> {
     setState(() {
       _tripMarkers = newMarkers;
       _tripPaths = newPolylines;
-      _isLoading = false;
+      _isLoadingTrips = false;
     });
   }
 
   void _zoomToTrip(String tripId) {
     final data = _tripsData[tripId];
     if (data != null && _mapController != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: LatLng(data['latitude'], data['longitude']),
-            zoom: 15,
-          ),
-        ),
-      );
+      _mapController!.move(latlong.LatLng(data['latitude'], data['longitude']), 15.0);
     }
   }
 
@@ -302,15 +337,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
           autofocus: true,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6A1B9A),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6A1B9A)),
             child: const Text('Follow'),
           ),
         ],
@@ -329,7 +359,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
       _popupMessage = message;
       _popupColor = color;
     });
-
     _popupTimer?.cancel();
     _popupTimer = Timer(const Duration(seconds: 3), () {
       if (mounted) {
@@ -343,6 +372,27 @@ class _FullMapScreenState extends State<FullMapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Show loading while getting location
+    if (_isLoading || _currentPosition == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Live Map'),
+          backgroundColor: const Color(0xFF6A1B9A),
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.purple),
+              SizedBox(height: 16),
+              Text('Getting your location...', style: TextStyle(color: Colors.white70)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Live Map'),
@@ -362,10 +412,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 children: [
                   const Icon(Icons.sos, size: 14, color: Colors.white),
                   const SizedBox(width: 4),
-                  Text(
-                    '${_sosMarkers.length}',
-                    style: const TextStyle(color: Colors.white, fontSize: 12),
-                  ),
+                  Text('${_sosMarkers.length}', style: const TextStyle(color: Colors.white, fontSize: 12)),
                 ],
               ),
             ),
@@ -378,33 +425,18 @@ class _FullMapScreenState extends State<FullMapScreen> {
       ),
       body: Stack(
         children: [
-          // GoogleMap(
-          //   initialCameraPosition: CameraPosition(
-          //     target: _initialPosition,
-          //     zoom: 5.0,
-          //   ),
-          //   onMapCreated: (controller) => _mapController = controller,
-          //   myLocationEnabled: true,
-          //   myLocationButtonEnabled: true,
-          //   zoomControlsEnabled: true,
-          //   markers: {..._tripMarkers, ..._sosMarkers},
-          //   polylines: _tripPaths,
-          //   polygons: _dangerZones,
-          // ),
           MapWidget(
-            currentPosition: _initialPosition,
+            currentPosition: _currentPosition!,
             onMapCreate: (controller) => _mapController = controller,
-            myLocation: true,
-            myLocationButton: true,
+            myLocation: true,               // Shows blue dot for your location
+            myLocationButton: true,         // "Locate Me" button (bottom-right)
             zoomControls: true,
-            markers: {..._tripMarkers, ..._sosMarkers},
+            markers: _tripMarkers,
             polylines: _tripPaths,
             polygons: _dangerZones,
           ),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.purple),
-            ),
+          if (_isLoadingTrips)
+            const Center(child: CircularProgressIndicator(color: Colors.purple)),
           Positioned(
             bottom: 10,
             left: 10,
@@ -419,36 +451,17 @@ class _FullMapScreenState extends State<FullMapScreen> {
                   onTap: () => setState(() => _panelExpanded = !_panelExpanded),
                   borderRadius: BorderRadius.circular(30),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                     constraints: const BoxConstraints(maxWidth: 200),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.people_alt,
-                          color: Colors.white70,
-                          size: 18,
-                        ),
+                        const Icon(Icons.people_alt, color: Colors.white70, size: 18),
                         const SizedBox(width: 6),
-                        Text(
-                          '${_tripsData.length} following',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        Text('${_tripsData.length} following', style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
                         const SizedBox(width: 4),
-                        Icon(
-                          _panelExpanded
-                              ? Icons.keyboard_arrow_down
-                              : Icons.keyboard_arrow_up,
-                          color: Colors.white70,
-                          size: 18,
-                        ),
+                        Icon(_panelExpanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+                            color: Colors.white70, size: 18),
                       ],
                     ),
                   ),
@@ -471,34 +484,16 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 child: Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.people_alt,
-                            color: Colors.white70,
-                            size: 20,
-                          ),
+                          const Icon(Icons.people_alt, color: Colors.white70, size: 20),
                           const SizedBox(width: 8),
-                          Text(
-                            'Following (${_tripsData.length})',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          Text('Following (${_tripsData.length})', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                           const Spacer(),
                           IconButton(
-                            icon: const Icon(
-                              Icons.close,
-                              color: Colors.white70,
-                              size: 20,
-                            ),
-                            onPressed: () =>
-                                setState(() => _panelExpanded = false),
+                            icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                            onPressed: () => setState(() => _panelExpanded = false),
                           ),
                         ],
                       ),
@@ -507,73 +502,36 @@ class _FullMapScreenState extends State<FullMapScreen> {
                     Expanded(
                       child: _tripsData.isEmpty
                           ? const Center(
-                              child: Text(
-                                'No trips followed. Tap QR icon to follow.',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
+                              child: Text('No trips followed. Tap QR icon to follow.',
+                                  style: TextStyle(color: Colors.white54, fontSize: 12)),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
                               itemCount: _tripsData.length,
                               itemBuilder: (context, index) {
                                 final tripId = _tripsData.keys.elementAt(index);
                                 final data = _tripsData[tripId]!;
-                                final color =
-                                    _tripColors[tripId] ?? Colors.grey;
-                                final lastUpdate =
-                                    data['lastUpdate'] as Timestamp?;
+                                final color = _tripColors[tripId] ?? Colors.grey;
+                                final lastUpdate = data['lastUpdate'] as Timestamp?;
                                 String statusText = 'Active now';
                                 if (lastUpdate != null) {
-                                  final minutesAgo = DateTime.now()
-                                      .difference(lastUpdate.toDate())
-                                      .inMinutes;
-                                  if (minutesAgo > 5) {
-                                    statusText =
-                                        'Offline ($minutesAgo min ago)';
-                                  } else if (minutesAgo > 1) {
-                                    statusText = '$minutesAgo min ago';
-                                  }
+                                  final minutesAgo = DateTime.now().difference(lastUpdate.toDate()).inMinutes;
+                                  if (minutesAgo > 5) statusText = 'Offline ($minutesAgo min ago)';
+                                  else if (minutesAgo > 1) statusText = '$minutesAgo min ago';
                                 }
                                 return ListTile(
                                   dense: true,
                                   leading: CircleAvatar(
                                     backgroundColor: color,
                                     radius: 14,
-                                    child: Text(
-                                      data['userName'][0].toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                      ),
-                                    ),
+                                    child: Text(data['userName'][0].toUpperCase(),
+                                        style: const TextStyle(color: Colors.white, fontSize: 12)),
                                   ),
-                                  title: Text(
-                                    data['userName'],
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  subtitle: Text(
-                                    statusText,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 11,
-                                    ),
-                                  ),
+                                  title: Text(data['userName'], style: const TextStyle(color: Colors.white, fontSize: 14)),
+                                  subtitle: Text(statusText, style: const TextStyle(color: Colors.white70, fontSize: 11)),
                                   trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.close,
-                                      color: Colors.red,
-                                      size: 18,
-                                    ),
-                                    onPressed: () =>
-                                        _removeFollowedTrip(tripId),
+                                    icon: const Icon(Icons.close, color: Colors.red, size: 18),
+                                    onPressed: () => _removeFollowedTrip(tripId),
                                   ),
                                   onTap: () => _zoomToTrip(tripId),
                                 );
@@ -594,22 +552,10 @@ class _FullMapScreenState extends State<FullMapScreen> {
                 borderRadius: BorderRadius.circular(12),
                 color: _popupColor ?? Colors.grey,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          _popupMessage!,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: Text(_popupMessage!, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500))),
                       GestureDetector(
                         onTap: () {
                           _popupTimer?.cancel();
@@ -618,11 +564,7 @@ class _FullMapScreenState extends State<FullMapScreen> {
                             _popupColor = null;
                           });
                         },
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                          size: 18,
-                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 18),
                       ),
                     ],
                   ),

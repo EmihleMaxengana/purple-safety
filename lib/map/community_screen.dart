@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -301,12 +300,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Thank you for helping! Navigation starting...'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        // No snackbar – silent success
       }
     } catch (e) {
       debugPrint('Error responding to SOS: $e');
@@ -418,7 +412,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ],
             ),
           ),
-
         Expanded(
           child: Stack(
             children: [
@@ -448,42 +441,28 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                 )
               else
-                // GoogleMap(
-                //   onMapCreated: (controller) {
-                //     _mapController = controller;
-                //     setState(() => _isMapReady = true);
-                //   },
-                //   initialCameraPosition: const CameraPosition(
-                //     target: _saCenter,
-                //     zoom: 5.0,
-                //   ),
-                //   markers: {
-                //     ..._sosMarkers,
-                //     ..._incidentMarkers,
-                //   },
-                //   myLocationEnabled: true,
-                //   myLocationButtonEnabled: true,
-                //   zoomControlsEnabled: true,
-                //   compassEnabled: true,
-                // ),
-                MapWidget(
-                  onMapCreate: (controller) {
+                GoogleMap(
+                  onMapCreated: (controller) {
                     _mapController = controller;
                     setState(() => _isMapReady = true);
                   },
-                  currentPosition: _saCenter,
-                  markers: {..._sosMarkers, ..._incidentMarkers},
-                  myLocation: true,
-                  myLocationButton: true,
-                  zoomControls: true,
-                  compass: true,
+                  initialCameraPosition: const CameraPosition(
+                    target: _saCenter,
+                    zoom: 5.0,
+                  ),
+                  markers: {
+                    ..._sosMarkers,
+                    ..._incidentMarkers,
+                  },
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
+                  zoomControlsEnabled: true,
+                  compassEnabled: true,
                 ),
-
               if (_isLoadingSOS && !_mapLoadFailed)
                 const Center(
                   child: CircularProgressIndicator(color: Colors.purple),
                 ),
-
               Positioned(
                 bottom: 80,
                 right: 8,
@@ -523,6 +502,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
+  // ============================================================
+  // LIST VIEW (unchanged)
+  // ============================================================
   Widget _buildListView() {
     return Column(
       children: [
@@ -530,14 +512,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
           GestureDetector(
             onTap: () {
               setState(() => _selectedView = 'map');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Switch to Map View to see active SOS locations',
-                  ),
-                  backgroundColor: Colors.red,
-                ),
-              );
             },
             child: Container(
               width: double.infinity,
@@ -575,7 +549,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
             ),
           ),
-
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance

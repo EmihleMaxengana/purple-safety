@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/authentication/login_screen.dart';
-import 'package:purple_safety/home/home_screen.dart';
+// Hide FullMapScreen from home_screen.dart to avoid conflict with trip/full_map_screen.dart
+import 'package:purple_safety/home/home_screen.dart' hide FullMapScreen;
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/emergency/emergency_mode_screen.dart';
 import 'package:purple_safety/core/widgets/app_header.dart';
@@ -36,10 +37,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _emergencyManager.emergencyStatusStream.listen((isEmergency) {
       setState(() {
         _isEmergencyMode = isEmergency;
-        // ✅ REMOVED: Auto-switch to Emergency tab – user decides where to go
-        // if (isEmergency) {
-        //   _selectedIndex = 1;   // <-- this caused the automatic switch
-        // }
+        // Do NOT auto‑switch to Emergency tab – let user navigate manually
       });
     });
     _listenToAlerts();
