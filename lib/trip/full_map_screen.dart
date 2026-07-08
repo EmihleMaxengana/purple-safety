@@ -19,7 +19,8 @@ class FullMapScreen extends StatefulWidget {
   State<FullMapScreen> createState() => _FullMapScreenState();
 }
 
-class _FullMapScreenState extends State<FullMapScreen> {
+class _FullMapScreenState extends State<FullMapScreen>
+    with WidgetsBindingObserver {
   GoogleMapController? _mapController;
   final LatLng _initialPosition = const LatLng(-30.5595, 22.9375);
   Set<Marker> _tripMarkers = {};
@@ -27,7 +28,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
   Set<Marker> _sosMarkers = {};
   Set<Polygon> _dangerZones = {};
 
-  // Multi‑trip tracking
   List<String> _followedTripIds = [];
   Map<String, StreamSubscription> _tripSubscriptions = {};
   Map<String, Map<String, dynamic>> _tripsData = {};
@@ -35,7 +35,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
   bool _isLoading = false;
   bool _panelExpanded = false;
 
-  // Pop-up message
   String? _popupMessage;
   Color? _popupColor;
   Timer? _popupTimer;
@@ -56,9 +55,29 @@ class _FullMapScreenState extends State<FullMapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _listenToSOSEvents();
     _loadFollowedTrips();
     _loadDangerZones();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    for (var sub in _tripSubscriptions.values) {
+      sub.cancel();
+    }
+    _mapController?.dispose();
+    _popupTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadFollowedTrips();
+      print('Reloaded followed trips on app resume');
+    }
   }
 
   void _listenToSOSEvents() {
@@ -299,9 +318,6 @@ class _FullMapScreenState extends State<FullMapScreen> {
     }
   }
 
-  // ============================================================
-  // POP-UP MESSAGE
-  // ============================================================
   void _showPopupMessage(String message, Color color) {
     setState(() {
       _popupMessage = message;
@@ -581,15 +597,5 @@ class _FullMapScreenState extends State<FullMapScreen> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    for (var sub in _tripSubscriptions.values) {
-      sub.cancel();
-    }
-    _mapController?.dispose();
-    _popupTimer?.cancel();
-    super.dispose();
   }
 }

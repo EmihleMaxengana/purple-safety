@@ -38,18 +38,16 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  // SOS state
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _isSosActive = false;
   int _sosCountdown = 0;
   Timer? _countdownTimer;
   bool _isCountdownActive = false;
 
-  // Trip sharing state
   bool _isSharingTrip = false;
   Timer? _tripUpdateTimer;
 
-  // Map state
   GoogleMapController? _mapController;
   final location.Location _location = location.Location();
   bool _locationEnabled = false;
@@ -58,18 +56,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
-  // Map retry
   bool _mapLoadFailed = false;
   Timer? _mapLoadTimer;
 
-  // Contacts
   List<Contact> _contacts = [];
 
-  // Firestore
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _contactsSubscription;
 
-  // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
   bool _hasCenteredMap = false;
@@ -77,10 +71,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initLocation();
     _setupDangerZones();
     _listenToContacts();
     TripSharingService.cleanupExpiredTrips();
+    _restoreTripSharingState();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    TripSharingService.stopSharing();
+    _tripUpdateTimer?.cancel();
+    _countdownTimer?.cancel();
+    _locationSubscription?.cancel();
+    _mapController?.dispose();
+    _contactsSubscription?.cancel();
+    _mapLoadTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _restoreTripSharingState();
+      if (EmergencyManager().isEmergencyActive) {
+      }
+    }
+  }
+
+  Future<void> _restoreTripSharingState() async {
+    if (_isSharingTrip && _currentPosition != null) {
+      _tripUpdateTimer?.cancel();
+      _tripUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+        if (_currentPosition != null && TripSharingService.isSharing) {
+          TripSharingService.updateLocation(
+            latitude: _currentPosition!.latitude,
+            longitude: _currentPosition!.longitude,
+          );
+        }
+      });
+      print('Restarted trip sharing timer on app resume');
+    }
+
+    final isActive = await TripSharingService.isTripActive();
+    if (!isActive && _isSharingTrip) {
+      setState(() {
+        _isSharingTrip = false;
+      });
+      _tripUpdateTimer?.cancel();
+    }
   }
 
   Future<void> _listenToContacts() async {
@@ -205,7 +246,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  // SOS functions
   void _startSOSCountdown() {
     if (_isCountdownActive) return;
     setState(() {
@@ -556,18 +596,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   @override
-  void dispose() {
-    TripSharingService.stopSharing();
-    _tripUpdateTimer?.cancel();
-    _countdownTimer?.cancel();
-    _locationSubscription?.cancel();
-    _mapController?.dispose();
-    _contactsSubscription?.cancel();
-    _mapLoadTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final isMaxContacts = _contacts.length >= 5;
 
@@ -588,7 +616,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             children: [
               const SizedBox(height: 16),
 
-              // SOS Button
               Center(
                 child: Column(
                   children: [
