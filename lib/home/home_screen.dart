@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as latlong;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
@@ -51,12 +50,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _tripUpdateTimer;
 
   // Map state
-  MapController? _mapController;
+  GoogleMapController? _mapController;
   final location.Location _location = location.Location();
   bool _locationEnabled = false;
   bool _isLocationLoading = false;
-  latlong.LatLng? _currentPosition;
-  List<Polygon> _dangerZones = [];
+  LatLng? _currentPosition;
+  Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
   // Map retry
@@ -71,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   StreamSubscription? _contactsSubscription;
 
   // Default map position (center of South Africa)
-  static const latlong.LatLng _defaultPosition = latlong.LatLng(-30.5595, 22.9375);
+  static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
   bool _hasCenteredMap = false;
 
@@ -137,12 +136,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _locationSubscription = _location.onLocationChanged.listen((event) {
       if (event.latitude != null && event.longitude != null) {
         setState(() {
-          _currentPosition = latlong.LatLng(event.latitude!, event.longitude!);
+          _currentPosition = LatLng(event.latitude!, event.longitude!);
           _isLocationLoading = false;
         });
         if (!_hasCenteredMap && _mapController != null) {
           _hasCenteredMap = true;
-          _mapController!.move(_currentPosition!, 14.0);
+          _mapController!.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(target: _currentPosition!, zoom: 14),
+            ),
+          );
         }
 
         if (_isSharingTrip && TripSharingService.isSharing) {
@@ -167,23 +170,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _setupDangerZones() {
-    _dangerZones = [
+    _dangerZones = {
       Polygon(
-        points: [
-          latlong.LatLng(-26.1, 28.0),
-          latlong.LatLng(-26.2, 28.1),
-          latlong.LatLng(-26.3, 28.0),
-          latlong.LatLng(-26.2, 27.9),
-          latlong.LatLng(-26.1, 28.0),
+        polygonId: const PolygonId('johannesburg_zone'),
+        points: const [
+          LatLng(-26.1, 28.0),
+          LatLng(-26.2, 28.1),
+          LatLng(-26.3, 28.0),
+          LatLng(-26.2, 27.9),
+          LatLng(-26.1, 28.0),
         ],
-        color: Colors.purple.withOpacity(0.3),
-        borderColor: Colors.purple,
-        borderStrokeWidth: 2,
+        fillColor: Colors.purple.withOpacity(0.3),
+        strokeColor: Colors.purple,
+        strokeWidth: 2,
+        geodesic: true,
       ),
-    ];
+    };
   }
 
-  void _onMapCreated(MapController controller) {
+  void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _mapLoadTimer?.cancel();
     setState(() {
@@ -192,13 +197,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (_currentPosition != null && !_hasCenteredMap) {
       _hasCenteredMap = true;
-      controller.move(_currentPosition!, 14.0);
+      controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _currentPosition!, zoom: 14),
+        ),
+      );
     }
   }
 
-  // ============================================================
-  // SOS BUTTON - Single tap with countdown
-  // ============================================================
+  // SOS functions
   void _startSOSCountdown() {
     if (_isCountdownActive) return;
     setState(() {
@@ -261,9 +268,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     widget.onNavigateToTools?.call();
   }
 
-  // ============================================================
-  // SMS FALLBACK - Send SMS to trusted contacts when offline
-  // ============================================================
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
     if (_contacts.isEmpty) return;
 
@@ -292,9 +296,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FullMapScreen(
-          dangerZones: _dangerZones,
-        ),
+        builder: (context) => FullMapScreen(dangerZones: _dangerZones),
       ),
     );
   }
@@ -822,14 +824,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       myLocationButton: false,
       zoomControls: false,
       polygons: _dangerZones,
-      markers: [
+      markers: {
         Marker(
-          width: 80.0,
-          height: 80.0,
-          point: targetPosition,
-          child: const Icon(Icons.location_on, color: Colors.purple, size: 40),
+          markerId: const MarkerId('current'),
+          position: targetPosition,
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueViolet,
+          ),
         ),
-      ],
+      },
     );
   }
 

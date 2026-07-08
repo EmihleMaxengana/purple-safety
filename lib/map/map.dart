@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as latlong;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-class MapWidget extends StatefulWidget {
-  final latlong.LatLng currentPosition;
-  final List<Marker>? markers;
-  final List<Polyline>? polylines;
-  final List<Polygon>? polygons;
-  final List<CircleMarker>? circles;
+class MapWidget extends StatelessWidget {
+  final LatLng currentPosition;
+  final Set<Marker>? markers;
+  final Set<Polyline>? polylines;
+  final Set<Polygon>? polygons;
+  final Set<Circle>? circles;
   final bool myLocation;
   final bool myLocationButton;
   final bool zoomControls;
   final bool compass;
-  final Function(MapController)? onMapCreate;
+  final MapCreatedCallback? onMapCreate;
 
   const MapWidget({
     Key? key,
@@ -28,57 +27,148 @@ class MapWidget extends StatefulWidget {
     this.onMapCreate,
   }) : super(key: key);
 
-  @override
-  State<MapWidget> createState() => _MapWidgetState();
-}
-
-class _MapWidgetState extends State<MapWidget> {
-  late MapController _mapController;
-
-  @override
-  void initState() {
-    super.initState();
-    _mapController = MapController();
+  static const String _mapStyle = '''
+[
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#1d2c3d"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8ec3b0"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#1a3646"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.country",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      {
+        "color": "#4b2e6b"
+      },
+      {
+        "weight": 1.5
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.land_parcel",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#b9daa4"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#8ec3b0"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2a5c4a"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#3c2b4f"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#d4bfff"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#5a3e7a"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#f3d9ff"
+      }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#b9daa4"
+      }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry.fill",
+    "stylers": [
+      {
+        "color": "#2e5c8a"
+      }
+    ]
   }
+]
+  ''';
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            center: widget.currentPosition,
-            zoom: 14.0,
-            interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.all,
-            ),
-            onMapReady: () {
-              if (widget.onMapCreate != null) {
-                widget.onMapCreate!(_mapController);
-              }
-            },
-          ),
-          children: [
-            TileLayer(
-              // Light, colorful style – similar to Google Maps but with a purple tint
-              urlTemplate:
-                  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-              subdomains: ['a', 'b', 'c'],
-              userAgentPackageName: 'com.emihle.purplesafety',
-            ),
-            if (widget.markers != null && widget.markers!.isNotEmpty)
-              MarkerLayer(markers: widget.markers!),
-            if (widget.polylines != null && widget.polylines!.isNotEmpty)
-              PolylineLayer(polylines: widget.polylines!),
-            if (widget.polygons != null && widget.polygons!.isNotEmpty)
-              PolygonLayer(polygons: widget.polygons!),
-            if (widget.circles != null && widget.circles!.isNotEmpty)
-              CircleLayer(circles: widget.circles!),
-          ],
-        ),
-        // The "Locate Me" button is automatically shown if myLocationButton is true
-      ],
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: currentPosition,
+        zoom: 14.0,
+      ),
+      onMapCreated: (controller) {
+        controller.setMapStyle(_mapStyle);
+        if (onMapCreate != null) {
+          onMapCreate!(controller);
+        }
+      },
+      myLocationEnabled: myLocation,
+      myLocationButtonEnabled: myLocationButton,
+      zoomControlsEnabled: zoomControls,
+      markers: markers ?? {},
+      polylines: polylines ?? {},
+      polygons: polygons ?? {},
+      circles: circles ?? {},
     );
   }
 }

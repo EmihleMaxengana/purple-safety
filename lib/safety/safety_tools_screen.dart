@@ -1,9 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as latlong;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
@@ -41,8 +40,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   String? _audioPath;
 
   location.Location _location = location.Location();
-  MapController? _mapController;
-  latlong.LatLng? _currentPosition;
+  GoogleMapController? _mapController;
+  LatLng? _currentPosition;
   StreamSubscription<location.LocationData>? _locationSubscription;
   bool _locationEnabled = false;
 
@@ -125,7 +124,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _locationSubscription = _location.onLocationChanged.listen((event) {
       if (event.latitude != null && event.longitude != null) {
         setState(() {
-          _currentPosition = latlong.LatLng(event.latitude!, event.longitude!);
+          _currentPosition = LatLng(event.latitude!, event.longitude!);
         });
         _updateMapCamera();
       }
@@ -134,7 +133,11 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   void _updateMapCamera() {
     if (_mapController != null && _currentPosition != null) {
-      _mapController!.move(_currentPosition!, 15.0);
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: _currentPosition!, zoom: 15),
+        ),
+      );
     }
   }
 
@@ -594,7 +597,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   // ============================================================
-  // LOCATION MAP
+  // LOCATION MAP - Share button bottom-left, locate me right
   // ============================================================
   Widget _buildLocationMap() {
     if (!_locationEnabled || _currentPosition == null) {
@@ -629,16 +632,17 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               myLocation: true,
               myLocationButton: true,
               zoomControls: false,
-              markers: [
+              markers: {
                 Marker(
-                  width: 80.0,
-                  height: 80.0,
-                  point: _currentPosition!,
-                  child: const Icon(Icons.location_on, color: Colors.purple, size: 40),
+                  markerId: const MarkerId('current'),
+                  position: _currentPosition!,
+                  icon: BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueViolet,
+                  ),
                 ),
-              ],
+              },
             ),
-            // Share button – bottom‑left
+            // Share button – bottom-left
             Positioned(
               bottom: 8,
               left: 8,

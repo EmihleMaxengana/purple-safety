@@ -9,7 +9,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io';
 import 'package:purple_safety/utils/pref_keys.dart';
-import 'offline_maps_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -70,9 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       reason: 'Authenticate to update your profile',
     );
-    if (!authenticated) {
-      return;
-    }
+    if (!authenticated) return;
 
     setState(() => _isLoading = true);
     final user = _auth.getCurrentUser();
@@ -196,9 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       reason: 'Authenticate to save next of kin changes',
     );
-    if (!authenticated) {
-      return;
-    }
+    if (!authenticated) return;
 
     setState(() => _isLoading = true);
     final user = _auth.getCurrentUser();
@@ -277,15 +272,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (newPasswordController.text != confirmController.text) {
-                return;
-              }
-              if (newPasswordController.text.length < 6) {
-                return;
-              }
-              if (currentPasswordController.text.isEmpty) {
-                return;
-              }
+              if (newPasswordController.text != confirmController.text) return;
+              if (newPasswordController.text.length < 6) return;
+              if (currentPasswordController.text.isEmpty) return;
 
               showDialog(
                 context: context,
@@ -525,9 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       reason: 'Authenticate to delete your account',
     );
 
-    if (!authenticated) {
-      return;
-    }
+    if (!authenticated) return;
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -936,6 +923,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  // Offline Maps tile REMOVED
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1020,18 +1009,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: 'Privacy Policy',
                   subtitle: 'Read how we protect your data',
                   onTap: _showPrivacyPolicy,
-                ),
-                // ✅ NEW: Offline Maps
-                _buildSettingTile(
-                  icon: Icons.map_outlined,
-                  title: 'Offline Maps',
-                  subtitle: 'Download maps for offline use',
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (context) => const OfflineMapsScreen()),
-                    );
-                  },
                 ),
 
                 const SizedBox(height: 24),
