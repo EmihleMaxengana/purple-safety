@@ -3,11 +3,16 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:location/location.dart' as location;
 import 'package:purple_safety/authentication/login_screen.dart';
 import 'package:purple_safety/navigation/main_screen.dart';
 import 'package:purple_safety/authentication/reauth_screen.dart';
 import 'package:purple_safety/incidents/incident_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/emergency/sos_alert_service.dart';
+import 'package:purple_safety/utils/pref_keys.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -15,7 +20,6 @@ void main() async {
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
-  // Start periodic cleanup of expired incidents
   final incidentService = IncidentService();
   incidentService.deleteExpiredIncidents();
   Timer.periodic(const Duration(hours: 1), (timer) {
@@ -43,6 +47,7 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkReauthRequired();
+    _checkPendingSOS();
     _setLoadingFalse();
   }
 
@@ -56,6 +61,73 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  // ============================================================
+  // CHECK FOR PENDING SOS ON APP START AND CONNECTIVITY CHANGE
+  // ============================================================
+  Future<void> _checkPendingSOS() async {
+    final hasPending = await SOSAlertService.hasPendingSOS();
+    if (!hasPending) return;
+
+    // Check if we have internet
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult != ConnectivityResult.none) {
+      await _sendPendingSOS();
+    }
+
+    // Listen for connectivity changes
+    Connectivity().onConnectivityChanged.listen((result) async {
+      if (result != ConnectivityResult.none) {
+        await _sendPendingSOS();
+      }
+    });
+  }
+
+  // ============================================================
+  // SEND PENDING SOS WITH CURRENT LOCATION
+  // ============================================================
+  Future<void> _sendPendingSOS() async {
+    final pendingList = await SOSAlertService.getPendingSOS();
+    if (pendingList.isEmpty) return;
+
+    // Get current location
+    final locationPlugin = location.Location();
+    bool serviceEnabled = await locationPlugin.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await locationPlugin.requestService();
+      if (!serviceEnabled) return;
+    }
+
+    final permission = await locationPlugin.hasPermission();
+    if (permission == location.PermissionStatus.denied) {
+      final requested = await locationPlugin.requestPermission();
+      if (requested != location.PermissionStatus.granted) return;
+    }
+
+    final currentLocation = await locationPlugin.getLocation();
+    if (currentLocation.latitude == null || currentLocation.longitude == null) {
+      return;
+    }
+
+    for (var sosData in pendingList) {
+      try {
+        await SOSAlertService.sendCommunitySOSAlert(
+          userId: sosData['userId']!,
+          userName: sosData['userName']!,
+          latitude: currentLocation.latitude!,
+          longitude: currentLocation.longitude!,
+          triggerLat: sosData['triggerLat'],
+          triggerLng: sosData['triggerLng'],
+          triggerTimestamp: sosData['triggerTimestamp'],
+        );
+        debugPrint('✅ Pending SOS sent for ${sosData['userId']}');
+      } catch (e) {
+        debugPrint('❌ Failed to send pending SOS: $e');
+      }
+    }
+
+    await SOSAlertService.clearPendingSOS();
   }
 
   @override
