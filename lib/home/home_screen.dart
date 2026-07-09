@@ -38,16 +38,22 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  // SOS state
   bool _isSosActive = false;
   int _sosCountdown = 0;
   Timer? _countdownTimer;
   bool _isCountdownActive = false;
 
+  // SOS Status pop-up
+  bool _showSOSStatus = false;
+  String _sosStatusMessage = '';
+
+  // Trip sharing state
   bool _isSharingTrip = false;
   Timer? _tripUpdateTimer;
 
+  // Map state
   GoogleMapController? _mapController;
   final location.Location _location = location.Location();
   bool _locationEnabled = false;
@@ -56,14 +62,18 @@ class _HomeScreenState extends State<HomeScreen>
   Set<Polygon> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
+  // Map retry
   bool _mapLoadFailed = false;
   Timer? _mapLoadTimer;
 
+  // Contacts
   List<Contact> _contacts = [];
 
+  // Firestore
   final FirestoreService _firestoreService = FirestoreService();
   StreamSubscription? _contactsSubscription;
 
+  // Default map position (center of South Africa)
   static const LatLng _defaultPosition = LatLng(-30.5595, 22.9375);
 
   bool _hasCenteredMap = false;
@@ -71,57 +81,10 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _initLocation();
     _setupDangerZones();
     _listenToContacts();
     TripSharingService.cleanupExpiredTrips();
-    _restoreTripSharingState();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    TripSharingService.stopSharing();
-    _tripUpdateTimer?.cancel();
-    _countdownTimer?.cancel();
-    _locationSubscription?.cancel();
-    _mapController?.dispose();
-    _contactsSubscription?.cancel();
-    _mapLoadTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _restoreTripSharingState();
-      if (EmergencyManager().isEmergencyActive) {
-      }
-    }
-  }
-
-  Future<void> _restoreTripSharingState() async {
-    if (_isSharingTrip && _currentPosition != null) {
-      _tripUpdateTimer?.cancel();
-      _tripUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-        if (_currentPosition != null && TripSharingService.isSharing) {
-          TripSharingService.updateLocation(
-            latitude: _currentPosition!.latitude,
-            longitude: _currentPosition!.longitude,
-          );
-        }
-      });
-      print('Restarted trip sharing timer on app resume');
-    }
-
-    final isActive = await TripSharingService.isTripActive();
-    if (!isActive && _isSharingTrip) {
-      setState(() {
-        _isSharingTrip = false;
-      });
-      _tripUpdateTimer?.cancel();
-    }
   }
 
   Future<void> _listenToContacts() async {
@@ -246,6 +209,9 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // ============================================================
+  // SOS BUTTON - Single tap with countdown
+  // ============================================================
   void _startSOSCountdown() {
     if (_isCountdownActive) return;
     setState(() {
@@ -288,10 +254,17 @@ class _HomeScreenState extends State<HomeScreen>
       userName = userData?['name'] ?? 'A user';
     }
 
-    if (_currentPosition == null) return;
+    if (_currentPosition == null) {
+      return;
+    }
 
     final lat = _currentPosition!.latitude;
     final lng = _currentPosition!.longitude;
+
+    setState(() {
+      _showSOSStatus = true;
+      _sosStatusMessage = '🚨 Sending SOS...';
+    });
 
     try {
       await SOSAlertService.sendCommunitySOSAlert(
@@ -300,7 +273,39 @@ class _HomeScreenState extends State<HomeScreen>
         latitude: lat,
         longitude: lng,
       );
+
+      setState(() {
+        _sosStatusMessage = '✅ SOS sent!';
+      });
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _showSOSStatus = false;
+          });
+        }
+      });
+
     } catch (e) {
+      // Firebase failed → store locally
+      await SOSAlertService.storeSOSLocally(
+        userId: userId,
+        userName: userName,
+        triggerLat: lat,
+        triggerLng: lng,
+      );
+
+      setState(() {
+        _sosStatusMessage = '⏳ SOS pending - Will send when connected';
+      });
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _showSOSStatus = false;
+          });
+        }
+      });
+
+      // Also try SMS fallback
       await _sendSMSFallback(userName, lat, lng);
     }
 
@@ -308,6 +313,9 @@ class _HomeScreenState extends State<HomeScreen>
     widget.onNavigateToTools?.call();
   }
 
+  // ============================================================
+  // SMS FALLBACK
+  // ============================================================
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
     if (_contacts.isEmpty) return;
 
@@ -596,166 +604,225 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   @override
+  void dispose() {
+    TripSharingService.stopSharing();
+    _tripUpdateTimer?.cancel();
+    _countdownTimer?.cancel();
+    _locationSubscription?.cancel();
+    _mapController?.dispose();
+    _contactsSubscription?.cancel();
+    _mapLoadTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isMaxContacts = _contacts.length >= 5;
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
-        ),
-      ),
-      height: 1000,
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
+            ),
+          ),
+          height: 1000,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 16),
 
-              Center(
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: _isCountdownActive ? null : _startSOSCountdown,
-                      child: Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const RadialGradient(
-                            colors: [Color(0xFFe060c0), Color(0xFF5c0070)],
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.purple.withOpacity(0.3),
-                              blurRadius: 20,
-                              spreadRadius: 2,
+                  // SOS Button
+                  Center(
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: _isCountdownActive ? null : _startSOSCountdown,
+                          child: Container(
+                            width: 140,
+                            height: 140,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const RadialGradient(
+                                colors: [Color(0xFFe060c0), Color(0xFF5c0070)],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.purple.withOpacity(0.3),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            _isCountdownActive ? '$_sosCountdown' : 'SOS',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 4,
+                            child: Center(
+                              child: Text(
+                                _isCountdownActive ? '$_sosCountdown' : 'SOS',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 4,
+                                ),
+                              ),
                             ),
                           ),
                         ),
+                        if (_isCountdownActive)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: TextButton(
+                              onPressed: _cancelSOS,
+                              style: TextButton.styleFrom(
+                                side: BorderSide(color: Colors.red.shade300),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 24,
+                                  vertical: 8,
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel SOS',
+                                style: TextStyle(color: Color(0xFFff8ab0)),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  SectionHeader(
+                    title: 'LIVE LOCATION',
+                    action: 'Full Map →',
+                    onActionTap: _openFullMap,
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 200,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFa078c0).withOpacity(0.2),
                       ),
                     ),
-                    if (_isCountdownActive)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: TextButton(
-                          onPressed: _cancelSOS,
-                          style: TextButton.styleFrom(
-                            side: BorderSide(color: Colors.red.shade300),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 24,
-                              vertical: 8,
-                            ),
-                          ),
-                          child: const Text(
-                            'Cancel SOS',
-                            style: TextStyle(color: Color(0xFFff8ab0)),
-                          ),
-                        ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: _buildMapContent(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  const SectionHeader(title: 'QUICK ACTIONS'),
+                  const SizedBox(height: 8),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    childAspectRatio: 3,
+                    children: [
+                      _buildQuickAction(
+                        Icons.share_location,
+                        _isSharingTrip ? 'Stop Sharing Trip' : 'Share Trip',
+                        _isSharingTrip ? Colors.red : const Color(0xFF8260dc),
+                        _handleTripSharing,
                       ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
+                      _buildQuickAction(
+                        Icons.phone,
+                        'Call Emergency',
+                        const Color(0xFFdc6080),
+                        _handleCallEmergency,
+                      ),
+                      _buildQuickAction(
+                        Icons.explore,
+                        'Safe Route',
+                        const Color(0xFF60dc80),
+                        _openFullMap,
+                      ),
+                      _buildQuickAction(
+                        Icons.report,
+                        'Report Incident',
+                        const Color(0xFFdcb060),
+                        _openReportIncident,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-              SectionHeader(
-                title: 'LIVE LOCATION',
-                action: 'Full Map →',
-                onActionTap: _openFullMap,
-              ),
-              const SizedBox(height: 8),
-              Container(
-                height: 200,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: const Color(0xFFa078c0).withOpacity(0.2),
+                  SectionHeader(
+                    title: 'TRUSTED CONTACTS (${_contacts.length}/5)',
+                    action: _contacts.isNotEmpty ? 'Manage →' : null,
+                    onActionTap: _showManageContactsModal,
                   ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: _buildMapContent(),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              const SectionHeader(title: 'QUICK ACTIONS'),
-              const SizedBox(height: 8),
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-                childAspectRatio: 3,
-                children: [
-                  _buildQuickAction(
-                    Icons.share_location,
-                    _isSharingTrip ? 'Stop Sharing Trip' : 'Share Trip',
-                    _isSharingTrip ? Colors.red : const Color(0xFF8260dc),
-                    _handleTripSharing,
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 80,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ..._contacts.map(
+                          (c) =>
+                              _buildContact(c.initials, c.name, c.color, c.active),
+                        ),
+                        if (!isMaxContacts) _buildAddContact(),
+                      ],
+                    ),
                   ),
-                  _buildQuickAction(
-                    Icons.phone,
-                    'Call Emergency',
-                    const Color(0xFFdc6080),
-                    _handleCallEmergency,
-                  ),
-                  _buildQuickAction(
-                    Icons.explore,
-                    'Safe Route',
-                    const Color(0xFF60dc80),
-                    _openFullMap,
-                  ),
-                  _buildQuickAction(
-                    Icons.report,
-                    'Report Incident',
-                    const Color(0xFFdcb060),
-                    _openReportIncident,
-                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
-              const SizedBox(height: 16),
+            ),
+          ),
+        ),
 
-              SectionHeader(
-                title: 'TRUSTED CONTACTS (${_contacts.length}/5)',
-                action: _contacts.isNotEmpty ? 'Manage →' : null,
-                onActionTap: _showManageContactsModal,
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 80,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
+        // SOS Status Pop-up
+        if (_showSOSStatus)
+          Positioned(
+            top: 50,
+            left: 16,
+            right: 16,
+            child: Material(
+              elevation: 6,
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.orange.withOpacity(0.9),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
                   children: [
-                    ..._contacts.map(
-                      (c) =>
-                          _buildContact(c.initials, c.name, c.color, c.active),
+                    Expanded(
+                      child: Text(
+                        _sosStatusMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                    if (!isMaxContacts) _buildAddContact(),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _showSOSStatus = false;
+                        });
+                      },
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
-            ],
+            ),
           ),
-        ),
-      ),
+      ],
     );
   }
 

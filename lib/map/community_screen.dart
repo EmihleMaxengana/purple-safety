@@ -17,18 +17,17 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-class _CommunityScreenState extends State<CommunityScreen> {
+class _CommunityScreenState extends State<CommunityScreen>
+    with WidgetsBindingObserver {
   final IncidentService _incidentService = IncidentService();
   String _selectedView = 'list';
 
-  // Map related
   GoogleMapController? _mapController;
   Set<Marker> _sosMarkers = {};
   Set<Marker> _incidentMarkers = {};
   bool _isMapReady = false;
   bool _mapLoadFailed = false;
 
-  // Active SOS events list
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
 
@@ -37,9 +36,26 @@ class _CommunityScreenState extends State<CommunityScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _listenToActiveSOS();
     _loadIncidentsAsMarkers();
     _startMapLoadTimer();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _listenToActiveSOS();
+      _loadIncidentsAsMarkers();
+      print('Refreshed community data on app resume');
+    }
   }
 
   void _startMapLoadTimer() {
@@ -50,12 +66,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
         });
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _mapController?.dispose();
-    super.dispose();
   }
 
   void _listenToActiveSOS() {
@@ -300,7 +310,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
       );
 
       if (mounted) {
-        // No snackbar – silent success
       }
     } catch (e) {
       debugPrint('Error responding to SOS: $e');
@@ -502,9 +511,6 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
-  // ============================================================
-  // LIST VIEW (unchanged)
-  // ============================================================
   Widget _buildListView() {
     return Column(
       children: [
