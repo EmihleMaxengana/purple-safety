@@ -12,7 +12,6 @@ import 'package:purple_safety/authentication/reauth_screen.dart';
 import 'package:purple_safety/incidents/incident_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/emergency/sos_alert_service.dart';
-import 'package:purple_safety/utils/pref_keys.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -41,6 +40,7 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
   final AuthService _authService = AuthService();
   bool _needsReauth = false;
   bool _isLoading = true;
+  bool _isSendingPending = false;
 
   @override
   void initState() {
@@ -63,71 +63,114 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
     super.dispose();
   }
 
-  // ============================================================
-  // CHECK FOR PENDING SOS ON APP START AND CONNECTIVITY CHANGE
-  // ============================================================
   Future<void> _checkPendingSOS() async {
     final hasPending = await SOSAlertService.hasPendingSOS();
-    if (!hasPending) return;
+    print('🔍 Checking pending SOS: hasPending = $hasPending');
 
-    // Check if we have internet
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult != ConnectivityResult.none) {
-      await _sendPendingSOS();
+    if (!hasPending) {
+      print('ℹ️ No pending SOS found');
+      return;
     }
 
-    // Listen for connectivity changes
+    final connectivityResult = await Connectivity().checkConnectivity();
+    print('📡 Current connectivity: $connectivityResult');
+
+    if (connectivityResult != ConnectivityResult.none) {
+      print('✅ Internet available, attempting to send pending SOS...');
+      await _sendPendingSOS();
+    } else {
+      print('⏳ No internet, waiting for connection...');
+    }
+
     Connectivity().onConnectivityChanged.listen((result) async {
+      print('📡 Connectivity changed: $result');
       if (result != ConnectivityResult.none) {
+        print('✅ Internet restored, sending pending SOS...');
         await _sendPendingSOS();
       }
     });
   }
 
-  // ============================================================
-  // SEND PENDING SOS WITH CURRENT LOCATION
-  // ============================================================
   Future<void> _sendPendingSOS() async {
-    final pendingList = await SOSAlertService.getPendingSOS();
-    if (pendingList.isEmpty) return;
-
-    // Get current location
-    final locationPlugin = location.Location();
-    bool serviceEnabled = await locationPlugin.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await locationPlugin.requestService();
-      if (!serviceEnabled) return;
-    }
-
-    final permission = await locationPlugin.hasPermission();
-    if (permission == location.PermissionStatus.denied) {
-      final requested = await locationPlugin.requestPermission();
-      if (requested != location.PermissionStatus.granted) return;
-    }
-
-    final currentLocation = await locationPlugin.getLocation();
-    if (currentLocation.latitude == null || currentLocation.longitude == null) {
+    if (_isSendingPending) {
+      print('⏳ Already sending pending SOS, skipping...');
       return;
     }
 
-    for (var sosData in pendingList) {
-      try {
-        await SOSAlertService.sendCommunitySOSAlert(
-          userId: sosData['userId']!,
-          userName: sosData['userName']!,
-          latitude: currentLocation.latitude!,
-          longitude: currentLocation.longitude!,
-          triggerLat: sosData['triggerLat'],
-          triggerLng: sosData['triggerLng'],
-          triggerTimestamp: sosData['triggerTimestamp'],
-        );
-        debugPrint('✅ Pending SOS sent for ${sosData['userId']}');
-      } catch (e) {
-        debugPrint('❌ Failed to send pending SOS: $e');
-      }
-    }
+    _isSendingPending = true;
 
-    await SOSAlertService.clearPendingSOS();
+    try {
+      final pendingList = await SOSAlertService.getPendingSOS();
+      print('📦 Pending SOS list: $pendingList');
+
+      if (pendingList.isEmpty) {
+        print('ℹ️ No pending SOS to send');
+        _isSendingPending = false;
+        return;
+      }
+
+      print('📍 Getting current location...');
+      final locationPlugin = location.Location();
+
+      bool serviceEnabled = await locationPlugin.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await locationPlugin.requestService();
+        if (!serviceEnabled) {
+          print('❌ Location service not enabled');
+          _isSendingPending = false;
+          return;
+        }
+      }
+
+      final permission = await locationPlugin.hasPermission();
+      if (permission == location.PermissionStatus.denied) {
+        final requested = await locationPlugin.requestPermission();
+        if (requested != location.PermissionStatus.granted) {
+          print('❌ Location permission denied');
+          _isSendingPending = false;
+          return;
+        }
+      }
+
+      final currentLocation = await locationPlugin.getLocation();
+      if (currentLocation.latitude == null || currentLocation.longitude == null) {
+        print('❌ Failed to get current location');
+        _isSendingPending = false;
+        return;
+      }
+
+      print('📍 Current location: ${currentLocation.latitude}, ${currentLocation.longitude}');
+
+      int sentCount = 0;
+      for (var sosData in pendingList) {
+        try {
+          print('📤 Sending SOS for user: ${sosData['userId']}');
+          await SOSAlertService.sendCommunitySOSAlert(
+            userId: sosData['userId']!,
+            userName: sosData['userName']!,
+            latitude: currentLocation.latitude!,
+            longitude: currentLocation.longitude!,
+            triggerLat: sosData['triggerLat'],
+            triggerLng: sosData['triggerLng'],
+            triggerTimestamp: sosData['triggerTimestamp'],
+          );
+          sentCount++;
+          print('✅ Pending SOS sent successfully for ${sosData['userId']}');
+        } catch (e) {
+          print('❌ Failed to send pending SOS: $e');
+        }
+      }
+
+      if (sentCount > 0) {
+        await SOSAlertService.clearPendingSOS();
+        print('🧹 Pending SOS cleared from storage');
+      }
+
+    } catch (e) {
+      print('❌ Error in _sendPendingSOS: $e');
+    } finally {
+      _isSendingPending = false;
+    }
   }
 
   @override

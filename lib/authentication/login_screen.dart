@@ -32,7 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Load saved email if Remember Me was previously enabled
   Future<void> _loadSavedEmail() async {
     final prefs = await SharedPreferences.getInstance();
     final savedEmail = prefs.getString('saved_email');
@@ -45,7 +44,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Save email if Remember Me is checked, otherwise clear saved email
   Future<void> _saveEmailPreference() async {
     final prefs = await SharedPreferences.getInstance();
     if (_rememberMe) {
@@ -90,26 +88,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Logo - now bigger and without background color
                         Container(
-                          width: 60,
-                          height: 60,
+                          width: 80,
+                          height: 80,
                           margin: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF52065F),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10.0),
-                            child: Image.asset(
-                              'assets/logo.png',
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(
-                                    Icons.security,
-                                    color: Colors.white,
-                                    size: 36,
-                                  ),
-                            ),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(
+                                  Icons.security,
+                                  color: Colors.white,
+                                  size: 48,
+                                ),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -305,7 +297,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 password,
                               );
                               if (user != null) {
-                                // Save email preference if Remember Me is checked
                                 await _saveEmailPreference();
                                 Navigator.pushReplacement(
                                   context,
@@ -314,22 +305,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 );
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Invalid email or password.'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
+                                // Silent error – no snackbar
                               }
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Please enter email and password',
-                                  ),
-                                  backgroundColor: Colors.orange,
-                                ),
-                              );
+                              // Silent error – no snackbar
                             }
                           },
                           style: ElevatedButton.styleFrom(

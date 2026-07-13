@@ -18,10 +18,13 @@ AppBar buildAppHeader({
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Logo - now bigger (40x40)
           Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Image.asset(
               'assets/logo.png',
               fit: BoxFit.contain,
@@ -33,37 +36,22 @@ AppBar buildAppHeader({
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 18,
                     ),
                   ),
                 );
               },
             ),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Purple Safety',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              Text(
-                'Your Personal Safety Companion',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.9),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w300,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+          const SizedBox(width: 10),
+          // Title only – no subtitle
+          const Text(
+            'PurpleSafety',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
           ),
         ],
       ),
