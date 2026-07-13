@@ -14,9 +14,9 @@ class SOSAlertService {
 
   static const String _pendingSOSKey = 'pending_sos';
 
-  // ============================================================
-  // COMMUNITY SOS - Sends alert to ALL app users
-  // ============================================================
+
+  // COMMUNITY SOS - Sends alert to ALL app users( not a push in notification tho)
+ 
   static Future<String?> sendCommunitySOSAlert({
     required String userId,
     required String userName,
@@ -33,7 +33,7 @@ class SOSAlertService {
         ? 'https://www.google.com/maps?q=$triggerLat,$triggerLng'
         : null;
 
-    debugPrint('🚨 Sending COMMUNITY SOS alert from $userName at $locationLink');
+    debugPrint(' Sending COMMUNITY SOS alert from $userName at $locationLink');
 
     try {
       final docRef = _firestore.collection('active_sos_events').doc();
@@ -62,11 +62,11 @@ class SOSAlertService {
       }
 
       await docRef.set(eventData);
-      debugPrint('✅ SOS event created: $sosEventId');
+      debugPrint(' SOS event created: $sosEventId');
 
-      String message = '🚨 EMERGENCY: $userName needs immediate help at their location!';
+      String message = ' EMERGENCY: $userName needs immediate help at their location!';
       if (triggerLocationLink != null) {
-        message = '🚨 EMERGENCY: $userName needs immediate help!\n'
+        message = ' EMERGENCY: $userName needs immediate help!\n'
             '📍 Current: $locationLink\n'
             '📍 Triggered: $triggerLocationLink\n'
             '🕐 Triggered at: $triggerTimestamp';
@@ -102,9 +102,9 @@ class SOSAlertService {
             .collection('alerts')
             .doc();
 
-        String alertMessage = '🚨 SOS: $userName needs immediate help! Tap to view location.';
+        String alertMessage = ' SOS: $userName needs immediate help! Tap to view location.';
         if (triggerLocationLink != null) {
-          alertMessage = '🚨 SOS: $userName needs immediate help!\n'
+          alertMessage = ' SOS: $userName needs immediate help!\n'
               '📍 Current: $locationLink\n'
               '📍 Triggered: $triggerLocationLink';
         }
@@ -126,12 +126,12 @@ class SOSAlertService {
       }
 
       await batch.commit();
-      debugPrint('✅ SOS alert sent to $alertCount users');
+      debugPrint(' SOS alert sent to $alertCount users');
 
       return sosEventId;
 
     } catch (e) {
-      debugPrint('❌ Error sending community SOS alert: $e');
+      debugPrint(' Error sending community SOS alert: $e');
       rethrow;
     }
   }
@@ -157,16 +157,16 @@ class SOSAlertService {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('✅ SOS event $sosEventId deactivated');
+      debugPrint(' SOS event $sosEventId deactivated');
     } catch (e) {
-      debugPrint('❌ Error deactivating SOS event: $e');
+      debugPrint(' Error deactivating SOS event: $e');
       rethrow;
     }
   }
 
-  // ============================================================
+ 
   // Get active SOS events
-  // ============================================================
+
   static Stream<List<Map<String, dynamic>>> getActiveSOSEvents() {
     return _firestore
         .collection('active_sos_events')
@@ -182,9 +182,9 @@ class SOSAlertService {
         }).toList());
   }
 
-  // ============================================================
+
   // User responds to help
-  // ============================================================
+ 
   static Future<void> respondToSOS({
     required String sosEventId,
     required String responderId,
@@ -218,7 +218,7 @@ class SOSAlertService {
             .doc(eventData?['userId'])
             .collection('alerts')
             .add({
-              'message': '🆘 $responderName is on their way to help you!',
+              'message': ' $responderName is on their way to help you!',
               'type': 'responder',
               'timestamp': FieldValue.serverTimestamp(),
               'read': false,
@@ -227,17 +227,17 @@ class SOSAlertService {
             });
       }
 
-      debugPrint('✅ $responderName responded to SOS event $sosEventId');
+      debugPrint(' $responderName responded to SOS event $sosEventId');
 
     } catch (e) {
-      debugPrint('❌ Error responding to SOS: $e');
+      debugPrint(' Error responding to SOS: $e');
       rethrow;
     }
   }
 
-  // ============================================================
-  // SMS FALLBACK
-  // ============================================================
+ 
+  // SMS FALLBACK( problem with this is that it the user cant personally  trigger the sos bcoz the app is not 0rating)
+
   static Future<void> sendSMS({
     required String phoneNumber,
     required String message,
@@ -262,9 +262,8 @@ class SOSAlertService {
     }
   }
 
-  // ============================================================
   // OFFLINE SOS QUEUE
-  // ============================================================
+ 
   static Future<void> storeSOSLocally({
     required String userId,
     required String userName,
@@ -290,16 +289,15 @@ class SOSAlertService {
       if (!pending.contains(encoded)) {
         pending.add(encoded);
         await prefs.setStringList(_pendingSOSKey, pending);
-        debugPrint('📦 SOS stored locally: $timestamp');
+        debugPrint(' SOS stored locally: $timestamp');
       }
     } catch (e) {
-      debugPrint('❌ Error storing SOS locally: $e');
+      debugPrint(' Error storing SOS locally: $e');
     }
   }
 
-  // ============================================================
-  // Get pending SOS list
-  // ============================================================
+  // Get pending SOS list(will be sent once back online via wifi or mobile data)
+
   static Future<List<Map<String, String>>> getPendingSOS() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -332,7 +330,7 @@ class SOSAlertService {
 
       return result;
     } catch (e) {
-      debugPrint('❌ Error getting pending SOS: $e');
+      debugPrint(' Error getting pending SOS: $e');
       return [];
     }
   }
@@ -346,7 +344,7 @@ class SOSAlertService {
       await prefs.remove(_pendingSOSKey);
       debugPrint('✅ Pending SOS cleared');
     } catch (e) {
-      debugPrint('❌ Error clearing pending SOS: $e');
+      debugPrint('Error clearing pending SOS: $e');
     }
   }
 
