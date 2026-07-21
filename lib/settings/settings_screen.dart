@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:app_settings/app_settings.dart';
 import 'dart:io';
 import 'package:purple_safety/utils/pref_keys.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -22,7 +23,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
-  // Next of kin data (loaded from Firestore)
   String _nextOfKinName = '';
   String _nextOfKinPhone = '';
   String _nextOfKinRelation = '';
@@ -81,7 +81,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'phone': _phoneController.text,
       });
     } catch (e) {
-      // Silent fail
     } finally {
       setState(() => _isLoading = false);
     }
@@ -100,9 +99,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await BiometricService.setBiometricsEnabled(value);
   }
 
-  // ============================================================
-  // CHANGE NEXT OF KIN
-  // ============================================================
   Future<void> _changeNextOfKin() async {
     final nameController = TextEditingController(text: _nextOfKinName);
     final phoneController = TextEditingController(text: _nextOfKinPhone);
@@ -213,15 +209,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _nextOfKinAltPhone = altPhoneController.text.trim();
         });
       } catch (e) {
-        // Silent fail
       }
     }
     setState(() => _isLoading = false);
   }
 
-  // ============================================================
-  // CHANGE PASSWORD
-  // ============================================================
   void _showChangePasswordDialog() {
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
@@ -310,9 +302,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ============================================================
-  // MANAGE BIOMETRICS
-  // ============================================================
   void _showManageBiometricsDialog() {
     showModalBottomSheet(
       context: context,
@@ -401,9 +390,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // ============================================================
-  // PRIVACY POLICY
-  // ============================================================
   void _showPrivacyPolicy() {
     showDialog(
       context: context,
@@ -505,9 +491,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ============================================================
-  // DELETE ACCOUNT
-  // ============================================================
   Future<void> _confirmDeleteAccount() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
@@ -531,7 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Icon(Icons.warning_amber, color: Colors.red, size: 48),
             SizedBox(height: 16),
             Text(
-              '⚠️ WARNING: This action is PERMANENT and CANNOT be undone.',
+              'WARNING: This action is PERMANENT and CANNOT be undone.',
               style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
             SizedBox(height: 12),
@@ -601,6 +584,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
 
+        // Delete all files from Firebase Storage
+        await StorageService.deleteUserFiles(user.uid);
+
+        // Delete Firestore data
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -638,7 +625,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         await user.delete();
 
         if (mounted) {
-          Navigator.of(context).pop(); // Close loading dialog
+          Navigator.of(context).pop();
           await _navigateToLoginWithAnimation();
         }
       }
@@ -710,9 +697,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // ============================================================
-  // BUILD METHODS
-  // ============================================================
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -923,8 +907,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // Offline Maps tile REMOVED
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -953,7 +935,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Profile Information
                 _buildSectionTitle('Profile Information'),
                 const SizedBox(height: 8),
                 _buildTextField(
@@ -982,14 +963,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                // Next of Kin Section
                 _buildSectionTitle('Next of Kin'),
                 const SizedBox(height: 8),
                 _buildNextOfKinDisplay(),
 
                 const SizedBox(height: 32),
 
-                // Security Section
                 _buildSectionTitle('Security'),
                 const SizedBox(height: 8),
                 _buildSettingTile(
@@ -1013,7 +992,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 24),
 
-                // Account Actions Row
                 _buildSectionTitle('Account Actions'),
                 const SizedBox(height: 12),
                 Row(
@@ -1040,7 +1018,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 20),
 
-                // Warning note
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(

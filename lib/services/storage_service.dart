@@ -7,12 +7,14 @@ class StorageService {
   static final FirebaseStorage _storage = FirebaseStorage.instance;
   static const String _incidentFolder = 'incidents';
   static const String _dmFolder = 'dms';
+  static const String _profileFolder = 'profiles';
+  static const String _recordingsFolder = 'recordings';
 
-  // Upload an image (or any file) and return the public download URL.
+  // Upload any file
   static Future<String> uploadFile({
     required File file,
-    required String folder, // e.g., 'dms', 'incidents'
-    String? subFolder,      // optional: chatId or incidentId
+    required String folder,
+    String? subFolder,
   }) async {
     try {
       final String ext = path.extension(file.path);
@@ -33,17 +35,17 @@ class StorageService {
     }
   }
 
-  // Convenience: upload image for DM
+  // Convenience: upload DM image
   static Future<String> uploadDMImage(File file, String chatId) {
     return uploadFile(file: file, folder: _dmFolder, subFolder: chatId);
   }
 
-  // Convenience: upload video for DM
+  // Convenience: upload DM video
   static Future<String> uploadDMVideo(File file, String chatId) {
     return uploadFile(file: file, folder: _dmFolder, subFolder: chatId);
   }
 
-  // Convenience: upload audio for DM
+  // Convenience: upload DM audio
   static Future<String> uploadDMAudio(File file, String chatId) {
     return uploadFile(file: file, folder: _dmFolder, subFolder: chatId);
   }
@@ -53,13 +55,47 @@ class StorageService {
     return uploadFile(file: file, folder: _incidentFolder, subFolder: incidentId);
   }
 
-  // Delete a file by URL (optional)
+  // Convenience: upload profile image
+  static Future<String> uploadProfileImage({
+    required String filePath,
+    required String userId,
+  }) {
+    final file = File(filePath);
+    return uploadFile(file: file, folder: _profileFolder, subFolder: userId);
+  }
+
+  // Delete a single file by URL
   static Future<void> deleteFile(String downloadUrl) async {
     try {
       final ref = _storage.refFromURL(downloadUrl);
       await ref.delete();
     } catch (e) {
       // Silent fail if file doesn't exist
+    }
+  }
+
+  // Delete all files belonging to a user (for account deletion)
+  static Future<void> deleteUserFiles(String userId) async {
+    try {
+      final List<String> folders = [
+        _incidentFolder,
+        _dmFolder,
+        _profileFolder,
+        _recordingsFolder,
+      ];
+
+      for (final folder in folders) {
+        try {
+          final listResult = await _storage.ref().child('$folder/$userId').listAll();
+          for (final item in listResult.items) {
+            await item.delete();
+          }
+        } catch (e) {
+          // Folder might not exist; ignore
+        }
+      }
+    } catch (e) {
+      // Ignore overall errors
     }
   }
 }

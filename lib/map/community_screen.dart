@@ -10,6 +10,7 @@ import '../incidents/incident_service.dart';
 import '../emergency/sos_alert_service.dart';
 import '../incidents/incident_detail_screen.dart';
 import '../settings/next_of_kin_modal.dart';
+import '../services/danger_zones_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);
@@ -33,6 +34,14 @@ class _CommunityScreenState extends State<CommunityScreen>
   bool _isLoadingSOS = true;
 
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
+
+  Set<Polygon> _getAllDangerZones() {
+    final Set<Polygon> zones = {};
+    for (final zone in DangerZonesService.dangerZones) {
+      zones.add(zone.toPolygon());
+    }
+    return zones;
+  }
 
   @override
   void initState() {
@@ -107,7 +116,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           position: LatLng(event['latitude'], event['longitude']),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
-            title: '🚨 SOS ACTIVE!',
+            title: 'SOS ACTIVE!',
             snippet:
                 '${event['userName']} needs immediate help!\nTap to respond',
           ),
@@ -117,7 +126,7 @@ class _CommunityScreenState extends State<CommunityScreen>
       }
 
       debugPrint(
-        '📍 Updated SOS markers: ${_sosMarkers.length} active SOS events',
+        'Updated SOS markers: ${_sosMarkers.length} active SOS events',
       );
     });
   }
@@ -215,7 +224,7 @@ class _CommunityScreenState extends State<CommunityScreen>
             ),
             const SizedBox(height: 12),
             const Text(
-              '🚨 ACTIVE SOS EMERGENCY 🚨',
+              'ACTIVE SOS EMERGENCY',
               style: TextStyle(
                 color: Colors.red,
                 fontSize: 18,
@@ -464,6 +473,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                     ..._sosMarkers,
                     ..._incidentMarkers,
                   },
+                  polygons: _getAllDangerZones(),
                   myLocationEnabled: true,
                   myLocationButtonEnabled: true,
                   zoomControlsEnabled: true,
@@ -724,14 +734,12 @@ class _CommunityScreenState extends State<CommunityScreen>
                             ),
                           ),
                         ),
-                      // Display missing person image if available (network)
                       if (incident.missingPersonImageUrl != null &&
                           incident.missingPersonImageUrl!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: GestureDetector(
                             onTap: () {
-                              // Navigate to full-screen image
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -913,15 +921,15 @@ class _CommunityScreenState extends State<CommunityScreen>
   Future<void> _shareIncident(Incident incident) async {
     final message =
         '''
-🚨 ${incident.title}
+${incident.title}
 
 ${incident.description}
 
-📍 Location: ${incident.location}
-📅 Reported: ${_formatTime(incident.timestamp)}
-👤 Reported by: ${incident.isAnonymous ? 'Anonymous' : incident.userName ?? 'User'}
+Location: ${incident.location}
+Reported: ${_formatTime(incident.timestamp)}
+Reported by: ${incident.isAnonymous ? 'Anonymous' : incident.userName ?? 'User'}
 
-${incident.type == IncidentType.missingPerson ? '🔍 MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
+${incident.type == IncidentType.missingPerson ? 'MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
 Please share to help spread awareness.
 ''';
 
