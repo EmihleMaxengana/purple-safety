@@ -3,12 +3,13 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/incident_model.dart';
-import 'incident_service.dart';
+import 'package:purple_safety/models/incident_model.dart';
+import 'package:purple_safety/incidents/incident_service.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class ReportIncidentForm extends StatefulWidget {
   final bool isAnonymous;
-  
+
   const ReportIncidentForm({Key? key, required this.isAnonymous}) : super(key: key);
 
   @override
@@ -19,33 +20,31 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
   final _formKey = GlobalKey<FormState>();
   final IncidentService _incidentService = IncidentService();
   final ImagePicker _picker = ImagePicker();
-  
+
   // User info
   String? _userName;
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _alternativePhoneController = TextEditingController();
-  
-  // Incident info - REMOVED title, location, crime, accident, other
-  String _selectedType = 'missingPerson'; // Only missingPerson and harassment
+
+  // Incident info
+  String _selectedType = 'missingPerson';
   final TextEditingController _descriptionController = TextEditingController();
-  
+
   // Missing person fields
   final TextEditingController _missingPersonNameController = TextEditingController();
   final TextEditingController _missingPersonAgeController = TextEditingController();
   final TextEditingController _lastSeenLocationController = TextEditingController();
   File? _missingPersonImage;
-  
-  // Media
+
+  // Media for harassment
   List<File> _images = [];
   List<File> _videos = [];
+
+  // UI state
   bool _isLoading = false;
-  
-  // Updated incident types - removed crime, accident, other
-  final List<String> _incidentTypes = [
-    'missingPerson',
-    'harassment',
-  ];
-  
+  String _errorMessage = '';
+
+  final List<String> _incidentTypes = ['missingPerson', 'harassment'];
   final Map<String, String> _typeLabels = {
     'missingPerson': 'Missing Person',
     'harassment': 'Harassment',
@@ -83,83 +82,114 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
     }
   }
 
+  // -------------------------------
+  // MEDIA PICKING
+  // -------------------------------
+  Future<void> _pickMissingPersonImage() async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() => _missingPersonImage = File(image.path));
+    }
+  }
+
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _images.add(File(image.path));
-      });
+      setState(() => _images.add(File(image.path)));
     }
   }
 
   Future<void> _pickVideo() async {
     final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
     if (video != null) {
-      setState(() {
-        _videos.add(File(video.path));
-      });
+      setState(() => _videos.add(File(video.path)));
     }
   }
 
-  Future<void> _pickMissingPersonImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        _missingPersonImage = File(image.path);
-      });
-    }
-  }
+  void _removeMissingPersonImage() => setState(() => _missingPersonImage = null);
+  void _removeImage(int index) => setState(() => _images.removeAt(index));
+  void _removeVideo(int index) => setState(() => _videos.removeAt(index));
 
-  void _removeImage(int index) {
-    setState(() {
-      _images.removeAt(index);
-    });
-  }
-
-  void _removeVideo(int index) {
-    setState(() {
-      _videos.removeAt(index);
-    });
-  }
-
+  // -------------------------------
+  // SUBMIT
+  // -------------------------------
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
-    
-    setState(() => _isLoading = true);
-    
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
     try {
       final user = FirebaseAuth.instance.currentUser;
       String userId = widget.isAnonymous ? 'anonymous' : (user?.uid ?? 'anonymous');
-      
+
       IncidentType type = IncidentType.values.firstWhere(
         (e) => e.toString() == 'IncidentType.$_selectedType',
         orElse: () => IncidentType.missingPerson,
       );
-      
-      // Get location (using geocoding to get location name from current position)
-      String locationName = 'Unknown location';
-      double? latitude;
-      double? longitude;
-      
-      try {
-        // You'll need to get current location here
-        // For now, we'll use placeholder or ask user
-        locationName = _lastSeenLocationController.text.isNotEmpty 
-            ? _lastSeenLocationController.text 
-            : 'Location not specified';
-      } catch (e) {
-        locationName = 'Location not specified';
+
+      // Get location name (simplified)
+      String locationName = _lastSeenLocationController.text.isNotEmpty
+          ? _lastSeenLocationController.text
+          : 'Location not specified';
+
+      // Generate incident ID early for storage paths
+      final incidentId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // -------------------------------
+      // UPLOAD MEDIA TO FIREBASE STORAGE
+      // -------------------------------
+      List<String> uploadedImageUrls = [];
+      List<String> uploadedVideoUrls = [];
+      String? missingPersonImageUrl;
+
+      // Upload missing person image
+      if (_missingPersonImage != null) {
+        try {
+          missingPersonImageUrl = await StorageService.uploadIncidentMedia(
+            _missingPersonImage!,
+            incidentId,
+          );
+        } catch (e) {
+          setState(() => _errorMessage = 'Failed to upload missing person image: $e');
+          return;
+        }
       }
-      
+
+      // Upload evidence images
+      for (var img in _images) {
+        try {
+          final url = await StorageService.uploadIncidentMedia(img, incidentId);
+          uploadedImageUrls.add(url);
+        } catch (e) {
+          setState(() => _errorMessage = 'Failed to upload evidence image: $e');
+          return;
+        }
+      }
+
+      // Upload evidence videos (if any) – we store as URLs too
+      for (var vid in _videos) {
+        try {
+          final url = await StorageService.uploadIncidentMedia(vid, incidentId);
+          uploadedVideoUrls.add(url);
+        } catch (e) {
+          setState(() => _errorMessage = 'Failed to upload video: $e');
+          return;
+        }
+      }
+
+      // Build incident
       final incident = Incident(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: incidentId,
         userId: userId,
         userName: widget.isAnonymous ? null : _userName,
         userPhone: _phoneController.text,
         alternativePhone: _alternativePhoneController.text.isNotEmpty ? _alternativePhoneController.text : null,
         isAnonymous: widget.isAnonymous,
-        title: _selectedType == 'missingPerson' 
-            ? 'MISSING: ${_missingPersonNameController.text}' 
+        title: _selectedType == 'missingPerson'
+            ? 'MISSING: ${_missingPersonNameController.text}'
             : 'Harassment Report',
         description: _descriptionController.text,
         type: type,
@@ -168,17 +198,17 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             ? int.tryParse(_missingPersonAgeController.text)
             : null,
         lastSeenLocation: _selectedType == 'missingPerson' ? _lastSeenLocationController.text : null,
-        missingPersonImageUrl: _missingPersonImage != null ? _missingPersonImage!.path : null,
+        missingPersonImageUrl: missingPersonImageUrl, // Now a cloud URL
         location: locationName,
-        latitude: latitude,
-        longitude: longitude,
-        imageUrls: [], // Will be uploaded to storage in production
-        videoUrls: [], // Will be uploaded to storage in production
+        latitude: null,
+        longitude: null,
+        imageUrls: uploadedImageUrls, // Cloud URLs
+        videoUrls: uploadedVideoUrls, // Cloud URLs
         timestamp: DateTime.now(),
       );
-      
+
       await _incidentService.createIncident(incident);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Report submitted successfully!')),
@@ -186,14 +216,15 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
         Navigator.pop(context);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
+      setState(() => _errorMessage = 'Error: $e');
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  // -------------------------------
+  // BUILD
+  // -------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -217,17 +248,12 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // User info section
+                // User contact info
                 const Text(
                   'Your Contact Information',
-                  style: TextStyle(
-                    color: Color(0xFFa078c0),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+                  style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold, fontSize: 16),
                 ),
                 const SizedBox(height: 8),
-                
                 if (!widget.isAnonymous)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -239,41 +265,30 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       children: [
                         const Icon(Icons.person, color: Color(0xFFBF7DCB)),
                         const SizedBox(width: 8),
-                        Text(
-                          _userName ?? 'Loading...',
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                        Text(_userName ?? 'Loading...', style: const TextStyle(color: Colors.white)),
                       ],
                     ),
                   ),
-                
                 if (!widget.isAnonymous) const SizedBox(height: 12),
-                
                 _buildTextField(
                   controller: _phoneController,
                   label: 'Phone Number *',
                   hint: 'Your contact number',
                   icon: Icons.phone,
                   keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your phone number';
-                    }
-                    return null;
-                  },
+                  validator: (v) => v!.isEmpty ? 'Phone number required' : null,
                 ),
                 const SizedBox(height: 12),
-                
                 _buildTextField(
                   controller: _alternativePhoneController,
                   label: 'Alternative Phone Number',
-                  hint: 'Optional secondary contact number',
+                  hint: 'Optional',
                   icon: Icons.phone_android,
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 20),
-                
-                // Incident type dropdown - Only Missing Person and Harassment
+
+                // Incident type
                 const Text(
                   'Incident Type *',
                   style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
@@ -293,18 +308,13 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                     ),
                     items: _incidentTypes.map((type) {
-                      return DropdownMenuItem(
-                        value: type,
-                        child: Text(_typeLabels[type]!),
-                      );
+                      return DropdownMenuItem(value: type, child: Text(_typeLabels[type]!));
                     }).toList(),
                     onChanged: (value) => setState(() => _selectedType = value!),
                   ),
                 ),
                 const SizedBox(height: 16),
-                
-                // REMOVED: Title field
-                
+
                 // Missing person section
                 if (_selectedType == 'missingPerson') ...[
                   Container(
@@ -319,55 +329,34 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       children: [
                         const Text(
                           'Missing Person Details',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                          style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 12),
-                        
                         _buildTextField(
                           controller: _missingPersonNameController,
                           label: 'Full Name *',
-                          hint: 'Name of the missing person',
+                          hint: 'Name of missing person',
                           icon: Icons.person_outline,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter missing person name';
-                            }
-                            return null;
-                          },
+                          validator: (v) => v!.isEmpty ? 'Enter name' : null,
                         ),
                         const SizedBox(height: 12),
-                        
                         _buildTextField(
                           controller: _missingPersonAgeController,
                           label: 'Age',
-                          hint: 'Age of missing person',
+                          hint: 'Age (optional)',
                           icon: Icons.cake,
                           keyboardType: TextInputType.number,
                         ),
                         const SizedBox(height: 12),
-                        
                         _buildTextField(
                           controller: _lastSeenLocationController,
                           label: 'Last Seen Location *',
                           hint: 'Where were they last seen?',
                           icon: Icons.location_searching,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter last seen location';
-                            }
-                            return null;
-                          },
+                          validator: (v) => v!.isEmpty ? 'Enter location' : null,
                         ),
                         const SizedBox(height: 12),
-                        
-                        const Text(
-                          'Photo of Missing Person',
-                          style: TextStyle(color: Colors.white70),
-                        ),
+                        const Text('Photo of Missing Person', style: TextStyle(color: Colors.white70)),
                         const SizedBox(height: 8),
                         GestureDetector(
                           onTap: _pickMissingPersonImage,
@@ -384,23 +373,15 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                                     children: [
                                       ClipRRect(
                                         borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(
-                                          _missingPersonImage!,
-                                          width: double.infinity,
-                                          height: 150,
-                                          fit: BoxFit.cover,
-                                        ),
+                                        child: Image.file(_missingPersonImage!, width: double.infinity, height: 150, fit: BoxFit.cover),
                                       ),
                                       Positioned(
                                         top: 8,
                                         right: 8,
                                         child: GestureDetector(
-                                          onTap: () => setState(() => _missingPersonImage = null),
+                                          onTap: _removeMissingPersonImage,
                                           child: Container(
-                                            decoration: const BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
+                                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                             child: const Icon(Icons.close, color: Colors.white, size: 20),
                                           ),
                                         ),
@@ -413,10 +394,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                                       children: [
                                         Icon(Icons.add_photo_alternate, color: Colors.orange, size: 40),
                                         SizedBox(height: 8),
-                                        Text(
-                                          'Tap to add photo',
-                                          style: TextStyle(color: Colors.white70),
-                                        ),
+                                        Text('Tap to add photo', style: TextStyle(color: Colors.white70)),
                                       ],
                                     ),
                                   ),
@@ -427,9 +405,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                
-                // REMOVED: Location field
-                
+
                 // Description
                 _buildTextField(
                   controller: _descriptionController,
@@ -437,23 +413,17 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   hint: 'Describe what happened in detail',
                   icon: Icons.description,
                   maxLines: 5,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a description';
-                    }
-                    return null;
-                  },
+                  validator: (v) => v!.isEmpty ? 'Enter description' : null,
                 ),
                 const SizedBox(height: 16),
-                
-                // Evidence section (for harassment only)
+
+                // Evidence (for harassment)
                 if (_selectedType == 'harassment') ...[
                   const Text(
                     'Evidence (Optional)',
                     style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  
                   Row(
                     children: [
                       Expanded(
@@ -505,7 +475,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       ),
                     ],
                   ),
-                  
                   if (_images.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     SizedBox(
@@ -528,10 +497,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                                   child: GestureDetector(
                                     onTap: () => _removeImage(index),
                                     child: Container(
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                       child: const Icon(Icons.close, size: 16, color: Colors.white),
                                     ),
                                   ),
@@ -543,7 +509,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       ),
                     ),
                   ],
-                  
                   if (_videos.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     SizedBox(
@@ -573,10 +538,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                                   child: GestureDetector(
                                     onTap: () => _removeVideo(index),
                                     child: Container(
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                                       child: const Icon(Icons.close, size: 16, color: Colors.white),
                                     ),
                                   ),
@@ -590,8 +552,15 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   ],
                   const SizedBox(height: 16),
                 ],
-                
-                // Submit button
+
+                // Error message
+                if (_errorMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(_errorMessage, style: const TextStyle(color: Colors.red, fontSize: 13)),
+                  ),
+
+                // Submit
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -600,16 +569,11 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                       backgroundColor: const Color(0xFF6A1B9A),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text(
-                            'Submit Report',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -633,10 +597,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
-        ),
+        Text(label, style: const TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
@@ -649,10 +610,7 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             prefixIcon: Icon(icon, color: const Color(0xFFBF7DCB)),
             filled: true,
             fillColor: Colors.white.withOpacity(0.1),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
           validator: validator,
         ),

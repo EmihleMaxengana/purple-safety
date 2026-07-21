@@ -18,11 +18,12 @@ import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/map/map.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
   const SafetyToolsScreen({Key? key, required this.onCallEmergency})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<SafetyToolsScreen> createState() => _SafetyToolsScreenState();
@@ -155,7 +156,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   // ============================================================
-  // I'M SAFE - Only works if SOS is active
+  // I'M SAFE
   // ============================================================
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
@@ -336,7 +337,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   // ============================================================
-  // RECORDING METHODS
+  // RECORDING METHODS (with Firebase Storage upload)
   // ============================================================
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
@@ -366,7 +367,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       if (path != null) {
         debugPrint('Audio recording saved at: $path');
         if (_autoShareRecordings) {
-          await _shareFile(path, 'audio');
+          // Upload to Firebase Storage and share URL
+          await _uploadAndShareFile(path, 'audio');
         }
       }
     }
@@ -385,9 +387,46 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       debugPrint('Video recorded: ${video.path}');
 
       if (_autoShareRecordings) {
-        await _shareFile(video.path, 'video');
+        await _uploadAndShareFile(video.path, 'video');
       }
       setState(() => _isRecordingVideo = false);
+    }
+  }
+
+  // NEW: Upload file to Firebase Storage and share the URL
+  Future<void> _uploadAndShareFile(String filePath, String type) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      debugPrint('File does not exist: $filePath');
+      return;
+    }
+
+    try {
+      // Upload to Firebase Storage (use DMs folder with a generic chat ID? For now, upload to a "recordings" folder)
+      final String url = await StorageService.uploadFile(
+        file: file,
+        folder: 'recordings',
+        subFolder: '${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      final time = DateTime.now().toLocal().toString();
+      final message =
+          '🚨 Safety recording: $type recording from $time\n\n'
+          'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}';
+
+      // Share the URL (you can also share the file itself, but we share the URL)
+      await Share.share('$message\n\nDownload: $url');
+
+      // Optionally save to Firestore for later retrieval
+      // You could store the URL in the user's profile or a global collection
+    } catch (e) {
+      debugPrint('Failed to upload recording: $e');
+      // Fallback to local file sharing
+      await Share.shareXFiles(
+        [XFile(filePath)],
+        text: 'Safety recording',
+        subject: 'Purple Safety - Recording',
+      );
     }
   }
 
@@ -399,28 +438,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _isLiveStreaming = !_isLiveStreaming;
     });
     debugPrint('Live streaming: ${_isLiveStreaming ? "ON" : "OFF"}');
-  }
-
-  // ============================================================
-  // SHARE FILE - Only to Trusted Contacts
-  // ============================================================
-  Future<void> _shareFile(String filePath, String type) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      debugPrint('File does not exist: $filePath');
-      return;
-    }
-
-    final time = DateTime.now().toLocal().toString();
-    final message =
-        '🚨 Safety recording: $type recording from $time\n\n'
-        'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}';
-
-    await Share.shareXFiles(
-      [XFile(filePath)],
-      text: message,
-      subject: 'Purple Safety - Recording',
-    );
   }
 
   @override
@@ -596,9 +613,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
   // LOCATION MAP - Share button bottom-left, locate me right
-  // ============================================================
+ 
   Widget _buildLocationMap() {
     if (!_locationEnabled || _currentPosition == null) {
       return Container(
@@ -658,9 +674,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
   // QUICK CALL BUTTONS
-  // ============================================================
   Widget _buildQuickCallButtons() {
     List<Widget> buttons = [];
     for (int i = 0; i < _contacts.length && i < 2; i++) {
@@ -721,9 +735,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
   // CALL EMERGENCY BUTTON
-  // ============================================================
   Widget _buildCallEmergencyButton() {
     return ElevatedButton.icon(
       onPressed: widget.onCallEmergency,
@@ -745,9 +757,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
   // I'M SAFE BUTTON - Only shows when SOS is active
-  // ============================================================
   Widget _buildImSafeButton() {
     return ElevatedButton.icon(
       onPressed: _imSafe,

@@ -4,11 +4,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/incident_model.dart';
 import '../incidents/incident_service.dart';
 import '../emergency/sos_alert_service.dart';
 import '../incidents/incident_detail_screen.dart';
 import '../settings/next_of_kin_modal.dart';
+import '../services/danger_zones_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({Key? key}) : super(key: key);
@@ -32,6 +34,14 @@ class _CommunityScreenState extends State<CommunityScreen>
   bool _isLoadingSOS = true;
 
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
+
+  Set<Polygon> _getAllDangerZones() {
+    final Set<Polygon> zones = {};
+    for (final zone in DangerZonesService.dangerZones) {
+      zones.add(zone.toPolygon());
+    }
+    return zones;
+  }
 
   @override
   void initState() {
@@ -106,7 +116,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           position: LatLng(event['latitude'], event['longitude']),
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
-            title: '🚨 SOS ACTIVE!',
+            title: 'SOS ACTIVE!',
             snippet:
                 '${event['userName']} needs immediate help!\nTap to respond',
           ),
@@ -116,7 +126,7 @@ class _CommunityScreenState extends State<CommunityScreen>
       }
 
       debugPrint(
-        '📍 Updated SOS markers: ${_sosMarkers.length} active SOS events',
+        'Updated SOS markers: ${_sosMarkers.length} active SOS events',
       );
     });
   }
@@ -214,7 +224,7 @@ class _CommunityScreenState extends State<CommunityScreen>
             ),
             const SizedBox(height: 12),
             const Text(
-              '🚨 ACTIVE SOS EMERGENCY 🚨',
+              'ACTIVE SOS EMERGENCY',
               style: TextStyle(
                 color: Colors.red,
                 fontSize: 18,
@@ -463,6 +473,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                     ..._sosMarkers,
                     ..._incidentMarkers,
                   },
+                  polygons: _getAllDangerZones(),
                   myLocationEnabled: true,
                   myLocationButtonEnabled: true,
                   zoomControlsEnabled: true,
@@ -723,6 +734,64 @@ class _CommunityScreenState extends State<CommunityScreen>
                             ),
                           ),
                         ),
+                      if (incident.missingPersonImageUrl != null &&
+                          incident.missingPersonImageUrl!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => Scaffold(
+                                    backgroundColor: Colors.black,
+                                    appBar: AppBar(
+                                      backgroundColor: Colors.black,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    body: Center(
+                                      child: InteractiveViewer(
+                                        child: CachedNetworkImage(
+                                          imageUrl: incident.missingPersonImageUrl!,
+                                          placeholder: (context, url) => const CircularProgressIndicator(),
+                                          errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white54, size: 60),
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: CachedNetworkImage(
+                                imageUrl: incident.missingPersonImageUrl!,
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  width: 80,
+                                  height: 80,
+                                  color: Colors.grey[800],
+                                  child: const Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: 80,
+                                  height: 80,
+                                  color: Colors.grey[800],
+                                  child: const Icon(Icons.person_outline, color: Colors.white54),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -852,15 +921,15 @@ class _CommunityScreenState extends State<CommunityScreen>
   Future<void> _shareIncident(Incident incident) async {
     final message =
         '''
-🚨 ${incident.title}
+${incident.title}
 
 ${incident.description}
 
-📍 Location: ${incident.location}
-📅 Reported: ${_formatTime(incident.timestamp)}
-👤 Reported by: ${incident.isAnonymous ? 'Anonymous' : incident.userName ?? 'User'}
+Location: ${incident.location}
+Reported: ${_formatTime(incident.timestamp)}
+Reported by: ${incident.isAnonymous ? 'Anonymous' : incident.userName ?? 'User'}
 
-${incident.type == IncidentType.missingPerson ? '🔍 MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
+${incident.type == IncidentType.missingPerson ? 'MISSING PERSON: ${incident.missingPersonName}\nAge: ${incident.missingPersonAge}\nLast seen: ${incident.lastSeenLocation}\n' : ''}
 Please share to help spread awareness.
 ''';
 

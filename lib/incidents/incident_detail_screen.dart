@@ -4,6 +4,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
 import '../models/incident_model.dart';
 import 'incident_service.dart';
 
@@ -23,6 +25,9 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
   bool _isLoading = false;
   bool _isMarkingFound = false;
   int _commentCount = 0;
+
+  // Video player controller for inline video playback (optional)
+  VideoPlayerController? _videoController;
 
   @override
   void initState() {
@@ -66,7 +71,7 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
     }
   }
 
-  // FIXED: Share using XFile like the tools page
+  // SHARE (now uses the story URLs if available)
   Future<void> _shareIncident() async {
     String shareMessage;
     
@@ -104,24 +109,13 @@ Please stay safe. Report incidents via Purple Safety app.
 ''';
     }
     
-    // Share using XFile (same as tools page)
+    // If there is a missing person image URL (now a cloud URL), share it
     if (widget.incident.type == IncidentType.missingPerson && 
         widget.incident.missingPersonImageUrl != null && 
         widget.incident.missingPersonImageUrl!.isNotEmpty) {
-      try {
-        final imageFile = File(widget.incident.missingPersonImageUrl!);
-        if (await imageFile.exists()) {
-          await Share.shareXFiles(
-            [XFile(widget.incident.missingPersonImageUrl!)],
-            text: shareMessage,
-            subject: 'Missing Person Alert - Purple Safety',
-          );
-        } else {
-          await Share.share(shareMessage, subject: 'Purple Safety Alert');
-        }
-      } catch (e) {
-        await Share.share(shareMessage, subject: 'Purple Safety Alert');
-      }
+      // Since it's a network URL, we can't share a local file, so we just share the text with the URL
+      shareMessage += '\n\nPhoto: ${widget.incident.missingPersonImageUrl}';
+      await Share.share(shareMessage, subject: 'Missing Person Alert - Purple Safety');
     } else {
       await Share.share(shareMessage, subject: 'Purple Safety Alert');
     }
@@ -197,6 +191,32 @@ Please stay safe. Report incidents via Purple Safety app.
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  // Helper to open full-screen image
+  void _openImageFullScreen(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            foregroundColor: Colors.white,
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              child: CachedNetworkImage(
+                imageUrl: imageUrl,
+                placeholder: (context, url) => const CircularProgressIndicator(),
+                errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white54, size: 60),
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -281,26 +301,33 @@ Please stay safe. Report incidents via Purple Safety app.
                     ),
                     const SizedBox(height: 16),
                     
-                    // Missing person image
+                    // Missing person image - now using CachedNetworkImage for network URLs
                     if (widget.incident.type == IncidentType.missingPerson && 
                         widget.incident.missingPersonImageUrl != null &&
                         widget.incident.missingPersonImageUrl!.isNotEmpty)
-                      Container(
-                        height: 180,
-                        width: double.infinity,
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.file(
-                            File(widget.incident.missingPersonImageUrl!),
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
+                      GestureDetector(
+                        onTap: () => _openImageFullScreen(widget.incident.missingPersonImageUrl!),
+                        child: Container(
+                          height: 180,
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: CachedNetworkImage(
+                              imageUrl: widget.incident.missingPersonImageUrl!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              placeholder: (context, url) => Container(
+                                color: Colors.grey[800],
+                                child: const Center(
+                                  child: CircularProgressIndicator(color: Colors.orange),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
                                 color: Colors.grey[800],
                                 child: const Center(
                                   child: Column(
@@ -315,8 +342,8 @@ Please stay safe. Report incidents via Purple Safety app.
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -355,7 +382,7 @@ Please stay safe. Report incidents via Purple Safety app.
                       ),
                     const SizedBox(height: 16),
                     
-                    // Evidence images for harassment
+                    // Evidence images - now network URLs
                     if (widget.incident.imageUrls.isNotEmpty)
                       Container(
                         margin: const EdgeInsets.only(bottom: 16),
@@ -373,26 +400,97 @@ Please stay safe. Report incidents via Purple Safety app.
                                 scrollDirection: Axis.horizontal,
                                 itemCount: widget.incident.imageUrls.length,
                                 itemBuilder: (context, index) {
-                                  return Container(
-                                    width: 100,
-                                    margin: const EdgeInsets.only(right: 8),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.white24),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.file(
-                                        File(widget.incident.imageUrls[index]),
-                                        fit: BoxFit.cover,
-                                        width: 100,
-                                        height: 100,
-                                        errorBuilder: (context, error, stackTrace) {
-                                          return Container(
+                                  final url = widget.incident.imageUrls[index];
+                                  return GestureDetector(
+                                    onTap: () => _openImageFullScreen(url),
+                                    child: Container(
+                                      width: 100,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white24),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: CachedNetworkImage(
+                                          imageUrl: url,
+                                          fit: BoxFit.cover,
+                                          width: 100,
+                                          height: 100,
+                                          placeholder: (context, url) => Container(
+                                            color: Colors.grey[800],
+                                            child: const Center(
+                                              child: SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(strokeWidth: 2),
+                                              ),
+                                            ),
+                                          ),
+                                          errorWidget: (context, url, error) => Container(
                                             color: Colors.grey[800],
                                             child: const Icon(Icons.broken_image, color: Colors.white54),
-                                          );
-                                        },
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    // Evidence videos - if any (simple placeholder)
+                    if (widget.incident.videoUrls.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Evidence Videos',
+                              style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              height: 100,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: widget.incident.videoUrls.length,
+                                itemBuilder: (context, index) {
+                                  final url = widget.incident.videoUrls[index];
+                                  return GestureDetector(
+                                    onTap: () {
+                                      // Open video in external player or custom player
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(content: Text('Video player coming soon')),
+                                      );
+                                    },
+                                    child: Container(
+                                      width: 100,
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.white24),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Container(
+                                              color: Colors.grey[800],
+                                              child: const Icon(Icons.videocam, color: Colors.white54, size: 40),
+                                            ),
+                                            const Icon(
+                                              Icons.play_circle_fill,
+                                              color: Colors.white,
+                                              size: 30,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );

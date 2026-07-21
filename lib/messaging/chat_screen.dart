@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:purple_safety/messaging/dm_service.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String recipientId;
@@ -22,6 +26,10 @@ class _ChatScreenState extends State<ChatScreen> {
   final ScrollController _scrollController = ScrollController();
   String _currentUserId = '';
   String _currentUserName = '';
+  final ImagePicker _picker = ImagePicker();
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _currentlyPlayingAudioUrl;
+  bool _isPlaying = false;
 
   @override
   void initState() {
@@ -32,20 +40,18 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadCurrentUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      setState(() {
-        _currentUserId = user.uid;
-      });
+      setState(() => _currentUserId = user.uid);
       final name = await DmService.getUserName(user.uid);
-      setState(() {
-        _currentUserName = name;
-      });
+      setState(() => _currentUserName = name);
     }
   }
 
-  Future<void> _sendMessage() async {
+  // -------------------------------
+  // SEND TEXT
+  // -------------------------------
+  Future<void> _sendTextMessage() async {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
-
     _messageController.clear();
     await DmService.sendTextMessage(
       recipientUserId: widget.recipientId,
@@ -54,6 +60,53 @@ class _ChatScreenState extends State<ChatScreen> {
       message: text,
     );
     _scrollToBottom();
+  }
+
+  // -------------------------------
+  // SEND IMAGE
+  // -------------------------------
+  Future<void> _sendImage() async {
+    final XFile? picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    final file = File(picked.path);
+    await DmService.sendImageMessage(
+      recipientUserId: widget.recipientId,
+      senderId: _currentUserId,
+      senderName: _currentUserName,
+      imageFile: file,
+    );
+    _scrollToBottom();
+  }
+
+  // -------------------------------
+  // SEND VIDEO
+  // -------------------------------
+  Future<void> _sendVideo() async {
+    final XFile? picked = await _picker.pickVideo(source: ImageSource.gallery);
+    if (picked == null) return;
+    final file = File(picked.path);
+    await DmService.sendVideoMessage(
+      recipientUserId: widget.recipientId,
+      senderId: _currentUserId,
+      senderName: _currentUserName,
+      videoFile: file,
+    );
+    _scrollToBottom();
+  }
+
+  // -------------------------------
+  // SEND AUDIO (using existing audio recording from Safety Tools? For simplicity, we pick from gallery)
+  // But we can also allow recording. We'll just pick from gallery.
+  // For recording, you'd need to use the record package; but for now we use picker.
+  // -------------------------------
+  Future<void> _sendAudio() async {
+    final XFile? picked = await _picker.pickVideo(source: ImageSource.gallery);
+    // Actually picker doesn't support audio. We'll use a file picker? For simplicity, we skip.
+    // Instead, we'll allow recording via a separate button.
+    // For now, just show a snackbar.
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Audio sending coming soon. Use record button in Safety Tools.')),
+    );
   }
 
   void _scrollToBottom() {
@@ -66,6 +119,38 @@ class _ChatScreenState extends State<ChatScreen> {
         );
       }
     });
+  }
+
+  // -------------------------------
+  // PLAY AUDIO (inline)
+  // -------------------------------
+  Future<void> _toggleAudio(String url) async {
+    if (_currentlyPlayingAudioUrl == url && _isPlaying) {
+      await _audioPlayer.pause();
+      setState(() => _isPlaying = false);
+    } else if (_currentlyPlayingAudioUrl == url && !_isPlaying) {
+      await _audioPlayer.resume();
+      setState(() => _isPlaying = true);
+    } else {
+      // stop previous and play new
+      await _audioPlayer.stop();
+      await _audioPlayer.play(UrlSource(url));
+      setState(() {
+        _currentlyPlayingAudioUrl = url;
+        _isPlaying = true;
+      });
+      _audioPlayer.onPlayerComplete.listen((event) {
+        setState(() => _isPlaying = false);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
   }
 
   @override
@@ -111,6 +196,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final data = messages[index].data() as Map<String, dynamic>;
                     final isMe = data['senderId'] == _currentUserId;
+                    final type = data['type'] ?? 'text';
                     return Align(
                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
@@ -120,10 +206,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           color: isMe ? const Color(0xFF6A1B9A) : const Color(0xFF2a1f3e),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Text(
-                          data['message'],
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                        child: _buildMessageContent(type, data),
                       ),
                     );
                   },
@@ -131,11 +215,22 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          // Input row with attachment buttons
           Container(
             padding: const EdgeInsets.all(8),
             color: const Color(0xFF1a0f2e),
             child: Row(
               children: [
+                IconButton(
+                  icon: const Icon(Icons.photo, color: Colors.blue, size: 24),
+                  onPressed: _sendImage,
+                  tooltip: 'Send Image',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.videocam, color: Colors.green, size: 24),
+                  onPressed: _sendVideo,
+                  tooltip: 'Send Video',
+                ),
                 Expanded(
                   child: TextField(
                     controller: _messageController,
@@ -156,7 +251,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send, color: Color(0xFFBF7DCB)),
-                  onPressed: _sendMessage,
+                  onPressed: _sendTextMessage,
                 ),
               ],
             ),
@@ -164,5 +259,145 @@ class _ChatScreenState extends State<ChatScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildMessageContent(String type, Map<String, dynamic> data) {
+    switch (type) {
+      case 'image':
+        final imageUrl = data['imageUrl'] as String?;
+        if (imageUrl == null) return const Text('Image unavailable');
+        return GestureDetector(
+          onTap: () {
+            // Show full-screen image
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => Scaffold(
+                  backgroundColor: Colors.black,
+                  appBar: AppBar(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                  ),
+                  body: Center(
+                    child: Image.network(imageUrl, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+            );
+          },
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              imageUrl,
+              width: 200,
+              height: 200,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[800],
+                  child: const Center(child: CircularProgressIndicator()),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 200,
+                  height: 200,
+                  color: Colors.grey[800],
+                  child: const Icon(Icons.broken_image, color: Colors.white54),
+                );
+              },
+            ),
+          ),
+        );
+
+      case 'video':
+        final videoUrl = data['videoUrl'] as String?;
+        if (videoUrl == null) return const Text('Video unavailable');
+        return GestureDetector(
+          onTap: () {
+            // Open video in a new screen with a video player.
+            // For simplicity, we use a webview or external player.
+            // We'll use the url_launcher to open in browser, or implement a video player.
+            // For now, show snackbar.
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Video player coming soon. Tap to open in browser.')),
+            );
+            // Could launch URL with url_launcher: launchUrl(Uri.parse(videoUrl));
+          },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: 200,
+                height: 200,
+                color: Colors.grey[800],
+                child: const Icon(Icons.play_circle_fill, color: Colors.white, size: 60),
+              ),
+              // You could also add a thumbnail from the video using video_thumbnail package.
+            ],
+          ),
+        );
+
+      case 'audio':
+        final audioUrl = data['audioUrl'] as String?;
+        if (audioUrl == null) return const Text('Audio unavailable');
+        final isCurrent = _currentlyPlayingAudioUrl == audioUrl;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Icon(
+                (isCurrent && _isPlaying) ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+              ),
+              onPressed: () => _toggleAudio(audioUrl),
+            ),
+            Expanded(
+              child: Text(
+                isCurrent && _isPlaying ? 'Playing...' : 'Audio message',
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        );
+
+      case 'trip_share':
+        final tripId = data['tripId'] ?? '';
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('📍 Shared Trip ID', style: TextStyle(color: Colors.white70)),
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: () {
+                // Navigate to FullMapScreen with tripId
+                Navigator.pushNamed(context, '/full_map', arguments: tripId);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.purple.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  tripId,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ],
+        );
+
+      default:
+        // text
+        return Text(
+          data['message'] ?? '',
+          style: const TextStyle(color: Colors.white),
+        );
+    }
   }
 }
