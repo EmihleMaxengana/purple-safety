@@ -95,17 +95,13 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // -------------------------------
-  // SEND AUDIO (using existing audio recording from Safety Tools? For simplicity, we pick from gallery)
-  // But we can also allow recording. We'll just pick from gallery.
-  // For recording, you'd need to use the record package; but for now we use picker.
+  // SEND AUDIO (pick from gallery - for demo, or you can integrate recorder)
   // -------------------------------
   Future<void> _sendAudio() async {
-    final XFile? picked = await _picker.pickVideo(source: ImageSource.gallery);
-    // Actually picker doesn't support audio. We'll use a file picker? For simplicity, we skip.
-    // Instead, we'll allow recording via a separate button.
-    // For now, just show a snackbar.
+    // We'll use a simple file picker; actually there's no audio picker, so we'll use a workaround:
+    // You could use a recording button. For simplicity, we'll show a snackbar.
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Audio sending coming soon. Use record button in Safety Tools.')),
+      const SnackBar(content: Text('Audio recording not implemented here. Use Safety Tools.')),
     );
   }
 
@@ -122,7 +118,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // -------------------------------
-  // PLAY AUDIO (inline)
+  // PLAY AUDIO
   // -------------------------------
   Future<void> _toggleAudio(String url) async {
     if (_currentlyPlayingAudioUrl == url && _isPlaying) {
@@ -132,7 +128,6 @@ class _ChatScreenState extends State<ChatScreen> {
       await _audioPlayer.resume();
       setState(() => _isPlaying = true);
     } else {
-      // stop previous and play new
       await _audioPlayer.stop();
       await _audioPlayer.play(UrlSource(url));
       setState(() {
@@ -268,7 +263,6 @@ class _ChatScreenState extends State<ChatScreen> {
         if (imageUrl == null) return const Text('Image unavailable');
         return GestureDetector(
           onTap: () {
-            // Show full-screen image
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -318,14 +312,10 @@ class _ChatScreenState extends State<ChatScreen> {
         if (videoUrl == null) return const Text('Video unavailable');
         return GestureDetector(
           onTap: () {
-            // Open video in a new screen with a video player.
-            // For simplicity, we use a webview or external player.
-            // We'll use the url_launcher to open in browser, or implement a video player.
-            // For now, show snackbar.
+            // In production, you'd use a video player.
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Video player coming soon. Tap to open in browser.')),
+              const SnackBar(content: Text('Video player coming soon.')),
             );
-            // Could launch URL with url_launcher: launchUrl(Uri.parse(videoUrl));
           },
           child: Stack(
             alignment: Alignment.center,
@@ -336,7 +326,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 color: Colors.grey[800],
                 child: const Icon(Icons.play_circle_fill, color: Colors.white, size: 60),
               ),
-              // You could also add a thumbnail from the video using video_thumbnail package.
             ],
           ),
         );
@@ -370,11 +359,10 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('📍 Shared Trip ID', style: TextStyle(color: Colors.white70)),
+            const Text('Shared Trip ID', style: TextStyle(color: Colors.white70)),
             const SizedBox(height: 4),
             GestureDetector(
               onTap: () {
-                // Navigate to FullMapScreen with tripId
                 Navigator.pushNamed(context, '/full_map', arguments: tripId);
               },
               child: Container(

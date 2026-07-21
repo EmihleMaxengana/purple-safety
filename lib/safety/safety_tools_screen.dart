@@ -142,9 +142,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  Future<void> _resendLocation() async {
-    // Silent action
-  }
+  Future<void> _resendLocation() async {}
 
   Future<void> _callNumber(String number) async {
     final Uri url = Uri(scheme: 'tel', path: number.replaceAll(' ', ''));
@@ -155,9 +153,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ============================================================
-  // I'M SAFE
-  // ============================================================
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -186,7 +181,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
       for (var doc in querySnapshot.docs) {
         await SOSAlertService.deactivateSOSEvent(doc.id);
-        debugPrint('✅ Deactivated SOS event: ${doc.id}');
+        debugPrint('Deactivated SOS event: ${doc.id}');
       }
     } catch (e) {
       debugPrint('Error deactivating SOS event: $e');
@@ -218,7 +213,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           : 'Location unavailable';
 
       final message =
-          '✅ SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
+          'SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
 
       await FirebaseFirestore.instance.collection('global_alerts').add({
         'timestamp': FieldValue.serverTimestamp(),
@@ -336,9 +331,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // RECORDING METHODS (with Firebase Storage upload)
-  // ============================================================
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) return;
@@ -367,7 +359,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       if (path != null) {
         debugPrint('Audio recording saved at: $path');
         if (_autoShareRecordings) {
-          // Upload to Firebase Storage and share URL
           await _uploadAndShareFile(path, 'audio');
         }
       }
@@ -393,7 +384,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // NEW: Upload file to Firebase Storage and share the URL
   Future<void> _uploadAndShareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -402,26 +392,26 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     try {
-      // Upload to Firebase Storage (use DMs folder with a generic chat ID? For now, upload to a "recordings" folder)
-      final String url = await StorageService.uploadFile(
+      final user = AuthService().getCurrentUser();
+      if (user == null) {
+        throw Exception('User not logged in');
+      }
+
+      final url = await StorageService.uploadRecording(
         file: file,
-        folder: 'recordings',
-        subFolder: '${DateTime.now().millisecondsSinceEpoch}',
+        userId: user.uid,
+        subFolder: _isEmergencyActive ? 'sos' : 'recordings',
       );
 
       final time = DateTime.now().toLocal().toString();
       final message =
-          '🚨 Safety recording: $type recording from $time\n\n'
-          'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}';
+          'Safety recording: $type recording from $time\n\n'
+          'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}\n'
+          'Download: $url';
 
-      // Share the URL (you can also share the file itself, but we share the URL)
-      await Share.share('$message\n\nDownload: $url');
-
-      // Optionally save to Firestore for later retrieval
-      // You could store the URL in the user's profile or a global collection
+      await Share.share(message);
     } catch (e) {
       debugPrint('Failed to upload recording: $e');
-      // Fallback to local file sharing
       await Share.shareXFiles(
         [XFile(filePath)],
         text: 'Safety recording',
@@ -430,9 +420,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ============================================================
-  // LIVE STREAMING - Toggle
-  // ============================================================
   void _toggleLiveStreaming() {
     setState(() {
       _isLiveStreaming = !_isLiveStreaming;
@@ -479,9 +466,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // CAPTURE IT! - Three buttons
-  // ============================================================
   Widget _buildRecordingControls() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -568,9 +552,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // AUTO-SHARE TOGGLE
-  // ============================================================
   Widget _buildAutoShareToggle() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -586,7 +567,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Auto‑share recordings',
+                'Auto-share recordings',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -613,8 +594,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // LOCATION MAP - Share button bottom-left, locate me right
- 
   Widget _buildLocationMap() {
     if (!_locationEnabled || _currentPosition == null) {
       return Container(
@@ -658,7 +637,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                 ),
               },
             ),
-            // Share button – bottom-left
             Positioned(
               bottom: 8,
               left: 8,
@@ -674,7 +652,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // QUICK CALL BUTTONS
   Widget _buildQuickCallButtons() {
     List<Widget> buttons = [];
     for (int i = 0; i < _contacts.length && i < 2; i++) {
@@ -735,7 +712,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // CALL EMERGENCY BUTTON
   Widget _buildCallEmergencyButton() {
     return ElevatedButton.icon(
       onPressed: widget.onCallEmergency,
@@ -757,13 +733,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // I'M SAFE BUTTON - Only shows when SOS is active
   Widget _buildImSafeButton() {
     return ElevatedButton.icon(
       onPressed: _imSafe,
       icon: const Icon(Icons.check_circle, color: Colors.white, size: 20),
       label: const Text(
-        "I'm Safe ✓",
+        "I'm Safe",
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,

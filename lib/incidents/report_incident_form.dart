@@ -82,9 +82,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
     }
   }
 
-  // -------------------------------
-  // MEDIA PICKING
-  // -------------------------------
   Future<void> _pickMissingPersonImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
@@ -110,9 +107,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
   void _removeImage(int index) => setState(() => _images.removeAt(index));
   void _removeVideo(int index) => setState(() => _videos.removeAt(index));
 
-  // -------------------------------
-  // SUBMIT
-  // -------------------------------
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -124,33 +118,30 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       String userId = widget.isAnonymous ? 'anonymous' : (user?.uid ?? 'anonymous');
+      final String storageUserId = user?.uid ?? 'anonymous';
 
       IncidentType type = IncidentType.values.firstWhere(
         (e) => e.toString() == 'IncidentType.$_selectedType',
         orElse: () => IncidentType.missingPerson,
       );
 
-      // Get location name (simplified)
       String locationName = _lastSeenLocationController.text.isNotEmpty
           ? _lastSeenLocationController.text
           : 'Location not specified';
 
-      // Generate incident ID early for storage paths
       final incidentId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // -------------------------------
-      // UPLOAD MEDIA TO FIREBASE STORAGE
-      // -------------------------------
       List<String> uploadedImageUrls = [];
       List<String> uploadedVideoUrls = [];
       String? missingPersonImageUrl;
 
       // Upload missing person image
-      if (_missingPersonImage != null) {
+      if (_missingPersonImage != null && storageUserId != 'anonymous') {
         try {
-          missingPersonImageUrl = await StorageService.uploadIncidentMedia(
-            _missingPersonImage!,
-            incidentId,
+          missingPersonImageUrl = await StorageService.uploadMissingPersonImage(
+            file: _missingPersonImage!,
+            userId: storageUserId,
+            incidentId: incidentId,
           );
         } catch (e) {
           setState(() => _errorMessage = 'Failed to upload missing person image: $e');
@@ -160,27 +151,38 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
 
       // Upload evidence images
       for (var img in _images) {
-        try {
-          final url = await StorageService.uploadIncidentMedia(img, incidentId);
-          uploadedImageUrls.add(url);
-        } catch (e) {
-          setState(() => _errorMessage = 'Failed to upload evidence image: $e');
-          return;
+        if (storageUserId != 'anonymous') {
+          try {
+            final url = await StorageService.uploadIncidentMedia(
+              file: img,
+              userId: storageUserId,
+              incidentId: incidentId,
+            );
+            uploadedImageUrls.add(url);
+          } catch (e) {
+            setState(() => _errorMessage = 'Failed to upload evidence image: $e');
+            return;
+          }
         }
       }
 
-      // Upload evidence videos (if any) – we store as URLs too
+      // Upload evidence videos
       for (var vid in _videos) {
-        try {
-          final url = await StorageService.uploadIncidentMedia(vid, incidentId);
-          uploadedVideoUrls.add(url);
-        } catch (e) {
-          setState(() => _errorMessage = 'Failed to upload video: $e');
-          return;
+        if (storageUserId != 'anonymous') {
+          try {
+            final url = await StorageService.uploadIncidentMedia(
+              file: vid,
+              userId: storageUserId,
+              incidentId: incidentId,
+            );
+            uploadedVideoUrls.add(url);
+          } catch (e) {
+            setState(() => _errorMessage = 'Failed to upload video: $e');
+            return;
+          }
         }
       }
 
-      // Build incident
       final incident = Incident(
         id: incidentId,
         userId: userId,
@@ -198,12 +200,12 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             ? int.tryParse(_missingPersonAgeController.text)
             : null,
         lastSeenLocation: _selectedType == 'missingPerson' ? _lastSeenLocationController.text : null,
-        missingPersonImageUrl: missingPersonImageUrl, // Now a cloud URL
+        missingPersonImageUrl: missingPersonImageUrl,
         location: locationName,
         latitude: null,
         longitude: null,
-        imageUrls: uploadedImageUrls, // Cloud URLs
-        videoUrls: uploadedVideoUrls, // Cloud URLs
+        imageUrls: uploadedImageUrls,
+        videoUrls: uploadedVideoUrls,
         timestamp: DateTime.now(),
       );
 
@@ -222,9 +224,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
     }
   }
 
-  // -------------------------------
-  // BUILD
-  // -------------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -248,7 +247,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // User contact info
                 const Text(
                   'Your Contact Information',
                   style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold, fontSize: 16),
@@ -288,7 +286,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 20),
 
-                // Incident type
                 const Text(
                   'Incident Type *',
                   style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
@@ -315,7 +312,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // Missing person section
                 if (_selectedType == 'missingPerson') ...[
                   Container(
                     padding: const EdgeInsets.all(12),
@@ -406,7 +402,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   const SizedBox(height: 16),
                 ],
 
-                // Description
                 _buildTextField(
                   controller: _descriptionController,
                   label: 'Description *',
@@ -417,7 +412,6 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // Evidence (for harassment)
                 if (_selectedType == 'harassment') ...[
                   const Text(
                     'Evidence (Optional)',
@@ -553,14 +547,12 @@ class _ReportIncidentFormState extends State<ReportIncidentForm> {
                   const SizedBox(height: 16),
                 ],
 
-                // Error message
                 if (_errorMessage.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: Text(_errorMessage, style: const TextStyle(color: Colors.red, fontSize: 13)),
                   ),
 
-                // Submit
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(

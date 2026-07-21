@@ -5,9 +5,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purple_safety/messaging/dm_service.dart';
 import 'package:purple_safety/messaging/chat_screen.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class DMScreen extends StatefulWidget {
-  final String? shareTripId; // If provided, Auto‑share tab shows "Share" button
+  final String? shareTripId;
 
   const DMScreen({Key? key, this.shareTripId}) : super(key: key);
 
@@ -21,7 +22,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   List<String> _selectedRecipients = [];
   bool _isLoading = true;
 
-  // Community tab data
   List<Map<String, dynamic>> _communityUsers = [];
   List<Map<String, dynamic>> _filteredCommunityUsers = [];
   TextEditingController _searchController = TextEditingController();
@@ -100,7 +100,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   Future<void> _saveSelection() async {
     await DmService.saveSelectedRecipients(_selectedRecipients);
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Auto‑share recipients saved')),
+      const SnackBar(content: Text('Auto-share recipients saved')),
     );
   }
 
@@ -250,7 +250,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(text: 'Auto‑share'),
+            Tab(text: 'Auto-share'),
             Tab(text: 'Community'),
             Tab(text: 'Inbox'),
           ],
@@ -259,7 +259,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ========== AUTO‑SHARE TAB ==========
+          // Auto-share tab
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -320,7 +320,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           child: Text(
-                            isShareMode ? 'Share' : 'Save Auto‑share List',
+                            isShareMode ? 'Share' : 'Save Auto-share List',
                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -328,7 +328,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     ],
                   ),
                 ),
-          // ========== COMMUNITY TAB ==========
+          // Community tab
           _isLoadingCommunity
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -385,7 +385,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     ],
                   ),
                 ),
-          // ========== INBOX TAB ==========
+          // Inbox tab
           Container(
             color: const Color(0xFF0e0718),
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -459,7 +459,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                           if (isTripShare) {
                             _followTrip(msg['tripId']);
                           } else {
-                            // Open chat screen with the sender
                             Navigator.push(
                               context,
                               MaterialPageRoute(

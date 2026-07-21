@@ -19,7 +19,7 @@ import 'package:purple_safety/incidents/post_choice_modal.dart';
 import 'package:purple_safety/emergency/sos_alert_service.dart';
 import 'package:purple_safety/trip/trip_sharing_service.dart';
 import 'package:purple_safety/Invitations/invite_contact_screen.dart';
-import 'package:purple_safety/messaging/dm_service.dart';
+import 'package:purple_safety/messaging/dm_service.dart' as dm_service;
 import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/map/map.dart';
@@ -398,11 +398,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
 
         try {
-          final recipients = await DmService.getSelectedRecipients();
+          final recipients = await dm_service.DmService.getSelectedRecipients();
           final userId = user.uid;
           if (userId != null && recipients.isNotEmpty) {
             for (var recipientId in recipients) {
-              await DmService.sendTripIdMessage(
+              await dm_service.DmService.sendTripIdMessage(
                 recipientUserId: recipientId,
                 senderName: userName,
                 tripId: tripId,

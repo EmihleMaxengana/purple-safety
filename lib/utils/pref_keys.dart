@@ -5,11 +5,11 @@ class PrefKeys {
   static const String shareLocationWithContacts = 'shareLocationWithContacts';
   static const String shareLocationWithCommunity = 'shareLocationWithCommunity';
   static const String profileImagePath = 'profileImagePath';
+  static const String profileImageUrl = 'profileImageUrl';
   static const String followedTrips = 'followedTrips';
   static const String savedEmail = 'saved_email';
   static const String rememberMe = 'remember_me';
   static const String requireReauth = 'require_reauth';
   static const String usePinAuth = 'usePinAuth';
   static const String usePasswordAuth = 'usePasswordAuth';
-  // static const String discreetMode = 'discreetMode';
 }

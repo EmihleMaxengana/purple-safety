@@ -6,18 +6,12 @@ import 'package:purple_safety/services/storage_service.dart';
 class DmService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // -------------------------------
-  // Chat ID helper
-  // -------------------------------
   static String getChatId(String userId1, String userId2) {
     List<String> ids = [userId1, userId2];
     ids.sort();
     return '${ids[0]}_${ids[1]}';
   }
 
-  // -------------------------------
-  // Send text message (existing)
-  // -------------------------------
   static Future<void> sendTextMessage({
     required String recipientUserId,
     required String senderId,
@@ -34,14 +28,12 @@ class DmService {
       'read': false,
     };
 
-    // Add to chat messages subcollection
     await _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .add(messageData);
 
-    // Also store a copy in recipient's DM inbox for easy listing
     await _firestore
         .collection('users')
         .doc(recipientUserId)
@@ -52,9 +44,6 @@ class DmService {
     });
   }
 
-  // -------------------------------
-  // Send image message (NEW)
-  // -------------------------------
   static Future<void> sendImageMessage({
     required String recipientUserId,
     required String senderId,
@@ -63,10 +52,13 @@ class DmService {
   }) async {
     final chatId = getChatId(senderId, recipientUserId);
 
-    // 1. Upload to Firebase Storage
-    final String imageUrl = await StorageService.uploadDMImage(imageFile, chatId);
+    // Named parameters now
+    final String imageUrl = await StorageService.uploadDMImage(
+      file: imageFile,
+      userId: senderId,
+      chatId: chatId,
+    );
 
-    // 2. Build message data
     final messageData = {
       'type': 'image',
       'imageUrl': imageUrl,
@@ -76,14 +68,12 @@ class DmService {
       'read': false,
     };
 
-    // 3. Store in chat subcollection
     await _firestore
         .collection('chats')
         .doc(chatId)
         .collection('messages')
         .add(messageData);
 
-    // 4. Store in recipient's DM inbox
     await _firestore
         .collection('users')
         .doc(recipientUserId)
@@ -94,9 +84,6 @@ class DmService {
     });
   }
 
-  // -------------------------------
-  // Send video message (NEW)
-  // -------------------------------
   static Future<void> sendVideoMessage({
     required String recipientUserId,
     required String senderId,
@@ -105,7 +92,11 @@ class DmService {
   }) async {
     final chatId = getChatId(senderId, recipientUserId);
 
-    final String videoUrl = await StorageService.uploadDMVideo(videoFile, chatId);
+    final String videoUrl = await StorageService.uploadDMVideo(
+      file: videoFile,
+      userId: senderId,
+      chatId: chatId,
+    );
 
     final messageData = {
       'type': 'video',
@@ -132,9 +123,6 @@ class DmService {
     });
   }
 
-  // -------------------------------
-  // Send audio message (NEW)
-  // -------------------------------
   static Future<void> sendAudioMessage({
     required String recipientUserId,
     required String senderId,
@@ -143,7 +131,11 @@ class DmService {
   }) async {
     final chatId = getChatId(senderId, recipientUserId);
 
-    final String audioUrl = await StorageService.uploadDMAudio(audioFile, chatId);
+    final String audioUrl = await StorageService.uploadDMAudio(
+      file: audioFile,
+      userId: senderId,
+      chatId: chatId,
+    );
 
     final messageData = {
       'type': 'audio',
@@ -170,9 +162,6 @@ class DmService {
     });
   }
 
-  // -------------------------------
-  // Send trip share (existing)
-  // -------------------------------
   static Future<void> sendTripIdMessage({
     required String recipientUserId,
     required String senderName,
@@ -194,9 +183,6 @@ class DmService {
         .add(message);
   }
 
-  // -------------------------------
-  // Stream of DMs for inbox (updated to include media fields)
-  // -------------------------------
   static Stream<List<Map<String, dynamic>>> getMessagesStream(String userId) {
     return _firestore
         .collection('users')
@@ -213,9 +199,6 @@ class DmService {
             }).toList());
   }
 
-  // -------------------------------
-  // Stream of conversation messages (updated to include media fields)
-  // -------------------------------
   static Stream<QuerySnapshot> getConversationStream(String userId1, String userId2) {
     final chatId = getChatId(userId1, userId2);
     return _firestore
@@ -226,9 +209,6 @@ class DmService {
         .snapshots();
   }
 
-  // -------------------------------
-  // Mark as read
-  // -------------------------------
   static Future<void> markAsRead(String userId, String messageId) async {
     await _firestore
         .collection('users')
@@ -238,9 +218,6 @@ class DmService {
         .update({'read': true});
   }
 
-  // -------------------------------
-  // User profile helpers (existing)
-  // -------------------------------
   static Future<List<Map<String, dynamic>>> getAllUsersWithProfile() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return [];

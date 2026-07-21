@@ -9,6 +9,8 @@ import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/utils/pref_keys.dart';
 import 'package:purple_safety/models/incident_model.dart';
+import 'package:purple_safety/services/storage_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class UserProfileModal extends StatefulWidget {
   final List<Contact>? contacts;
@@ -24,6 +26,7 @@ class _UserProfileModalState extends State<UserProfileModal> {
   bool _isLoading = true;
   String? _errorMessage;
   File? _profileImage;
+  String? _profileImageUrl;
   final ImagePicker _picker = ImagePicker();
 
   List<Contact> _realContacts = [];
@@ -159,25 +162,25 @@ class _UserProfileModalState extends State<UserProfileModal> {
     }
   }
 
-  Future<void> _saveProfileImagePath(String? path) async {
+  Future<void> _saveProfileImageUrl(String? url) async {
     final prefs = await SharedPreferences.getInstance();
-    if (path == null) {
-      await prefs.remove(PrefKeys.profileImagePath);
+    if (url == null) {
+      await prefs.remove(PrefKeys.profileImageUrl);
     } else {
-      await prefs.setString(PrefKeys.profileImagePath, path);
+      await prefs.setString(PrefKeys.profileImageUrl, url);
     }
   }
 
-  Future<String?> _loadProfileImagePath() async {
+  Future<String?> _loadProfileImageUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(PrefKeys.profileImagePath);
+    return prefs.getString(PrefKeys.profileImageUrl);
   }
 
   Future<void> _loadProfileImage() async {
-    final path = await _loadProfileImagePath();
-    if (path != null && File(path).existsSync()) {
+    final url = await _loadProfileImageUrl();
+    if (url != null && url.isNotEmpty) {
       setState(() {
-        _profileImage = File(path);
+        _profileImageUrl = url;
       });
     }
   }
@@ -186,10 +189,31 @@ class _UserProfileModalState extends State<UserProfileModal> {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
       final file = File(pickedFile.path);
-      setState(() {
-        _profileImage = file;
-      });
-      await _saveProfileImagePath(file.path);
+
+      final user = AuthService().getCurrentUser();
+      if (user != null) {
+        try {
+          final String? downloadUrl = await StorageService.uploadProfileImage(
+            filePath: file.path,
+            userId: user.uid,
+          );
+
+          if (downloadUrl != null) {
+            await _saveProfileImageUrl(downloadUrl);
+            setState(() {
+              _profileImageUrl = downloadUrl;
+              _profileImage = file; // Keep for display if needed
+            });
+          }
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to upload photo: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -235,8 +259,9 @@ class _UserProfileModalState extends State<UserProfileModal> {
                 Navigator.pop(context);
                 setState(() {
                   _profileImage = null;
+                  _profileImageUrl = null;
                 });
-                _saveProfileImagePath(null);
+                _saveProfileImageUrl(null);
               },
             ),
           ],
@@ -367,8 +392,10 @@ class _UserProfileModalState extends State<UserProfileModal> {
               backgroundColor: Colors.purple.withOpacity(0.5),
               backgroundImage: _profileImage != null
                   ? FileImage(_profileImage!)
-                  : null,
-              child: _profileImage == null
+                  : (_profileImageUrl != null
+                      ? CachedNetworkImageProvider(_profileImageUrl!)
+                      : null),
+              child: _profileImage == null && _profileImageUrl == null
                   ? const Icon(Icons.person, color: Colors.white, size: 30)
                   : null,
             ),

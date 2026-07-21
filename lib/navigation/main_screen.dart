@@ -119,7 +119,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _openDMScreen() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const DMScreen()),
+      MaterialPageRoute(builder: (context) => DMScreen()),
     );
   }
 
