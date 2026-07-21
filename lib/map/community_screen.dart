@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -33,6 +35,12 @@ class _CommunityScreenState extends State<CommunityScreen>
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
 
+  // Resolved SOS modal
+  bool _showResolvedModal = false;
+  Map<String, dynamic>? _resolvedSOSData;
+  final Set<String> _seenResolvedIds = {};
+  StreamSubscription? _resolvedSOSSubscription;
+
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
   Set<Polygon> _getAllDangerZones() {
@@ -50,10 +58,12 @@ class _CommunityScreenState extends State<CommunityScreen>
     _listenToActiveSOS();
     _loadIncidentsAsMarkers();
     _startMapLoadTimer();
+    _listenToResolvedSOS();
   }
 
   @override
   void dispose() {
+    _resolvedSOSSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _mapController?.dispose();
     super.dispose();
@@ -102,6 +112,27 @@ class _CommunityScreenState extends State<CommunityScreen>
 
             _updateSOSMarkers();
           });
+        });
+  }
+
+  void _listenToResolvedSOS() {
+    _resolvedSOSSubscription = FirebaseFirestore.instance
+        .collection('global_alerts')
+        .where('type', isEqualTo: 'sos_resolved')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .listen((snapshot) {
+          if (snapshot.docs.isNotEmpty) {
+            final doc = snapshot.docs.last;
+            final data = doc.data();
+            if (!_seenResolvedIds.contains(doc.id)) {
+              _seenResolvedIds.add(doc.id);
+              setState(() {
+                _resolvedSOSData = data;
+                _showResolvedModal = true;
+              });
+            }
+          }
         });
   }
 
@@ -335,6 +366,156 @@ class _CommunityScreenState extends State<CommunityScreen>
     }
   }
 
+  void _openNavigationToLocation(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Widget _buildResolvedSOSModal() {
+    if (!_showResolvedModal || _resolvedSOSData == null) return const SizedBox();
+    final data = _resolvedSOSData!;
+    final userName = data['userName'] ?? 'Someone';
+    final locationLink = data['locationLink'] ?? 'Location unavailable';
+    final lat = data['latitude'];
+    final lng = data['longitude'];
+    final locationString = (lat != null && lng != null)
+        ? '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'
+        : 'Unknown location';
+
+    return Positioned.fill(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+        child: Container(
+          color: Colors.black.withOpacity(0.4),
+          child: Center(
+            child: Container(
+              margin: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1a0f2e),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.green.withOpacity(0.5)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.2),
+                    blurRadius: 20,
+                    spreadRadius: 5,
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.green, size: 60),
+                  const SizedBox(height: 16),
+                  Text(
+                    '$userName is SAFE!',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'The SOS alert has been resolved.',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, color: Colors.green, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                locationString,
+                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap the link to view location',
+                          style: TextStyle(color: Colors.white38, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            setState(() {
+                              _showResolvedModal = false;
+                              _resolvedSOSData = null;
+                            });
+                            if (locationLink.isNotEmpty && locationLink != 'Location unavailable') {
+                              _openNavigationToLocation(locationLink);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'View on Map',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            setState(() {
+                              _showResolvedModal = false;
+                              _resolvedSOSData = null;
+                            });
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white70,
+                            side: const BorderSide(color: Colors.white24),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Close'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -498,6 +679,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                   child: _buildLegendItem(Colors.red, 'Active SOS'),
                 ),
               ),
+              if (_showResolvedModal) _buildResolvedSOSModal(),
             ],
           ),
         ),

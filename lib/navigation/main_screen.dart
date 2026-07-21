@@ -109,11 +109,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _openSafetyAlerts() {
-    Navigator.push(
+  void _openSafetyAlerts() async {
+    final result = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const SafetyAlertsScreen()),
+      MaterialPageRoute(
+        builder: (context) => const SafetyAlertsScreen(),
+      ),
     );
+    // If the user tapped an SOS alert, switch to Community tab (index 2)
+    if (result == 'sos') {
+      setState(() {
+        _selectedIndex = 2;
+      });
+    }
   }
 
   void _openDMScreen() {

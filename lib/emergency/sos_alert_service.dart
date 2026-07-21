@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purple_safety/services/storage_service.dart';
 
 class SOSAlertService {
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -14,9 +15,6 @@ class SOSAlertService {
 
   static const String _pendingSOSKey = 'pending_sos';
 
-
-  // COMMUNITY SOS - Sends alert to ALL app users( not a push in notification tho)
- 
   static Future<String?> sendCommunitySOSAlert({
     required String userId,
     required String userName,
@@ -33,7 +31,23 @@ class SOSAlertService {
         ? 'https://www.google.com/maps?q=$triggerLat,$triggerLng'
         : null;
 
-    debugPrint(' Sending COMMUNITY SOS alert from $userName at $locationLink');
+    String? audioUrl;
+    if (audioPath != null && audioPath.isNotEmpty) {
+      audioUrl = await StorageService.uploadAudio(
+        filePath: audioPath,
+        userId: userId,
+        isSOS: true,
+      );
+    }
+
+    String? videoUrl;
+    if (videoPath != null && videoPath.isNotEmpty) {
+      videoUrl = await StorageService.uploadVideo(
+        filePath: videoPath,
+        userId: userId,
+        isSOS: true,
+      );
+    }
 
     try {
       final docRef = _firestore.collection('active_sos_events').doc();
@@ -48,8 +62,8 @@ class SOSAlertService {
         'locationLink': locationLink,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'active',
-        'audioPath': audioPath,
-        'videoPath': videoPath,
+        'audioUrl': audioUrl,
+        'videoUrl': videoUrl,
         'responderCount': 0,
       };
 
@@ -62,14 +76,13 @@ class SOSAlertService {
       }
 
       await docRef.set(eventData);
-      debugPrint(' SOS event created: $sosEventId');
 
-      String message = ' EMERGENCY: $userName needs immediate help at their location!';
+      String message = 'EMERGENCY: $userName needs immediate help at their location!';
       if (triggerLocationLink != null) {
-        message = ' EMERGENCY: $userName needs immediate help!\n'
-            '📍 Current: $locationLink\n'
-            '📍 Triggered: $triggerLocationLink\n'
-            '🕐 Triggered at: $triggerTimestamp';
+        message = 'EMERGENCY: $userName needs immediate help!\n'
+            'Current: $locationLink\n'
+            'Triggered: $triggerLocationLink\n'
+            'Triggered at: $triggerTimestamp';
       }
 
       await _firestore.collection('global_alerts').add({
@@ -83,6 +96,8 @@ class SOSAlertService {
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'active',
         'sosEventId': sosEventId,
+        'audioUrl': audioUrl,
+        'videoUrl': videoUrl,
         'triggerLat': triggerLat != null ? double.tryParse(triggerLat) : null,
         'triggerLng': triggerLng != null ? double.tryParse(triggerLng) : null,
         'triggerTimestamp': triggerTimestamp,
@@ -91,7 +106,6 @@ class SOSAlertService {
 
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
-      int alertCount = 0;
 
       for (var userDoc in usersSnapshot.docs) {
         if (userDoc.id == userId) continue;
@@ -102,11 +116,11 @@ class SOSAlertService {
             .collection('alerts')
             .doc();
 
-        String alertMessage = ' SOS: $userName needs immediate help! Tap to view location.';
+        String alertMessage = 'SOS: $userName needs immediate help! Tap to view location.';
         if (triggerLocationLink != null) {
-          alertMessage = ' SOS: $userName needs immediate help!\n'
-              '📍 Current: $locationLink\n'
-              '📍 Triggered: $triggerLocationLink';
+          alertMessage = 'SOS: $userName needs immediate help!\n'
+              'Current: $locationLink\n'
+              'Triggered: $triggerLocationLink';
         }
 
         batch.set(alertRef, {
@@ -118,27 +132,22 @@ class SOSAlertService {
           'latitude': latitude,
           'longitude': longitude,
           'userName': userName,
+          'audioUrl': audioUrl,
+          'videoUrl': videoUrl,
           'triggerLat': triggerLat != null ? double.tryParse(triggerLat) : null,
           'triggerLng': triggerLng != null ? double.tryParse(triggerLng) : null,
           'wasOffline': triggerLat != null,
         });
-        alertCount++;
       }
 
       await batch.commit();
-      debugPrint(' SOS alert sent to $alertCount users');
-
       return sosEventId;
 
     } catch (e) {
-      debugPrint(' Error sending community SOS alert: $e');
       rethrow;
     }
   }
 
-  // ============================================================
-  // DEACTIVATE SOS EVENT
-  // ============================================================
   static Future<void> deactivateSOSEvent(String sosEventId, {String? userId}) async {
     try {
       await _firestore.collection('active_sos_events').doc(sosEventId).update({
@@ -147,25 +156,59 @@ class SOSAlertService {
       });
 
       final eventDoc = await _firestore.collection('active_sos_events').doc(sosEventId).get();
-      final eventData = eventDoc.data();
-      final userName = eventData?['userName'] ?? 'Someone';
+      if (!eventDoc.exists) return;
+      final eventData = eventDoc.data()!;
+      final userName = eventData['userName'] ?? 'Someone';
+      final locationLink = eventData['locationLink'] ?? 'Location unavailable';
+      final latitude = eventData['latitude'];
+      final longitude = eventData['longitude'];
 
       await _firestore.collection('global_alerts').add({
         'type': 'sos_resolved',
-        'message': '✅ $userName is now SAFE. The SOS alert has been resolved.',
+        'message': '$userName is now SAFE. The SOS alert has been resolved.',
         'sosEventId': sosEventId,
+        'userName': userName,
+        'locationLink': locationLink,
+        'latitude': latitude,
+        'longitude': longitude,
         'timestamp': FieldValue.serverTimestamp(),
+        'userId': eventData['userId'],
       });
 
-      debugPrint(' SOS event $sosEventId deactivated');
+      final usersSnapshot = await _firestore.collection('users').get();
+      final batch = _firestore.batch();
+
+      for (var userDoc in usersSnapshot.docs) {
+        if (userId != null && userDoc.id == userId) continue;
+
+        final alertRef = _firestore
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('alerts')
+            .doc();
+
+        batch.set(alertRef, {
+          'message': 'SAFE: $userName is now safe. The SOS alert has been resolved.',
+          'type': 'sos_resolved',
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+          'sosEventId': sosEventId,
+          'latitude': latitude,
+          'longitude': longitude,
+          'userName': userName,
+          'locationLink': locationLink,
+        });
+      }
+
+      await batch.commit();
+
+      debugPrint('SOS event $sosEventId deactivated and notifications sent (excluding deactivator).');
+
     } catch (e) {
-      debugPrint(' Error deactivating SOS event: $e');
+      debugPrint('Error deactivating SOS event: $e');
       rethrow;
     }
   }
-
- 
-  // Get active SOS events
 
   static Stream<List<Map<String, dynamic>>> getActiveSOSEvents() {
     return _firestore
@@ -182,9 +225,6 @@ class SOSAlertService {
         }).toList());
   }
 
-
-  // User responds to help
- 
   static Future<void> respondToSOS({
     required String sosEventId,
     required String responderId,
@@ -218,7 +258,7 @@ class SOSAlertService {
             .doc(eventData?['userId'])
             .collection('alerts')
             .add({
-              'message': ' $responderName is on their way to help you!',
+              'message': '$responderName is on their way to help you!',
               'type': 'responder',
               'timestamp': FieldValue.serverTimestamp(),
               'read': false,
@@ -227,16 +267,10 @@ class SOSAlertService {
             });
       }
 
-      debugPrint(' $responderName responded to SOS event $sosEventId');
-
     } catch (e) {
-      debugPrint(' Error responding to SOS: $e');
       rethrow;
     }
   }
-
- 
-  // SMS FALLBACK( problem with this is that it the user cant personally  trigger the sos bcoz the app is not 0rating)
 
   static Future<void> sendSMS({
     required String phoneNumber,
@@ -252,18 +286,14 @@ class SOSAlertService {
 
       if (await canLaunchUrl(smsUri)) {
         await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-        debugPrint('📱 SMS compose opened for $phoneNumber');
       } else {
         throw Exception('Could not launch SMS app');
       }
     } catch (e) {
-      debugPrint('❌ SMS send error: $e');
       rethrow;
     }
   }
 
-  // OFFLINE SOS QUEUE
- 
   static Future<void> storeSOSLocally({
     required String userId,
     required String userName,
@@ -289,14 +319,11 @@ class SOSAlertService {
       if (!pending.contains(encoded)) {
         pending.add(encoded);
         await prefs.setStringList(_pendingSOSKey, pending);
-        debugPrint(' SOS stored locally: $timestamp');
       }
     } catch (e) {
-      debugPrint(' Error storing SOS locally: $e');
+      return;
     }
   }
-
-  // Get pending SOS list(will be sent once back online via wifi or mobile data)
 
   static Future<List<Map<String, String>>> getPendingSOS() async {
     try {
@@ -324,33 +351,25 @@ class SOSAlertService {
             result.add(data);
           }
         } catch (e) {
-          debugPrint('Error decoding pending SOS: $e');
+          continue;
         }
       }
 
       return result;
     } catch (e) {
-      debugPrint(' Error getting pending SOS: $e');
       return [];
     }
   }
 
-  // ============================================================
-  // Clear pending SOS
-  // ============================================================
   static Future<void> clearPendingSOS() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_pendingSOSKey);
-      debugPrint('✅ Pending SOS cleared');
     } catch (e) {
-      debugPrint('Error clearing pending SOS: $e');
+      return;
     }
   }
 
-  // ============================================================
-  // Check if pending SOS exists
-  // ============================================================
   static Future<bool> hasPendingSOS() async {
     try {
       final prefs = await SharedPreferences.getInstance();

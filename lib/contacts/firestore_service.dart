@@ -10,6 +10,7 @@ class Alert {
   final String? incidentId;
   final String? incidentTitle;
   final String? invitationId;
+  final String? sosEventId; // Added for SOS alerts
 
   Alert({
     required this.id,
@@ -20,19 +21,21 @@ class Alert {
     this.incidentId,
     this.incidentTitle,
     this.invitationId,
+    this.sosEventId, // Added
   });
 
   factory Alert.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Alert(
       id: doc.id,
-      message: data['message'],
-      type: data['type'],
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
+      message: data['message'] ?? '',
+      type: data['type'] ?? '',
+      timestamp: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
       read: data['read'] ?? false,
       incidentId: data['incidentId'],
       incidentTitle: data['incidentTitle'],
       invitationId: data['invitationId'],
+      sosEventId: data['sosEventId'], // Added
     );
   }
 
@@ -45,6 +48,7 @@ class Alert {
       'incidentId': incidentId,
       'incidentTitle': incidentTitle,
       'invitationId': invitationId,
+      'sosEventId': sosEventId, // Added
     };
   }
 }

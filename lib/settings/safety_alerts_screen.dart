@@ -4,9 +4,13 @@ import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/incidents/incident_detail_screen.dart';
 import 'package:purple_safety/incidents/incident_service.dart';
 import 'package:purple_safety/Invitations/pending_invitations_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SafetyAlertsScreen extends StatefulWidget {
-  const SafetyAlertsScreen({Key? key}) : super(key: key);
+  // Callback to navigate to community tab (used for SOS alerts)
+  final VoidCallback? onNavigateToCommunity;
+
+  const SafetyAlertsScreen({Key? key, this.onNavigateToCommunity}) : super(key: key);
 
   @override
   State<SafetyAlertsScreen> createState() => _SafetyAlertsScreenState();
@@ -23,6 +27,29 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
       await _firestoreService.markAlertAsRead(user.uid, alert.id);
     }
 
+    // Handle SOS alerts
+    if (alert.type == 'sos' && alert.sosEventId != null) {
+      // Check if SOS is still active
+      final isActive = await _isSOSActive(alert.sosEventId!);
+      if (!isActive) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This SOS alert has already been resolved.'),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+        // Still navigate to community map
+        Navigator.pop(context, 'sos');
+        return;
+      }
+
+      // Navigate to community map (tab index 2)
+      Navigator.pop(context, 'sos');
+      return;
+    }
+
+    // Handle incident alerts
     if (alert.type == 'incident' && alert.incidentId != null) {
       final incident = await _incidentService.getIncident(alert.incidentId!);
       if (incident != null && mounted) {
@@ -33,7 +60,11 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
           ),
         );
       }
-    } else if (alert.type == 'invitation' && alert.invitationId != null) {
+      return;
+    }
+
+    // Handle invitation alerts
+    if (alert.type == 'invitation' && alert.invitationId != null) {
       if (mounted) {
         Navigator.push(
           context,
@@ -42,6 +73,22 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
           ),
         );
       }
+      return;
+    }
+  }
+
+  // Helper to check if SOS event is still active
+  Future<bool> _isSOSActive(String sosEventId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('active_sos_events')
+          .doc(sosEventId)
+          .get();
+      if (!doc.exists) return false;
+      final data = doc.data();
+      return data?['status'] == 'active';
+    } catch (e) {
+      return false;
     }
   }
 
@@ -111,6 +158,9 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                 } else if (alert.type == 'invitation') {
                   color = Colors.purple;
                   icon = Icons.person_add;
+                } else if (alert.type == 'sos') {
+                  color = Colors.red;
+                  icon = Icons.sos;
                 } else {
                   color = Colors.blue;
                   icon = Icons.info;
@@ -170,7 +220,8 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen> {
                             ),
                           ),
                         if (alert.type == 'incident' ||
-                            alert.type == 'invitation')
+                            alert.type == 'invitation' ||
+                            alert.type == 'sos')
                           const Icon(
                             Icons.arrow_forward_ios,
                             color: Colors.white38,

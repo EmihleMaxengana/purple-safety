@@ -36,7 +36,38 @@ class StorageService {
     }
   }
 
-  // DM image
+  // ----- Audio/Video for SOS (ADDED) -----
+  static Future<String> uploadAudio({
+    required String filePath,
+    required String userId,
+    bool isSOS = false,
+  }) {
+    final file = File(filePath);
+    final subFolder = isSOS ? 'sos' : 'recordings';
+    return uploadFile(
+      file: file,
+      userId: userId,
+      folder: _recordingsFolder,
+      subFolder: subFolder,
+    );
+  }
+
+  static Future<String> uploadVideo({
+    required String filePath,
+    required String userId,
+    bool isSOS = false,
+  }) {
+    final file = File(filePath);
+    final subFolder = isSOS ? 'sos' : 'recordings';
+    return uploadFile(
+      file: file,
+      userId: userId,
+      folder: _recordingsFolder,
+      subFolder: subFolder,
+    );
+  }
+
+  // ----- DM media -----
   static Future<String> uploadDMImage({
     required File file,
     required String userId,
@@ -50,7 +81,6 @@ class StorageService {
     );
   }
 
-  // DM video
   static Future<String> uploadDMVideo({
     required File file,
     required String userId,
@@ -64,7 +94,6 @@ class StorageService {
     );
   }
 
-  // DM audio
   static Future<String> uploadDMAudio({
     required File file,
     required String userId,
@@ -78,7 +107,7 @@ class StorageService {
     );
   }
 
-  // Incident media (image/video)
+  // ----- Incident media -----
   static Future<String> uploadIncidentMedia({
     required File file,
     required String userId,
@@ -92,7 +121,7 @@ class StorageService {
     );
   }
 
-  // Missing person image
+  // ----- Missing person image -----
   static Future<String> uploadMissingPersonImage({
     required File file,
     required String userId,
@@ -106,7 +135,7 @@ class StorageService {
     );
   }
 
-  // Profile image
+  // ----- Profile image -----
   static Future<String> uploadProfileImage({
     required String filePath,
     required String userId,
@@ -119,7 +148,7 @@ class StorageService {
     );
   }
 
-  // Recording (audio/video)
+  // ----- Generic recording (used by SafetyToolsScreen) -----
   static Future<String> uploadRecording({
     required File file,
     required String userId,
@@ -133,7 +162,7 @@ class StorageService {
     );
   }
 
-  // Delete single file by URL
+  // ----- Delete helpers -----
   static Future<void> deleteFile(String downloadUrl) async {
     try {
       final ref = _storage.refFromURL(downloadUrl);
@@ -143,7 +172,6 @@ class StorageService {
     }
   }
 
-  // Delete all user files (for account deletion)
   static Future<void> deleteUserFiles(String userId) async {
     try {
       final List<String> folders = [_incidentFolder, _dmFolder, _profileFolder, _recordingsFolder];
