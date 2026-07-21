@@ -7,7 +7,6 @@ import 'package:purple_safety/trip/trip_sharing_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/map/map.dart';
-import 'package:purple_safety/services/danger_zones_service.dart';
 
 class FullMapScreen extends StatefulWidget {
   final String? initialTripId;
@@ -52,14 +51,6 @@ class _FullMapScreenState extends State<FullMapScreen>
     Colors.teal,
     Colors.deepOrange,
   ];
-
-  Set<Polygon> _getAllDangerZones() {
-    final Set<Polygon> zones = {};
-    for (final zone in DangerZonesService.dangerZones) {
-      zones.add(zone.toPolygon());
-    }
-    return zones;
-  }
 
   @override
   void initState() {
@@ -118,8 +109,6 @@ class _FullMapScreenState extends State<FullMapScreen>
   void _loadDangerZones() {
     if (widget.dangerZones != null) {
       _dangerZones = widget.dangerZones!;
-    } else {
-      _dangerZones = _getAllDangerZones();
     }
   }
 
