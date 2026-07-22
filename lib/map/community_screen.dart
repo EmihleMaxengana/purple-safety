@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/map/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -43,12 +44,20 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
-  Set<Polygon> _getAllDangerZones() {
-    final Set<Polygon> zones = {};
-    for (final zone in DangerZonesService.dangerZones) {
-      zones.add(zone.toPolygon());
+  Set<Circle> _dangerZones = {};
+
+  void _getAllDangerZones() async {
+    try {
+      final dangerZones = await DangerZoneService().loadDangerZonesCircle();
+
+      setState(() {
+        _dangerZones = dangerZones;
+      });
+    } catch (e) {
+      debugPrint(
+        "[Full map screen] Error getting danger zones from DangerZoneService: $e",
+      );
     }
-    return zones;
   }
 
   @override
@@ -59,6 +68,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     _loadIncidentsAsMarkers();
     _startMapLoadTimer();
     _listenToResolvedSOS();
+    _getAllDangerZones();
   }
 
   @override
@@ -350,8 +360,7 @@ class _CommunityScreenState extends State<CommunityScreen>
         responderLongitude: 0,
       );
 
-      if (mounted) {
-      }
+      if (mounted) {}
     } catch (e) {
       debugPrint('Error responding to SOS: $e');
     }
@@ -374,7 +383,8 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   Widget _buildResolvedSOSModal() {
-    if (!_showResolvedModal || _resolvedSOSData == null) return const SizedBox();
+    if (!_showResolvedModal || _resolvedSOSData == null)
+      return const SizedBox();
     final data = _resolvedSOSData!;
     final userName = data['userName'] ?? 'Someone';
     final locationLink = data['locationLink'] ?? 'Location unavailable';
@@ -437,12 +447,19 @@ class _CommunityScreenState extends State<CommunityScreen>
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.location_on, color: Colors.green, size: 16),
+                            const Icon(
+                              Icons.location_on,
+                              color: Colors.green,
+                              size: 16,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 locationString,
-                                style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
                           ],
@@ -465,7 +482,8 @@ class _CommunityScreenState extends State<CommunityScreen>
                               _showResolvedModal = false;
                               _resolvedSOSData = null;
                             });
-                            if (locationLink.isNotEmpty && locationLink != 'Location unavailable') {
+                            if (locationLink.isNotEmpty &&
+                                locationLink != 'Location unavailable') {
                               _openNavigationToLocation(locationLink);
                             }
                           },
@@ -641,24 +659,24 @@ class _CommunityScreenState extends State<CommunityScreen>
                   ),
                 )
               else
-                GoogleMap(
-                  onMapCreated: (controller) {
+                MapWidget(
+                  onMapCreate: (controller) {
+                    controller.animateCamera(
+                      CameraUpdate.newCameraPosition(
+                        CameraPosition(target: _saCenter, zoom: 5),
+                      ),
+                    );
+
                     _mapController = controller;
                     setState(() => _isMapReady = true);
                   },
-                  initialCameraPosition: const CameraPosition(
-                    target: _saCenter,
-                    zoom: 5.0,
-                  ),
-                  markers: {
-                    ..._sosMarkers,
-                    ..._incidentMarkers,
-                  },
-                  polygons: _getAllDangerZones(),
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                  zoomControlsEnabled: true,
-                  compassEnabled: true,
+                  markers: {..._sosMarkers, ..._incidentMarkers},
+                  myLocation: true,
+                  myLocationButton: true,
+                  zoomControls: true,
+                  compass: true,
+                  currentPosition: _saCenter,
+                  circles: {..._dangerZones},
                 ),
               if (_isLoadingSOS && !_mapLoadFailed)
                 const Center(
@@ -934,9 +952,16 @@ class _CommunityScreenState extends State<CommunityScreen>
                                     body: Center(
                                       child: InteractiveViewer(
                                         child: CachedNetworkImage(
-                                          imageUrl: incident.missingPersonImageUrl!,
-                                          placeholder: (context, url) => const CircularProgressIndicator(),
-                                          errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white54, size: 60),
+                                          imageUrl:
+                                              incident.missingPersonImageUrl!,
+                                          placeholder: (context, url) =>
+                                              const CircularProgressIndicator(),
+                                          errorWidget: (context, url, error) =>
+                                              const Icon(
+                                                Icons.broken_image,
+                                                color: Colors.white54,
+                                                size: 60,
+                                              ),
                                           fit: BoxFit.contain,
                                         ),
                                       ),
@@ -960,7 +985,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                                     child: SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -968,7 +995,10 @@ class _CommunityScreenState extends State<CommunityScreen>
                                   width: 80,
                                   height: 80,
                                   color: Colors.grey[800],
-                                  child: const Icon(Icons.person_outline, color: Colors.white54),
+                                  child: const Icon(
+                                    Icons.person_outline,
+                                    color: Colors.white54,
+                                  ),
                                 ),
                               ),
                             ),
