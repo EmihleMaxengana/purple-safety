@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/models/danger_zone_model.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _locationEnabled = false;
   bool _isLocationLoading = false;
   LatLng? _currentPosition;
-  Set<Polygon> _dangerZones = {};
+  Set<Circle> _dangerZones = {};
   StreamSubscription<location.LocationData>? _locationSubscription;
 
   bool _mapLoadFailed = false;
@@ -71,19 +72,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   bool _hasCenteredMap = false;
 
-  Set<Polygon> _getAllDangerZones() {
-    final Set<Polygon> zones = {};
-    for (final zone in DangerZonesService.dangerZones) {
-      zones.add(zone.toPolygon());
+  void _getAllDangerZones() async {
+    try {
+      final dangerZones = await DangerZoneService().loadDangerZonesCircle();
+
+      setState(() {
+        _dangerZones = dangerZones;
+      });
+    } catch (e) {
+      debugPrint(
+        "[Home Screen] Error getting danger zones from DangerZoneService: $e",
+      );
     }
-    return zones;
   }
 
   @override
   void initState() {
     super.initState();
     _initLocation();
-    _dangerZones = _getAllDangerZones();
+    _getAllDangerZones();
     _listenToContacts();
     TripSharingService.cleanupExpiredTrips();
   }
@@ -185,7 +192,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _hasCenteredMap = true;
       controller.animateCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: _currentPosition!, zoom: 14),
+          CameraPosition(target: _currentPosition!, zoom: 13),
+          // CameraPosition(target: _currentPosition!, zoom: 14),
         ),
       );
     }
@@ -263,7 +271,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           });
         }
       });
-
     } catch (e) {
       await SOSAlertService.storeSOSLocally(
         userId: userId,
@@ -317,9 +324,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void _openFullMap() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => FullMapScreen(dangerZones: _dangerZones),
-      ),
+      MaterialPageRoute(builder: (context) => FullMapScreen()),
     );
   }
 
@@ -400,7 +405,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         try {
           final recipients = await dm_service.DmService.getSelectedRecipients();
           final userId = user.uid;
-          if (userId != null && recipients.isNotEmpty) {
+          // if (userId != null && recipients.isNotEmpty) {
+          // NOTE: userId != null does not evaluate, it always returns value of true since userId is of type string
+          if (userId.isNotEmpty && recipients.isNotEmpty) {
             for (var recipientId in recipients) {
               await dm_service.DmService.sendTripIdMessage(
                 recipientUserId: recipientId,
@@ -645,7 +652,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             myLocation: false,
             myLocationButton: false,
             zoomControls: false,
-            polygons: _getAllDangerZones(),
+            // polygons: _getAllDangerZones(),
           ),
           Center(
             child: Container(
@@ -671,7 +678,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         myLocation: true,
         myLocationButton: false,
         zoomControls: false,
-        polygons: _getAllDangerZones(),
+        // polygons: _getAllDangerZones(),
       );
     }
 
@@ -681,7 +688,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       myLocation: true,
       myLocationButton: false,
       zoomControls: false,
-      polygons: _getAllDangerZones(),
+      // polygons: _getAllDangerZones(),
+      circles: _dangerZones,
       markers: {
         Marker(
           markerId: const MarkerId('current'),
@@ -968,8 +976,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       scrollDirection: Axis.horizontal,
                       children: [
                         ..._contacts.map(
-                          (c) =>
-                              _buildContact(c.initials, c.name, c.color, c.active),
+                          (c) => _buildContact(
+                            c.initials,
+                            c.name,
+                            c.color,
+                            c.active,
+                          ),
                         ),
                         if (!isMaxContacts) _buildAddContact(),
                       ],
@@ -992,7 +1004,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               borderRadius: BorderRadius.circular(12),
               color: Colors.orange.withOpacity(0.9),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 child: Row(
                   children: [
                     Expanded(

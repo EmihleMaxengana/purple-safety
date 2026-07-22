@@ -14,7 +14,7 @@ class FullMapScreen extends StatefulWidget {
   final Set<Polygon>? dangerZones;
 
   const FullMapScreen({Key? key, this.initialTripId, this.dangerZones})
-      : super(key: key);
+    : super(key: key);
 
   @override
   State<FullMapScreen> createState() => _FullMapScreenState();
@@ -27,7 +27,7 @@ class _FullMapScreenState extends State<FullMapScreen>
   Set<Marker> _tripMarkers = {};
   Set<Polyline> _tripPaths = {};
   Set<Marker> _sosMarkers = {};
-  Set<Polygon> _dangerZones = {};
+  Set<Circle> _dangerZones = {};
 
   List<String> _followedTripIds = [];
   Map<String, StreamSubscription> _tripSubscriptions = {};
@@ -53,18 +53,25 @@ class _FullMapScreenState extends State<FullMapScreen>
     Colors.deepOrange,
   ];
 
-  Set<Polygon> _getAllDangerZones() {
-    final Set<Polygon> zones = {};
-    for (final zone in DangerZonesService.dangerZones) {
-      zones.add(zone.toPolygon());
+  void _getAllDangerZones() async {
+    try {
+      final dangerZones = await DangerZoneService().loadDangerZonesCircle();
+
+      setState(() {
+        _dangerZones = dangerZones;
+      });
+    } catch (e) {
+      debugPrint(
+        "[Full map screen] Error getting danger zones from DangerZoneService: $e",
+      );
     }
-    return zones;
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _getAllDangerZones();
     _listenToSOSEvents();
     _loadFollowedTrips();
     _loadDangerZones();
@@ -101,7 +108,9 @@ class _FullMapScreenState extends State<FullMapScreen>
             final marker = Marker(
               markerId: MarkerId('sos_${doc.id}'),
               position: LatLng(data['latitude'], data['longitude']),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueRed,
+              ),
               infoWindow: InfoWindow(
                 title: 'SOS EMERGENCY',
                 snippet: '${data['userName']} needs immediate help!',
@@ -115,12 +124,12 @@ class _FullMapScreenState extends State<FullMapScreen>
         });
   }
 
-  void _loadDangerZones() {
-    if (widget.dangerZones != null) {
-      _dangerZones = widget.dangerZones!;
-    } else {
-      _dangerZones = _getAllDangerZones();
-    }
+  void _loadDangerZones() async {
+    // if (widget.dangerZones != null) {
+    //   _dangerZones = widget.dangerZones!;
+    // } else {
+    //   _dangerZones = _getAllDangerZones();
+    // }
   }
 
   Future<void> _loadFollowedTrips() async {
@@ -175,7 +184,9 @@ class _FullMapScreenState extends State<FullMapScreen>
     bool _notifiedStart = false;
     bool _notifiedEnd = false;
 
-    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((snapshot) {
+    _tripSubscriptions[tripId] = TripSharingService.getTrip(tripId).listen((
+      snapshot,
+    ) {
       if (!mounted) return;
       if (snapshot.exists) {
         final data = snapshot.data() as Map<String, dynamic>;
@@ -204,14 +215,20 @@ class _FullMapScreenState extends State<FullMapScreen>
             _notifiedStart = true;
             _notifiedEnd = false;
             final userName = data['userName'] ?? 'Someone';
-            _showPopupMessage('$userName is now sharing their trip!', Colors.green);
+            _showPopupMessage(
+              '$userName is now sharing their trip!',
+              Colors.green,
+            );
           }
         } else if (status == 'ended' || status == 'expired') {
           final userName = data['userName'] ?? 'Someone';
           if (!_notifiedEnd) {
             _notifiedEnd = true;
             _notifiedStart = false;
-            _showPopupMessage('$userName has stopped sharing their trip.', Colors.orange);
+            _showPopupMessage(
+              '$userName has stopped sharing their trip.',
+              Colors.orange,
+            );
           }
           _removeFollowedTrip(tripId, showNotification: false);
         }
@@ -391,7 +408,7 @@ class _FullMapScreenState extends State<FullMapScreen>
             zoomControls: true,
             markers: _tripMarkers,
             polylines: _tripPaths,
-            polygons: _dangerZones,
+            circles: _dangerZones,
           ),
           if (_isLoading)
             const Center(
@@ -411,7 +428,10 @@ class _FullMapScreenState extends State<FullMapScreen>
                   onTap: () => setState(() => _panelExpanded = !_panelExpanded),
                   borderRadius: BorderRadius.circular(30),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     constraints: const BoxConstraints(maxWidth: 200),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -460,7 +480,10 @@ class _FullMapScreenState extends State<FullMapScreen>
                 child: Column(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                       child: Row(
                         children: [
                           const Icon(
@@ -483,7 +506,8 @@ class _FullMapScreenState extends State<FullMapScreen>
                               color: Colors.white70,
                               size: 20,
                             ),
-                            onPressed: () => setState(() => _panelExpanded = false),
+                            onPressed: () =>
+                                setState(() => _panelExpanded = false),
                           ),
                         ],
                       ),
@@ -501,20 +525,25 @@ class _FullMapScreenState extends State<FullMapScreen>
                               ),
                             )
                           : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               itemCount: _tripsData.length,
                               itemBuilder: (context, index) {
                                 final tripId = _tripsData.keys.elementAt(index);
                                 final data = _tripsData[tripId]!;
-                                final color = _tripColors[tripId] ?? Colors.grey;
-                                final lastUpdate = data['lastUpdate'] as Timestamp?;
+                                final color =
+                                    _tripColors[tripId] ?? Colors.grey;
+                                final lastUpdate =
+                                    data['lastUpdate'] as Timestamp?;
                                 String statusText = 'Active now';
                                 if (lastUpdate != null) {
                                   final minutesAgo = DateTime.now()
                                       .difference(lastUpdate.toDate())
                                       .inMinutes;
                                   if (minutesAgo > 5) {
-                                    statusText = 'Offline ($minutesAgo min ago)';
+                                    statusText =
+                                        'Offline ($minutesAgo min ago)';
                                   } else if (minutesAgo > 1) {
                                     statusText = '$minutesAgo min ago';
                                   }
@@ -552,7 +581,8 @@ class _FullMapScreenState extends State<FullMapScreen>
                                       color: Colors.red,
                                       size: 18,
                                     ),
-                                    onPressed: () => _removeFollowedTrip(tripId),
+                                    onPressed: () =>
+                                        _removeFollowedTrip(tripId),
                                   ),
                                   onTap: () => _zoomToTrip(tripId),
                                 );
@@ -573,7 +603,10 @@ class _FullMapScreenState extends State<FullMapScreen>
                 borderRadius: BorderRadius.circular(12),
                 color: _popupColor ?? Colors.grey,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
