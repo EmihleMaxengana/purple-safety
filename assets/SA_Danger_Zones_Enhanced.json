@@ -1,0 +1,1802 @@
+[
+  {
+    "province": "Eastern Cape",
+    "name": "Mthatha",
+    "latitude": -31.5887,
+    "longitude": 28.7765,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Mount Road",
+    "latitude": -33.9506,
+    "longitude": 25.5989,
+    "radius": 500,
+    "warningRadius": 1000,
+    "riskLevel": 3,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Cambridge",
+    "latitude": -33.95,
+    "longitude": 25.5,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "East London",
+    "latitude": -33.0115,
+    "longitude": 27.9198,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Humewood",
+    "latitude": -33.98,
+    "longitude": 25.6,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Qonce",
+    "latitude": -33.88,
+    "longitude": 25.63,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Mdantsane",
+    "latitude": -32.9356,
+    "longitude": 27.7395,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Kabega Park",
+    "latitude": -33.95,
+    "longitude": 25.48,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 3,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Madeira",
+    "latitude": -33.98,
+    "longitude": 25.5,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Walmer",
+    "latitude": -33.9745,
+    "longitude": 25.5924,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Lusikisiki",
+    "latitude": -31.3728,
+    "longitude": 29.5782,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Bethelsdorp",
+    "latitude": -33.8798,
+    "longitude": 25.4927,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Nxuba",
+    "latitude": -32.6,
+    "longitude": 25.75,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Komani",
+    "latitude": -31.898,
+    "longitude": 26.8781,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Kariega",
+    "latitude": -33.92,
+    "longitude": 25.46,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Butterworth",
+    "latitude": -32.333,
+    "longitude": 28.1437,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "New Brighton",
+    "latitude": -33.9076,
+    "longitude": 25.598,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Kwazakhele",
+    "latitude": -33.88,
+    "longitude": 25.63,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Dutywa",
+    "latitude": -32.35,
+    "longitude": 28.38,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Eastern Cape",
+    "name": "Kwanobuhle",
+    "latitude": -33.88,
+    "longitude": 25.6,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Park Road",
+    "latitude": -29.1,
+    "longitude": 26.23,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 3,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Thabong",
+    "latitude": -27.75,
+    "longitude": 26.68,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Welkom",
+    "latitude": -27.9801,
+    "longitude": 26.7425,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Bloemspruit",
+    "latitude": -29.18,
+    "longitude": 26.15,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Kagisanong",
+    "latitude": -29.12,
+    "longitude": 26.18,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Mangaung",
+    "latitude": -29.1246,
+    "longitude": 26.2271,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Boithuso",
+    "latitude": -28.53,
+    "longitude": 28.83,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Phuthaditjhaba",
+    "latitude": -28.6861,
+    "longitude": 28.8996,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Odendaalsrus",
+    "latitude": -27.73,
+    "longitude": 26.65,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Botshabelo",
+    "latitude": -29.2788,
+    "longitude": 26.7349,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Harrismith",
+    "latitude": -28.23,
+    "longitude": 28.32,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Kopanong",
+    "latitude": -28.78,
+    "longitude": 28.62,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Zamdela",
+    "latitude": -27.65,
+    "longitude": 26.72,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Maokeng",
+    "latitude": -29.12,
+    "longitude": 26.18,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Heidedal",
+    "latitude": -29.1,
+    "longitude": 26.2,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Kroonstad",
+    "latitude": -27.6617,
+    "longitude": 27.2359,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Bethlehem",
+    "latitude": -28.2403,
+    "longitude": 28.3186,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Free State",
+    "name": "Bothaville",
+    "latitude": -27.72,
+    "longitude": 26.42,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Selosesha",
+    "latitude": -29.42,
+    "longitude": 26.4,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Free State",
+    "name": "Sasolburg",
+    "latitude": -26.8152,
+    "longitude": 27.827,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Johannesburg Central",
+    "latitude": -26.1365,
+    "longitude": 28.0588,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Tembisa",
+    "latitude": -25.9938,
+    "longitude": 28.2174,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Midrand",
+    "latitude": -26.0217,
+    "longitude": 28.0901,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Roodepoort",
+    "latitude": -26.13,
+    "longitude": 27.85,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Honeydew",
+    "latitude": -26.05,
+    "longitude": 27.87,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Ivory Park",
+    "latitude": -26.05,
+    "longitude": 28.2,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Kempton Park",
+    "latitude": -26.12,
+    "longitude": 28.3,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 3,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Sandton",
+    "latitude": -26.1068,
+    "longitude": 28.0502,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Sunnyside",
+    "latitude": -26.15,
+    "longitude": 28.02,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Temba",
+    "latitude": -26.0,
+    "longitude": 28.1,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Brooklyn",
+    "latitude": -26.05,
+    "longitude": 28.07,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Mamelodi East",
+    "latitude": -25.75,
+    "longitude": 28.35,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Hillbrow",
+    "latitude": -26.187,
+    "longitude": 28.0493,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Akasia",
+    "latitude": -26.1,
+    "longitude": 28.12,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Eldorado Park",
+    "latitude": -26.2,
+    "longitude": 27.93,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Alexandra",
+    "latitude": -26.1051,
+    "longitude": 28.121,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Gauteng",
+    "name": "Krugersdorp",
+    "latitude": -26.15,
+    "longitude": 27.77,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Jeppe",
+    "latitude": -26.17,
+    "longitude": 28.08,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Germiston",
+    "latitude": -26.2,
+    "longitude": 28.17,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Gauteng",
+    "name": "Benoni",
+    "latitude": -26.25,
+    "longitude": 28.35,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Durban Central",
+    "latitude": -29.86,
+    "longitude": 31.03,
+    "radius": 1250,
+    "warningRadius": 1750,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Phoenix",
+    "latitude": -29.7014,
+    "longitude": 31.0049,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Chatsworth",
+    "latitude": -29.9131,
+    "longitude": 30.8801,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Plessislaer",
+    "latitude": -29.62,
+    "longitude": 31.09,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Inanda",
+    "latitude": -29.72,
+    "longitude": 31.08,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Empangeni",
+    "latitude": -28.78,
+    "longitude": 31.96,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Pinetown",
+    "latitude": -29.8,
+    "longitude": 30.91,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "KwaDukuza",
+    "latitude": -29.33,
+    "longitude": 31.03,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Ladysmith",
+    "latitude": -28.55,
+    "longitude": 29.77,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Verulam",
+    "latitude": -29.5,
+    "longitude": 31.1,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Umlazi",
+    "latitude": -30.01,
+    "longitude": 30.85,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Mountain Rise",
+    "latitude": -29.75,
+    "longitude": 31.02,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Pietermaritzburg",
+    "latitude": -29.5988,
+    "longitude": 30.3743,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Newcastle",
+    "latitude": -27.7807,
+    "longitude": 29.9457,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Madadeni",
+    "latitude": -27.77,
+    "longitude": 29.95,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Osizweni",
+    "latitude": -27.52,
+    "longitude": 30.18,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Margate",
+    "latitude": -30.85,
+    "longitude": 30.18,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Richards Bay",
+    "latitude": -28.78,
+    "longitude": 32.08,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Port Shepstone",
+    "latitude": -30.74,
+    "longitude": 30.45,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "KwaZulu-Natal",
+    "name": "Ntuzuma",
+    "latitude": -29.7,
+    "longitude": 31.08,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Polokwane",
+    "latitude": -23.9418,
+    "longitude": 29.4245,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Limpopo",
+    "name": "Mankweng",
+    "latitude": -23.85,
+    "longitude": 29.42,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Thohoyandou",
+    "latitude": -22.9834,
+    "longitude": 30.4626,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Limpopo",
+    "name": "Seshego",
+    "latitude": -24.5,
+    "longitude": 28.75,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Lebowakgomo",
+    "latitude": -24.35,
+    "longitude": 28.88,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Giyani",
+    "latitude": -23.3,
+    "longitude": 30.73,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Mahwelereng",
+    "latitude": -24.58,
+    "longitude": 28.7,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Maake",
+    "latitude": -24.7,
+    "longitude": 28.68,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Tzaneen",
+    "latitude": -23.8145,
+    "longitude": 30.1871,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Limpopo",
+    "name": "Westenburg",
+    "latitude": -25.35,
+    "longitude": 27.88,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Dennilton",
+    "latitude": -24.78,
+    "longitude": 28.93,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Bela-Bela",
+    "latitude": -25.05,
+    "longitude": 27.93,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Mokopane",
+    "latitude": -24.65,
+    "longitude": 29.08,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Bolobedu",
+    "latitude": -24.4,
+    "longitude": 30.7,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Burgersfort",
+    "latitude": -24.78,
+    "longitude": 29.88,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Namakgale",
+    "latitude": -23.15,
+    "longitude": 30.65,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Musina",
+    "latitude": -22.38,
+    "longitude": 29.23,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Lephalale",
+    "latitude": -24.15,
+    "longitude": 27.77,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Modimolle",
+    "latitude": -25.08,
+    "longitude": 27.9,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Limpopo",
+    "name": "Ritavi",
+    "latitude": -23.9,
+    "longitude": 30.53,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Witbank",
+    "latitude": -25.8766,
+    "longitude": 29.2458,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Nelspruit",
+    "latitude": -25.4442,
+    "longitude": 30.9661,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Middelburg",
+    "latitude": -25.8058,
+    "longitude": 29.4526,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Vosman",
+    "latitude": -25.88,
+    "longitude": 29.27,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "KwaMhlanga",
+    "latitude": -25.7,
+    "longitude": 29.37,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Ermelo",
+    "latitude": -26.5,
+    "longitude": 29.82,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Delmas",
+    "latitude": -25.62,
+    "longitude": 29.58,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Standerton",
+    "latitude": -26.98,
+    "longitude": 29.23,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Barberton",
+    "latitude": -25.78,
+    "longitude": 30.95,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Embalenhle",
+    "latitude": -25.77,
+    "longitude": 29.13,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Kabokweni",
+    "latitude": -25.6,
+    "longitude": 30.95,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Pienaar",
+    "latitude": -25.58,
+    "longitude": 30.9,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Siyabuswa",
+    "latitude": -26.08,
+    "longitude": 30.68,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Secunda",
+    "latitude": -26.5112,
+    "longitude": 29.1825,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Piet Retief",
+    "latitude": -27.02,
+    "longitude": 30.8,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Bushbuckridge",
+    "latitude": -24.58,
+    "longitude": 31.23,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Masoyi",
+    "latitude": -25.68,
+    "longitude": 31.48,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Calcutta",
+    "latitude": -26.02,
+    "longitude": 30.4,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "White River",
+    "latitude": -24.82,
+    "longitude": 31.18,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Mpumalanga",
+    "name": "Acornhoek",
+    "latitude": -24.68,
+    "longitude": 31.42,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Kimberley",
+    "latitude": -28.7492,
+    "longitude": 24.7783,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Galeshewe",
+    "latitude": -28.75,
+    "longitude": 24.78,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Upington",
+    "latitude": -28.45,
+    "longitude": 21.27,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Roodepan",
+    "latitude": -28.68,
+    "longitude": 24.85,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Postmasburg",
+    "latitude": -28.43,
+    "longitude": 24.02,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Kagisho",
+    "latitude": -28.12,
+    "longitude": 24.68,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Rosedale",
+    "latitude": -28.78,
+    "longitude": 24.72,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Kuruman",
+    "latitude": -27.47,
+    "longitude": 23.43,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Mothibistad",
+    "latitude": -29.15,
+    "longitude": 23.95,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Kakamas",
+    "latitude": -28.8,
+    "longitude": 20.53,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Jan Kempdorp",
+    "latitude": -27.85,
+    "longitude": 25.53,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Douglas",
+    "latitude": -28.97,
+    "longitude": 23.92,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Kathu",
+    "latitude": -27.68,
+    "longitude": 23.42,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Warrenton",
+    "latitude": -28.58,
+    "longitude": 22.6,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Modder River",
+    "latitude": -28.72,
+    "longitude": 24.32,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Springbok",
+    "latitude": -29.65,
+    "longitude": 17.88,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Hartswater",
+    "latitude": -28.55,
+    "longitude": 25.68,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Barkly West",
+    "latitude": -28.82,
+    "longitude": 24.88,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "Pabalello",
+    "latitude": -28.88,
+    "longitude": 24.95,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Northern Cape",
+    "name": "De Aar",
+    "latitude": -30.65,
+    "longitude": 23.98,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Rustenburg",
+    "latitude": -25.6813,
+    "longitude": 27.2348,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "North West",
+    "name": "Brits",
+    "latitude": -25.62,
+    "longitude": 27.8,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Klerksdorp",
+    "latitude": -26.8362,
+    "longitude": 26.6949,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "North West",
+    "name": "Letlhabile",
+    "latitude": -25.63,
+    "longitude": 27.73,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Mmabatho",
+    "latitude": -25.85,
+    "longitude": 25.64,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Ikageng",
+    "latitude": -26.72,
+    "longitude": 26.63,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Mahikeng",
+    "latitude": -25.853,
+    "longitude": 25.639,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "North West",
+    "name": "Tlhabane",
+    "latitude": -25.65,
+    "longitude": 27.72,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Boitekong",
+    "latitude": -26.72,
+    "longitude": 26.68,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Mogwase",
+    "latitude": -25.76,
+    "longitude": 27.6,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Potchefstroom",
+    "latitude": -26.71,
+    "longitude": 26.7,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Mooinooi",
+    "latitude": -25.8,
+    "longitude": 27.38,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Jouberton",
+    "latitude": -26.77,
+    "longitude": 26.62,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Phokeng",
+    "latitude": -25.62,
+    "longitude": 27.68,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Hartbeespoortdam",
+    "latitude": -25.65,
+    "longitude": 27.78,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Lichtenburg",
+    "latitude": -26.25,
+    "longitude": 26.18,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Makapanstad",
+    "latitude": -25.62,
+    "longitude": 27.47,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Ventersdorp",
+    "latitude": -26.48,
+    "longitude": 26.62,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Taung",
+    "latitude": -27.7,
+    "longitude": 25.27,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "North West",
+    "name": "Klipgat",
+    "latitude": -26.82,
+    "longitude": 26.48,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 4,
+    "approximated": true
+  },
+  {
+    "province": "Western Cape",
+    "name": "Cape Town Central",
+    "latitude": -33.9276,
+    "longitude": 18.4232,
+    "radius": 1000,
+    "warningRadius": 1500,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Mitchells Plain",
+    "latitude": -34.0404,
+    "longitude": 18.6176,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Delft",
+    "latitude": -33.98,
+    "longitude": 18.64,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Western Cape",
+    "name": "Mfuleni",
+    "latitude": -33.9898,
+    "longitude": 18.6676,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Kraaifontein",
+    "latitude": -33.8441,
+    "longitude": 18.7119,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Worcester",
+    "latitude": -33.6432,
+    "longitude": 19.4448,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Nyanga",
+    "latitude": -34.0,
+    "longitude": 18.58,
+    "radius": 1750,
+    "warningRadius": 2250,
+    "riskLevel": 5,
+    "approximated": true
+  },
+  {
+    "province": "Western Cape",
+    "name": "Kleinvlei",
+    "latitude": -33.9882,
+    "longitude": 18.7188,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Atlantis",
+    "latitude": -33.5686,
+    "longitude": 18.5014,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Stellenbosch",
+    "latitude": -33.9383,
+    "longitude": 18.8615,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Bishop Lavis",
+    "latitude": -33.9494,
+    "longitude": 18.5847,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Lentegeur",
+    "latitude": -34.0224,
+    "longitude": 18.6056,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Khayelitsha",
+    "latitude": -34.0475,
+    "longitude": 18.6722,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Knysna",
+    "latitude": -34.0415,
+    "longitude": 23.0454,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Bellville",
+    "latitude": -33.9041,
+    "longitude": 18.6463,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Grassy Park",
+    "latitude": -34.0435,
+    "longitude": 18.492,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Milnerton",
+    "latitude": -33.8792,
+    "longitude": 18.4992,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Paarl East",
+    "latitude": -33.7217,
+    "longitude": 18.9927,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Hermanus",
+    "latitude": -34.4192,
+    "longitude": 19.2432,
+    "radius": 750,
+    "warningRadius": 1250,
+    "riskLevel": 4,
+    "approximated": false
+  },
+  {
+    "province": "Western Cape",
+    "name": "Gugulethu",
+    "latitude": -33.9847,
+    "longitude": 18.5649,
+    "radius": 1500,
+    "warningRadius": 2000,
+    "riskLevel": 5,
+    "approximated": false
+  }
+]
