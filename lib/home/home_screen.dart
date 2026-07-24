@@ -40,7 +40,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _isSosActive = false;
   int _sosCountdown = 0;
   Timer? _countdownTimer;
@@ -49,8 +50,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _showSOSStatus = false;
   String _sosStatusMessage = '';
 
-  bool _isSharingTrip = false;
   Timer? _tripUpdateTimer;
+
+  bool get _isSharingTrip => TripSharingService.isSharing;
 
   GoogleMapController? _mapController;
   final location.Location _location = location.Location();
@@ -89,10 +91,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initLocation();
     _getAllDangerZones();
     _listenToContacts();
     TripSharingService.cleanupExpiredTrips();
+    _restoreTripSharingState();
+  }
+
+  Future<void> _restoreTripSharingState() async {
+    await TripSharingService.restoreTripSession();
+
+    if (!mounted) return;
+
+    setState(() {});
+
+    if (TripSharingService.isSharing && _currentPosition != null) {
+      _startTripUpdateTimer();
+    }
+  }
+
+  void _startTripUpdateTimer() {
+    _tripUpdateTimer?.cancel();
+    _tripUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (_currentPosition != null && TripSharingService.isSharing) {
+        TripSharingService.updateLocation(
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+        );
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _restoreTripSharingState();
+    }
   }
 
   Future<void> _listenToContacts() async {
@@ -160,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         }
 
-        if (_isSharingTrip && TripSharingService.isSharing) {
+        if (TripSharingService.isSharing) {
           TripSharingService.updateLocation(
             latitude: _currentPosition!.latitude,
             longitude: _currentPosition!.longitude,
@@ -371,16 +406,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!_locationEnabled) return;
     if (_currentPosition == null) return;
 
-    String userName = 'User';
+    // String userName = 'User';
     final userData = await AuthService().getUserData(user.uid);
-    userName = userData?['name'] ?? 'User';
+    String userName = userData?['name'] ?? 'User';
 
     if (_isSharingTrip) {
       await TripSharingService.stopSharing();
       _tripUpdateTimer?.cancel();
-      setState(() {
-        _isSharingTrip = false;
-      });
+      setState(() {});
     } else {
       try {
         final tripId = await TripSharingService.startSharing(
@@ -389,24 +422,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           longitude: _currentPosition!.longitude,
         );
 
-        setState(() {
-          _isSharingTrip = true;
-        });
+        setState(() {});
 
-        _tripUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
-          if (_currentPosition != null && TripSharingService.isSharing) {
-            TripSharingService.updateLocation(
-              latitude: _currentPosition!.latitude,
-              longitude: _currentPosition!.longitude,
-            );
-          }
-        });
+        _startTripUpdateTimer();
 
         try {
           final recipients = await dm_service.DmService.getSelectedRecipients();
           final userId = user.uid;
-          // if (userId != null && recipients.isNotEmpty) {
-          // NOTE: userId != null does not evaluate, it always returns value of true since userId is of type string
           if (userId.isNotEmpty && recipients.isNotEmpty) {
             for (var recipientId in recipients) {
               await dm_service.DmService.sendTripIdMessage(
@@ -586,7 +608,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    TripSharingService.stopSharing();
+    WidgetsBinding.instance.removeObserver(this);
     _tripUpdateTimer?.cancel();
     _countdownTimer?.cancel();
     _locationSubscription?.cancel();

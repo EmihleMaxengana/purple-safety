@@ -23,7 +23,7 @@ import 'package:purple_safety/services/storage_service.dart';
 class SafetyToolsScreen extends StatefulWidget {
   final VoidCallback onCallEmergency;
   const SafetyToolsScreen({Key? key, required this.onCallEmergency})
-      : super(key: key);
+    : super(key: key);
 
   @override
   State<SafetyToolsScreen> createState() => _SafetyToolsScreenState();
@@ -210,7 +210,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _showSafeConfirmationDialog();
   }
 
-  Future<void> _sendGlobalSafeAlert(String userName, String? currentUserId) async {
+  Future<void> _sendGlobalSafeAlert(
+    String userName,
+    String? currentUserId,
+  ) async {
     try {
       final locationLink = _currentPosition != null
           ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
@@ -227,7 +230,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         'locationLink': locationLink,
       });
 
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .get();
       final batch = FirebaseFirestore.instance.batch();
 
       for (var userDoc in usersSnapshot.docs) {
@@ -644,8 +649,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             MapWidget(
               currentPosition: _currentPosition!,
               onMapCreate: (controller) => _mapController = controller,
-              myLocation: true,
-              myLocationButton: true,
+              myLocation: false,
+              myLocationButton: false,
               zoomControls: false,
               markers: {
                 Marker(

@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:location/location.dart' as location;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TripSharingService {
+  static const String _tripIdPrefsKey = 'active_trip_id';
+
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static Timer? _locationTimer;
   static String? _currentTripId;
@@ -19,7 +23,7 @@ class TripSharingService {
   // ============================================================
   static Future<void> enableBackgroundLocation() async {
     if (_backgroundModeEnabled) return;
-    
+
     try {
       // Check permissions
       bool serviceEnabled = await _location.serviceEnabled();
@@ -27,13 +31,13 @@ class TripSharingService {
         serviceEnabled = await _location.requestService();
         if (!serviceEnabled) return;
       }
-      
+
       final permission = await _location.hasPermission();
       if (permission == location.PermissionStatus.denied) {
         final requested = await _location.requestPermission();
         if (requested != location.PermissionStatus.granted) return;
       }
-      
+
       // Enable background mode
       await _location.enableBackgroundMode(enable: true);
       _backgroundModeEnabled = true;
@@ -44,7 +48,7 @@ class TripSharingService {
   }
 
   // START SHARING
-  
+
   static Future<String> startSharing({
     required String userName,
     required double latitude,
@@ -57,7 +61,6 @@ class TripSharingService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not logged in');
 
-    // Enable background location BEFORE starting sharing
     await enableBackgroundLocation();
 
     final tripRef = _firestore.collection('active_trips').doc();
@@ -79,9 +82,12 @@ class TripSharingService {
           'latitude': latitude,
           'longitude': longitude,
           'timestamp': timestampString,
-        }
+        },
       ],
     });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tripIdPrefsKey, _currentTripId!);
 
     _isSharing = true;
     return _currentTripId!;
@@ -108,7 +114,7 @@ class TripSharingService {
             'latitude': latitude,
             'longitude': longitude,
             'timestamp': timestampString,
-          }
+          },
         ]),
       });
     } catch (e) {
@@ -133,8 +139,55 @@ class TripSharingService {
       print('Error stopping trip: $e');
     }
 
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tripIdPrefsKey);
+
     _isSharing = false;
     _currentTripId = null;
+  }
+
+  static Future<String?> getPersistedTripId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_tripIdPrefsKey);
+  }
+
+  static Future<void> restoreTripSession() async {
+    final persistedTripId = await getPersistedTripId();
+    if (persistedTripId == null || persistedTripId.isEmpty) {
+      return;
+    }
+
+    try {
+      final doc = await _firestore
+          .collection('active_trips')
+          .doc(persistedTripId)
+          .get();
+
+      if (!doc.exists) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_tripIdPrefsKey);
+        return;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_tripIdPrefsKey);
+        return;
+      }
+
+      if (data['status'] == 'active') {
+        _currentTripId = persistedTripId;
+        _isSharing = true;
+      } else {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(_tripIdPrefsKey);
+        _currentTripId = null;
+        _isSharing = false;
+      }
+    } catch (e) {
+      debugPrint('[Trip sharing service] Error restoring trip session: $e');
+    }
   }
 
   // GET TRIP
@@ -163,13 +216,13 @@ class TripSharingService {
   // CHECK IF A TRIP IS STILL ACTIVE (for app resume)
   static Future<bool> isTripActive() async {
     if (!_isSharing || _currentTripId == null) return false;
-    
+
     try {
       final doc = await _firestore
           .collection('active_trips')
           .doc(_currentTripId)
           .get();
-      
+
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         return data['status'] == 'active';
