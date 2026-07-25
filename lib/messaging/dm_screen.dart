@@ -6,6 +6,9 @@ import 'package:purple_safety/messaging/dm_service.dart';
 import 'package:purple_safety/messaging/chat_screen.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/services/storage_service.dart';
+import 'package:purple_safety/contacts/firestore_service.dart';
+import 'package:purple_safety/models/incident_model.dart';
+import 'dart:async';
 
 class DMScreen extends StatefulWidget {
   final String? shareTripId;
@@ -27,24 +30,85 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   TextEditingController _searchController = TextEditingController();
   bool _isLoadingCommunity = true;
 
+  final FirestoreService _firestoreService = FirestoreService();
+  
+  // Stream subscription for real-time contact updates
+  StreamSubscription? _contactsSubscription;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _loadAutoShareData();
     _loadCommunityData();
+    _listenToTrustedContacts();
   }
 
-  Future<void> _loadAutoShareData() async {
-    final users = await DmService.getAllUsersWithProfile();
+  @override
+  void dispose() {
+    _contactsSubscription?.cancel();
+    _tabController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ============================================================
+  // FIXED: Listen to trusted contacts in REAL-TIME
+  // ============================================================
+  void _listenToTrustedContacts() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _isLoading = false;
+        _allUsers = [];
+      });
+      return;
+    }
+
+    _isLoading = true;
+
+    // Listen to contacts stream - updates automatically when contacts change
+    _contactsSubscription = _firestoreService
+        .getContactsStream(user.uid)
+        .listen((contacts) {
+          // Convert contacts to the format expected by the UI
+          final List<Map<String, dynamic>> trustedContacts = contacts.map((contact) {
+            return {
+              'id': contact.id,
+              'name': contact.name,
+              'email': contact.phone ?? 'No phone number',
+            };
+          }).toList();
+
+          // Load saved recipient preferences
+          _loadSavedRecipients(trustedContacts);
+        });
+  }
+
+  // Helper to load saved recipients and update state
+  Future<void> _loadSavedRecipients(List<Map<String, dynamic>> trustedContacts) async {
     final saved = await DmService.getSelectedRecipients();
-    setState(() {
-      _allUsers = users;
-      _selectedRecipients = saved;
-      _isLoading = false;
-    });
+    
+    // Filter saved recipients - only keep ones that still exist in trusted contacts
+    final validSavedIds = trustedContacts.map((c) => c['id'] as String).toSet();
+    final filteredSaved = saved.where((id) => validSavedIds.contains(id)).toList();
+    
+    // If saved list changed (some contacts removed), update Firestore
+    if (filteredSaved.length != saved.length) {
+      await DmService.saveSelectedRecipients(filteredSaved);
+    }
+
+    if (mounted) {
+      setState(() {
+        _allUsers = trustedContacts;
+        _selectedRecipients = filteredSaved;
+        _isLoading = false;
+      });
+    }
   }
 
+  // ============================================================
+  // Community tab - shows ALL users (unchanged)
+  // ============================================================
   Future<void> _loadCommunityData() async {
     final users = await DmService.getAllUsersWithProfile();
     setState(() {
@@ -259,7 +323,9 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
       body: TabBarView(
         controller: _tabController,
         children: [
-          // Auto-share tab
+          // ============================================================
+          // AUTO-SHARE TAB - REAL-TIME SYNC WITH TRUSTED CONTACTS
+          // ============================================================
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -271,64 +337,104 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                         color: const Color(0xFF1a0f2e),
                         child: Text(
                           isShareMode
-                              ? 'Select trusted contacts to receive this Trip ID:'
-                              : 'Select users who will automatically receive your Trip ID when you start sharing.',
+                              ? 'Select your trusted contacts to receive this Trip ID:'
+                              : 'Select trusted contacts who will automatically receive your Trip ID when you start sharing.',
                           style: const TextStyle(color: Colors.white70, fontSize: 14),
                         ),
                       ),
-                      Expanded(
-                        child: ListView.builder(
-                          itemCount: _allUsers.length,
-                          itemBuilder: (context, index) {
-                            final userItem = _allUsers[index];
-                            final isSelected = _selectedRecipients.contains(userItem['id']);
-                            return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: isSelected ? const Color(0xFF6A1B9A).withOpacity(0.3) : const Color(0xFF1a0f2e),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: CheckboxListTile(
-                                title: Text(userItem['name'],
-                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                                subtitle: Text(userItem['email'], style: const TextStyle(color: Colors.white70)),
-                                value: isSelected,
-                                onChanged: (val) {
-                                  setState(() {
-                                    if (val == true) {
-                                      _selectedRecipients.add(userItem['id']);
-                                    } else {
-                                      _selectedRecipients.remove(userItem['id']);
-                                    }
-                                  });
-                                },
-                                activeColor: const Color(0xFFD105FF),
-                                checkColor: Colors.white,
-                                tileColor: Colors.transparent,
-                              ),
-                            );
-                          },
+                      if (_allUsers.isEmpty)
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.people_outline, color: Colors.white38, size: 64),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  'No trusted contacts yet',
+                                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Add contacts from the Home screen first',
+                                  style: TextStyle(color: Colors.white38, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: ListView.builder(
+                            itemCount: _allUsers.length,
+                            itemBuilder: (context, index) {
+                              final userItem = _allUsers[index];
+                              final isSelected = _selectedRecipients.contains(userItem['id']);
+                              return Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? const Color(0xFF6A1B9A).withOpacity(0.3) : const Color(0xFF1a0f2e),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: CheckboxListTile(
+                                  title: Text(userItem['name'],
+                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                                  subtitle: Text(userItem['email'], style: const TextStyle(color: Colors.white70)),
+                                  value: isSelected,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (val == true) {
+                                        _selectedRecipients.add(userItem['id']);
+                                      } else {
+                                        _selectedRecipients.remove(userItem['id']);
+                                      }
+                                    });
+                                  },
+                                  activeColor: const Color(0xFFD105FF),
+                                  checkColor: Colors.white,
+                                  tileColor: Colors.transparent,
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                      ),
                       Padding(
                         padding: const EdgeInsets.all(16),
-                        child: ElevatedButton(
-                          onPressed: isShareMode ? _shareTripId : _saveSelection,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF6A1B9A),
-                            minimumSize: const Size(double.infinity, 48),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          child: Text(
-                            isShareMode ? 'Share' : 'Save Auto-share List',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: isShareMode ? _shareTripId : _saveSelection,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF6A1B9A),
+                                  minimumSize: const Size(double.infinity, 48),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                child: Text(
+                                  isShareMode ? 'Share' : 'Save Auto-share List',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      // Show count of contacts
+                      if (_allUsers.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            '${_allUsers.length} trusted contact${_allUsers.length > 1 ? 's' : ''} available',
+                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-          // Community tab
+
+          // ============================================================
+          // COMMUNITY TAB - ALL USERS (unchanged)
+          // ============================================================
           _isLoadingCommunity
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -385,7 +491,10 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     ],
                   ),
                 ),
-          // Inbox tab
+
+          // ============================================================
+          // INBOX TAB (unchanged)
+          // ============================================================
           Container(
             color: const Color(0xFF0e0718),
             child: StreamBuilder<List<Map<String, dynamic>>>(
