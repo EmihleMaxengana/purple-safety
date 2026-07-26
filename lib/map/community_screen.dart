@@ -132,15 +132,40 @@ class _CommunityScreenState extends State<CommunityScreen>
         .orderBy('timestamp', descending: false)
         .snapshots()
         .listen((snapshot) {
+          // if (snapshot.docs.isNotEmpty) {
+          //   final doc = snapshot.docs.last;
+          //   final data = doc.data();
+          //   if (!_seenResolvedIds.contains(doc.id)) {
+          //     _seenResolvedIds.add(doc.id);
+          //     setState(() {
+          //       _resolvedSOSData = data;
+          //       _showResolvedModal = true;
+          //     });
+          //   }
+          // }
+
           if (snapshot.docs.isNotEmpty) {
-            final doc = snapshot.docs.last;
-            final data = doc.data();
-            if (!_seenResolvedIds.contains(doc.id)) {
-              _seenResolvedIds.add(doc.id);
-              setState(() {
-                _resolvedSOSData = data;
-                _showResolvedModal = true;
-              });
+            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+            QueryDocumentSnapshot? resolvedDoc;
+
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              if (currentUserId == null || data['userId'] != currentUserId) {
+                resolvedDoc = doc;
+                break;
+              }
+            }
+
+            if (resolvedDoc != null) {
+              final data = resolvedDoc.data();
+              debugPrint("[Community screen] data: ${data.toString()}");
+              if (!_seenResolvedIds.contains(resolvedDoc.id)) {
+                _seenResolvedIds.add(resolvedDoc.id);
+                setState(() {
+                  _resolvedSOSData = data as Map<String, dynamic>?;
+                  _showResolvedModal = true;
+                });
+              }
             }
           }
         });
