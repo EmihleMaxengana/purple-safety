@@ -42,6 +42,15 @@ class DmService {
       ...messageData,
       'chatId': chatId,
     });
+
+    await _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('dms')
+        .add({
+      ...messageData,
+      'chatId': chatId,
+    });
   }
 
   static Future<void> sendImageMessage({
@@ -52,7 +61,6 @@ class DmService {
   }) async {
     final chatId = getChatId(senderId, recipientUserId);
 
-    // Named parameters now
     final String imageUrl = await StorageService.uploadDMImage(
       file: imageFile,
       userId: senderId,
@@ -77,6 +85,15 @@ class DmService {
     await _firestore
         .collection('users')
         .doc(recipientUserId)
+        .collection('dms')
+        .add({
+      ...messageData,
+      'chatId': chatId,
+    });
+
+    await _firestore
+        .collection('users')
+        .doc(senderId)
         .collection('dms')
         .add({
       ...messageData,
@@ -121,6 +138,15 @@ class DmService {
       ...messageData,
       'chatId': chatId,
     });
+
+    await _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('dms')
+        .add({
+      ...messageData,
+      'chatId': chatId,
+    });
   }
 
   static Future<void> sendAudioMessage({
@@ -160,6 +186,15 @@ class DmService {
       ...messageData,
       'chatId': chatId,
     });
+
+    await _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('dms')
+        .add({
+      ...messageData,
+      'chatId': chatId,
+    });
   }
 
   static Future<void> sendTripIdMessage({
@@ -168,7 +203,7 @@ class DmService {
     required String tripId,
     required String senderId,
   }) async {
-    final message = {
+    final messageData = {
       'type': 'trip_share',
       'senderId': senderId,
       'senderName': senderName,
@@ -176,11 +211,12 @@ class DmService {
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
+    
     await _firestore
         .collection('users')
         .doc(recipientUserId)
         .collection('dms')
-        .add(message);
+        .add(messageData);
   }
 
   static Stream<List<Map<String, dynamic>>> getMessagesStream(String userId) {
@@ -197,6 +233,17 @@ class DmService {
                 ...data,
               };
             }).toList());
+  }
+
+  // Get unread count for inbox tab badge
+  static Stream<int> getUnreadCountStream(String userId) {
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('dms')
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
   }
 
   static Stream<QuerySnapshot> getConversationStream(String userId1, String userId2) {
@@ -216,6 +263,22 @@ class DmService {
         .collection('dms')
         .doc(messageId)
         .update({'read': true});
+  }
+
+  static Future<void> markAllFromSenderAsRead(String userId, String senderId) async {
+    final snapshot = await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('dms')
+        .where('senderId', isEqualTo: senderId)
+        .where('read', isEqualTo: false)
+        .get();
+
+    final batch = _firestore.batch();
+    for (var doc in snapshot.docs) {
+      batch.update(doc.reference, {'read': true});
+    }
+    await batch.commit();
   }
 
   static Future<List<Map<String, dynamic>>> getAllUsersWithProfile() async {

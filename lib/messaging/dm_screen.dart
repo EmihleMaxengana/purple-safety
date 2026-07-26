@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,7 +9,6 @@ import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/services/storage_service.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/models/incident_model.dart';
-import 'dart:async';
 
 class DMScreen extends StatefulWidget {
   final String? shareTripId;
@@ -32,8 +32,11 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
 
   final FirestoreService _firestoreService = FirestoreService();
   
-  // Stream subscription for real-time contact updates
   StreamSubscription? _contactsSubscription;
+  
+  // Unread count for inbox tab badge
+  int _unreadCount = 0;
+  StreamSubscription<int>? _unreadCountSubscription;
 
   @override
   void initState() {
@@ -41,19 +44,33 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     _tabController = TabController(length: 3, vsync: this);
     _loadCommunityData();
     _listenToTrustedContacts();
+    _listenToUnreadCount();
   }
 
   @override
   void dispose() {
     _contactsSubscription?.cancel();
+    _unreadCountSubscription?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  // ============================================================
-  // FIXED: Listen to trusted contacts in REAL-TIME
-  // ============================================================
+  void _listenToUnreadCount() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _unreadCountSubscription = DmService
+        .getUnreadCountStream(user.uid)
+        .listen((count) {
+          if (mounted) {
+            setState(() {
+              _unreadCount = count;
+            });
+          }
+        });
+  }
+
   void _listenToTrustedContacts() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -66,11 +83,9 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
 
     _isLoading = true;
 
-    // Listen to contacts stream - updates automatically when contacts change
     _contactsSubscription = _firestoreService
         .getContactsStream(user.uid)
         .listen((contacts) {
-          // Convert contacts to the format expected by the UI
           final List<Map<String, dynamic>> trustedContacts = contacts.map((contact) {
             return {
               'id': contact.id,
@@ -79,20 +94,16 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
             };
           }).toList();
 
-          // Load saved recipient preferences
           _loadSavedRecipients(trustedContacts);
         });
   }
 
-  // Helper to load saved recipients and update state
   Future<void> _loadSavedRecipients(List<Map<String, dynamic>> trustedContacts) async {
     final saved = await DmService.getSelectedRecipients();
     
-    // Filter saved recipients - only keep ones that still exist in trusted contacts
     final validSavedIds = trustedContacts.map((c) => c['id'] as String).toSet();
     final filteredSaved = saved.where((id) => validSavedIds.contains(id)).toList();
     
-    // If saved list changed (some contacts removed), update Firestore
     if (filteredSaved.length != saved.length) {
       await DmService.saveSelectedRecipients(filteredSaved);
     }
@@ -106,9 +117,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     }
   }
 
-  // ============================================================
-  // Community tab - shows ALL users (unchanged)
-  // ============================================================
   Future<void> _loadCommunityData() async {
     final users = await DmService.getAllUsersWithProfile();
     setState(() {
@@ -294,6 +302,23 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     );
   }
 
+  void _openChat(String recipientId, String recipientName) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await DmService.markAllFromSenderAsRead(user.uid, recipientId);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          recipientId: recipientId,
+          recipientName: recipientName,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -313,10 +338,39 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'Auto-share'),
-            Tab(text: 'Community'),
-            Tab(text: 'Inbox'),
+          tabs: [
+            const Tab(text: 'Auto-share'),
+            const Tab(text: 'Community'),
+            // ============================================================
+            // INBOX TAB WITH BADGE - Only place badge appears
+            // ============================================================
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Inbox'),
+                  if (_unreadCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.rectangle,
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
+                      ),
+                      child: Text(
+                        _unreadCount > 9 ? '9+' : '$_unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -324,7 +378,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
         controller: _tabController,
         children: [
           // ============================================================
-          // AUTO-SHARE TAB - REAL-TIME SYNC WITH TRUSTED CONTACTS
+          // AUTO-SHARE TAB
           // ============================================================
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
@@ -419,7 +473,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                           ],
                         ),
                       ),
-                      // Show count of contacts
                       if (_allUsers.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -433,7 +486,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                 ),
 
           // ============================================================
-          // COMMUNITY TAB - ALL USERS (unchanged)
+          // COMMUNITY TAB
           // ============================================================
           _isLoadingCommunity
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
@@ -493,7 +546,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                 ),
 
           // ============================================================
-          // INBOX TAB (unchanged)
+          // INBOX TAB - With Unread Indicators
           // ============================================================
           Container(
             color: const Color(0xFF0e0718),
@@ -513,32 +566,109 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     ),
                   );
                 }
+
+                // Group by sender to show one conversation per person
+                final Map<String, Map<String, dynamic>> groupedMessages = {};
+                for (var msg in messages) {
+                  final senderId = msg['senderId'] as String;
+                  // Only keep the most recent message per sender
+                  if (!groupedMessages.containsKey(senderId)) {
+                    groupedMessages[senderId] = msg;
+                  }
+                }
+
+                final groupedList = groupedMessages.values.toList();
+
                 return ListView.builder(
-                  itemCount: messages.length,
+                  itemCount: groupedList.length,
                   itemBuilder: (context, index) {
-                    final msg = messages[index];
+                    final msg = groupedList[index];
                     final isTripShare = msg['type'] == 'trip_share';
+                    final isRead = msg['read'] == true;
+                    final currentUserId = user.uid;
+                    final isSentByMe = msg['senderId'] == currentUserId;
+
+                    // ============================================================
+                    // MESSAGE PREVIEW - Shows the latest message (sent or received)
+                    // ============================================================
+                    String previewText = '';
+                    if (isTripShare) {
+                      previewText = '📌 Shared a Trip ID with you';
+                    } else if (msg['type'] == 'image') {
+                      previewText = '📷 Image';
+                    } else if (msg['type'] == 'video') {
+                      previewText = '🎬 Video';
+                    } else if (msg['type'] == 'audio') {
+                      previewText = '🎵 Audio';
+                    } else {
+                      previewText = msg['message'] ?? '';
+                    }
+
+                    // Show "You: " prefix if we sent it
+                    if (isSentByMe) {
+                      previewText = 'You: $previewText';
+                    }
+
                     return Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: msg['read'] == true ? const Color(0xFF1a0f2e) : const Color(0xFF2a1f3e),
+                        // ============================================================
+                        // DIFFERENT BACKGROUND COLOR FOR UNREAD (like alerts section)
+                        // ============================================================
+                        color: isRead 
+                            ? const Color(0xFF1a0f2e)  // Read - normal dark
+                            : const Color(0xFF2a1f3e), // Unread - darker (like alerts)
                         borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isRead 
+                              ? Colors.purple.withOpacity(0.1) 
+                              : Colors.purple.withOpacity(0.3),
+                        ),
                       ),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.purple,
-                          child: Text(
-                            (msg['senderName'] ?? '?')[0].toUpperCase(),
-                            style: const TextStyle(color: Colors.white),
-                          ),
+                        leading: Stack(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.purple,
+                              child: Text(
+                                (msg['senderName'] ?? '?')[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            // ============================================================
+                            // RED DOT NEXT TO UNREAD MESSAGES
+                            // ============================================================
+                            if (!isRead && !isSentByMe)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  width: 12,
+                                  height: 12,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         title: Text(
                           msg['senderName'] ?? 'Unknown',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
+                          ),
                         ),
-                        subtitle: isTripShare
-                            ? const Text('Shared a Trip ID with you', style: TextStyle(color: Colors.white70))
-                            : Text(msg['message'] ?? '', style: const TextStyle(color: Colors.white70)),
+                        subtitle: Text(
+                          previewText,
+                          style: TextStyle(
+                            color: isRead ? Colors.white70 : Colors.white,
+                            fontWeight: isRead ? FontWeight.normal : FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                         trailing: isTripShare
                             ? Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -561,23 +691,8 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                                 ],
                               )
                             : null,
-                        onTap: () async {
-                          if (!msg['read']) {
-                            await DmService.markAsRead(user.uid, msg['id']);
-                          }
-                          if (isTripShare) {
-                            _followTrip(msg['tripId']);
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => ChatScreen(
-                                  recipientId: msg['senderId'],
-                                  recipientName: msg['senderName'],
-                                ),
-                              ),
-                            );
-                          }
+                        onTap: () {
+                          _openChat(msg['senderId'], msg['senderName'] ?? 'Unknown');
                         },
                       ),
                     );

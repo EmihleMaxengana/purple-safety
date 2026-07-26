@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:purple_safety/authentication/login_screen.dart';
-// Hide FullMapScreen from home_screen.dart to avoid conflict with trip/full_map_screen.dart
+// Hide FullMapScreen from home_screen.dart to avoid conflict
 import 'package:purple_safety/home/home_screen.dart' hide FullMapScreen;
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/emergency/emergency_mode_screen.dart';
@@ -37,13 +37,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _emergencyManager.emergencyStatusStream.listen((isEmergency) {
       setState(() {
         _isEmergencyMode = isEmergency;
-        // Do NOT auto‑switch to Emergency tab – let user navigate manually
       });
     });
     _listenToAlerts();
     _checkInitialTripId();
 
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   void _listenToAlerts() async {
@@ -116,7 +121,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         builder: (context) => const SafetyAlertsScreen(),
       ),
     );
-    // If the user tapped an SOS alert, switch to Community tab (index 2)
     if (result == 'sos') {
       setState(() {
         _selectedIndex = 2;
@@ -137,12 +141,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _isEmergencyMode
@@ -151,6 +149,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       appBar: buildAppHeader(
         onAvatarPressed: _showUserProfileModal,
         unreadAlertsCount: _unreadAlertsCount,
+        // DM badge removed from app bar
         onNotificationPressed: _openSafetyAlerts,
         onDMTap: _openDMScreen,
       ),

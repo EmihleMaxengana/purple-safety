@@ -18,7 +18,6 @@ AppBar buildAppHeader({
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Logo - now bigger (40x40)
           Container(
             width: 40,
             height: 40,
@@ -44,7 +43,6 @@ AppBar buildAppHeader({
             ),
           ),
           const SizedBox(width: 10),
-          // Title only – no subtitle
           const Text(
             'PurpleSafety',
             style: TextStyle(
@@ -57,7 +55,7 @@ AppBar buildAppHeader({
       ),
     ),
     actions: [
-      // DM Icon
+      // DM Icon (no badge)
       if (onDMTap != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -67,7 +65,7 @@ AppBar buildAppHeader({
             tooltip: 'Direct Messages',
           ),
         ),
-      // Notification Icon with badge
+      // Notification Icon with badge (keep this)
       if (onNotificationPressed != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
