@@ -132,18 +132,6 @@ class _CommunityScreenState extends State<CommunityScreen>
         .orderBy('timestamp', descending: false)
         .snapshots()
         .listen((snapshot) {
-          // if (snapshot.docs.isNotEmpty) {
-          //   final doc = snapshot.docs.last;
-          //   final data = doc.data();
-          //   if (!_seenResolvedIds.contains(doc.id)) {
-          //     _seenResolvedIds.add(doc.id);
-          //     setState(() {
-          //       _resolvedSOSData = data;
-          //       _showResolvedModal = true;
-          //     });
-          //   }
-          // }
-
           if (snapshot.docs.isNotEmpty) {
             final currentUserId = FirebaseAuth.instance.currentUser?.uid;
             QueryDocumentSnapshot? resolvedDoc;
