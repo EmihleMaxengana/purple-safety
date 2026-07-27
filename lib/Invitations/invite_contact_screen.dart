@@ -38,7 +38,7 @@ class _InviteContactScreenState extends State<InviteContactScreen> {
     if (_currentContactCount >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('You already have 5 trusted contacts. Delete one to add more.'),
+          content: Text('You already have 5 trusted contacts.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -49,20 +49,14 @@ class _InviteContactScreenState extends State<InviteContactScreen> {
     
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter an email address'),
-          backgroundColor: Colors.orange,
-        ),
+        const SnackBar(content: Text('Please enter an email address'), backgroundColor: Colors.orange),
       );
       return;
     }
     
     if (!email.contains('@') || !email.contains('.')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid email address'),
-          backgroundColor: Colors.orange,
-        ),
+        const SnackBar(content: Text('Please enter a valid email address'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -70,22 +64,15 @@ class _InviteContactScreenState extends State<InviteContactScreen> {
     final user = AuthService().getCurrentUser();
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You must be logged in to invite contacts'),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text('You must be logged in'), backgroundColor: Colors.red),
       );
       return;
     }
 
-    // Prevent inviting yourself
     final currentUserEmail = user.email;
     if (email == currentUserEmail) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You cannot invite yourself as a trusted contact.'),
-          backgroundColor: Colors.orange,
-        ),
+        const SnackBar(content: Text('You cannot invite yourself'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -94,9 +81,7 @@ class _InviteContactScreenState extends State<InviteContactScreen> {
     final userName = userData?['name'] ?? 'Someone';
     final userEmail = userData?['email'] ?? user.email ?? '';
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final success = await InvitationService.sendInvitation(
       inviterName: userName,
@@ -105,23 +90,22 @@ class _InviteContactScreenState extends State<InviteContactScreen> {
       inviterId: user.uid,
     );
 
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (success) {
       _emailController.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Invitation sent! They will receive a notification.'),
+          content: Text('Invitation sent successfully!'),
           backgroundColor: Colors.green,
         ),
       );
       Navigator.pop(context);
     } else {
+      // Updated error message to reflect the new behavior
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to send invitation. They may already be your trusted contact.'),
+          content: Text('Cannot send invitation. This person may already be your trusted contact or has a pending invitation from you.'),
           backgroundColor: Colors.red,
         ),
       );

@@ -10,7 +10,7 @@ class Alert {
   final String? incidentId;
   final String? incidentTitle;
   final String? invitationId;
-  final String? sosEventId; // Added for SOS alerts
+  final String? sosEventId;
 
   Alert({
     required this.id,
@@ -21,7 +21,7 @@ class Alert {
     this.incidentId,
     this.incidentTitle,
     this.invitationId,
-    this.sosEventId, // Added
+    this.sosEventId,
   });
 
   factory Alert.fromFirestore(DocumentSnapshot doc) {
@@ -35,7 +35,7 @@ class Alert {
       incidentId: data['incidentId'],
       incidentTitle: data['incidentTitle'],
       invitationId: data['invitationId'],
-      sosEventId: data['sosEventId'], // Added
+      sosEventId: data['sosEventId'],
     );
   }
 
@@ -48,7 +48,7 @@ class Alert {
       'incidentId': incidentId,
       'incidentTitle': incidentTitle,
       'invitationId': invitationId,
-      'sosEventId': sosEventId, // Added
+      'sosEventId': sosEventId,
     };
   }
 }
@@ -74,7 +74,17 @@ class FirestoreService {
         .doc(userId)
         .collection('contacts')
         .doc(contact.id)
-        .set(contact.toFirestore());
+        .set({
+          'id': contact.id,
+          'userId': contact.id,
+          'name': contact.name,
+          'initials': contact.initials,
+          'color': contact.color.value,
+          'active': contact.active,
+          'phone': contact.phone,
+          'relationship': contact.relationship,
+          'socialLinks': contact.socialLinks,
+        });
   }
 
   Future<void> deleteContact(String userId, String contactId) async {
@@ -92,7 +102,17 @@ class FirestoreService {
         .doc(userId)
         .collection('contacts')
         .doc(contact.id)
-        .update(contact.toFirestore());
+        .update({
+          'id': contact.id,
+          'userId': contact.id,
+          'name': contact.name,
+          'initials': contact.initials,
+          'color': contact.color.value,
+          'active': contact.active,
+          'phone': contact.phone,
+          'relationship': contact.relationship,
+          'socialLinks': contact.socialLinks,
+        });
   }
 
   Stream<List<Alert>> getAlertsStream(String userId) {

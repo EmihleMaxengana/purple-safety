@@ -6,7 +6,6 @@ class InvitationService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Send invitation (ONE-WAY)
   static Future<bool> sendInvitation({
     required String inviterName,
     required String inviterEmail,
@@ -14,13 +13,10 @@ class InvitationService {
     required String inviterId,
   }) async {
     try {
-      // Prevent self-invitation
       if (inviterEmail == inviteeEmail) {
-        print('Cannot invite yourself');
         return false;
       }
 
-      // Find invitee user (they must have an account)
       final userQuery = await _firestore
           .collection('users')
           .where('email', isEqualTo: inviteeEmail)
@@ -28,28 +24,26 @@ class InvitationService {
           .get();
 
       if (userQuery.docs.isEmpty) {
-        print('User not found');
         return false;
       }
 
       final inviteeId = userQuery.docs.first.id;
 
-      // Check if already a trusted contact (one-way from inviter to invitee)
-      final existingContact = await _firestore
+      // Check if the inviter already has this person as a contact
+      final contactCheck = await _firestore
           .collection('users')
           .doc(inviterId)
           .collection('contacts')
-          .where('id', isEqualTo: inviteeId)
+          .where('userId', isEqualTo: inviteeId)
           .limit(1)
           .get();
-      
-      if (existingContact.docs.isNotEmpty) {
-        print('Already a trusted contact');
+
+      if (contactCheck.docs.isNotEmpty) {
         return false;
       }
 
-      // Check if invitation already exists
-      final existingInvitation = await _firestore
+      // Check for pending invitation FROM THIS USER to the invitee
+      final pendingCheck = await _firestore
           .collection('invitations')
           .where('inviterId', isEqualTo: inviterId)
           .where('inviteeId', isEqualTo: inviteeId)
@@ -57,12 +51,16 @@ class InvitationService {
           .limit(1)
           .get();
 
-      if (existingInvitation.docs.isNotEmpty) {
-        print('Invitation already exists');
+      if (pendingCheck.docs.isNotEmpty) {
         return false;
       }
 
-      // Create invitation
+      // ============================================================
+      // REMOVED: The reverse invitation check
+      // User A can invite User B even if User B invited User A before
+      // They are separate trust relationships
+      // ============================================================
+
       final invitationRef = _firestore.collection('invitations').doc();
       final invitationId = invitationRef.id;
 
@@ -78,13 +76,12 @@ class InvitationService {
         'expiresAt': Timestamp.fromDate(DateTime.now().add(Duration(days: 7))),
       });
 
-      // Send in-app notification
       await _firestore
           .collection('users')
           .doc(inviteeId)
           .collection('alerts')
           .add({
-            'message': '🔐 $inviterName invited you to be their trusted contact. Tap to respond.',
+            'message': '$inviterName invited you to be their trusted contact. Tap to respond.',
             'type': 'invitation',
             'invitationId': invitationId,
             'timestamp': FieldValue.serverTimestamp(),
@@ -93,12 +90,10 @@ class InvitationService {
 
       return true;
     } catch (e) {
-      print('Error sending invitation: $e');
       return false;
     }
   }
 
-  // Get pending invitations for current user
   static Stream<List<Map<String, dynamic>>> getPendingInvitations() {
     final user = _auth.currentUser;
     if (user == null) return Stream.value([]);
@@ -122,7 +117,6 @@ class InvitationService {
         });
   }
 
-  // Accept invitation - ONE WAY: adds invitee to inviter's contacts ONLY
   static Future<bool> acceptInvitation(String invitationId) async {
     try {
       final user = _auth.currentUser;
@@ -134,24 +128,26 @@ class InvitationService {
       final data = invitationDoc.data()!;
       
       if (data['status'] != 'pending') {
-        print('Invitation already processed');
         return false;
       }
 
       final inviterId = data['inviterId'];
       final inviteeId = user.uid;
 
-      // Check if already a trusted contact
-      final existingContact = await _firestore
+      final inviteeUserDoc = await _firestore.collection('users').doc(inviteeId).get();
+      final inviteeName = inviteeUserDoc.data()?['name'] ?? 'User';
+      final inviteePhone = inviteeUserDoc.data()?['phone'] ?? '';
+
+      // Check if the inviter already has this person as a contact
+      final existingCheck = await _firestore
           .collection('users')
           .doc(inviterId)
           .collection('contacts')
-          .where('id', isEqualTo: inviteeId)
+          .where('userId', isEqualTo: inviteeId)
           .limit(1)
           .get();
-      
-      if (existingContact.docs.isNotEmpty) {
-        print('Already a trusted contact');
+
+      if (existingCheck.docs.isNotEmpty) {
         await _firestore.collection('invitations').doc(invitationId).update({
           'status': 'accepted',
           'acceptedAt': FieldValue.serverTimestamp(),
@@ -159,30 +155,48 @@ class InvitationService {
         return true;
       }
 
-      // Get invitee name
-      final inviteeUserDoc = await _firestore.collection('users').doc(inviteeId).get();
-      final inviteeName = inviteeUserDoc.data()?['name'] ?? 'User';
-
       // Update invitation status
       await _firestore.collection('invitations').doc(invitationId).update({
         'status': 'accepted',
         'acceptedAt': FieldValue.serverTimestamp(),
       });
 
-      // ONE-WAY: Add invitee to inviter's trusted contacts ONLY
-      await _addTrustedContact(
-        userId: inviterId, 
-        trustedUserId: inviteeId, 
-        name: inviteeName,
-      );
+      // ============================================================
+      // ONE-WAY ONLY: Add the invitee (User B) to the inviter's (User A) contacts
+      // DO NOT add the inviter (User A) to the invitee's (User B) contacts
+      // User B must send their own invitation to User A if they want to trust them
+      // ============================================================
+      final contactId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // Send notification to inviter
+      await _firestore
+          .collection('users')
+          .doc(inviterId)  // ONLY User A's contacts collection
+          .collection('contacts')
+          .doc(contactId)
+          .set({
+            'id': contactId,
+            'userId': inviteeId,  // User B
+            'name': inviteeName,
+            'initials': inviteeName.isNotEmpty ? inviteeName[0].toUpperCase() : '?',
+            'color': Colors.primaries[DateTime.now().millisecond % Colors.primaries.length].value,
+            'active': true,
+            'phone': inviteePhone,
+            'relationship': 'Trusted Contact',
+            'socialLinks': {},
+          });
+
+      // ============================================================
+      // REMOVED: The code that was adding inviter to invitee's contacts
+      // NO LONGER creating contacts in invitee's collection
+      // ============================================================
+
+      // Notify inviter (User A) that User B accepted
       await _firestore
           .collection('users')
           .doc(inviterId)
           .collection('alerts')
           .add({
-            'message': '✅ $inviteeName accepted your trusted contact invitation!',
+            'message': '$inviteeName accepted your trusted contact invitation!',
             'type': 'info',
             'timestamp': FieldValue.serverTimestamp(),
             'read': false,
@@ -190,7 +204,6 @@ class InvitationService {
 
       return true;
     } catch (e) {
-      print('Error accepting invitation: $e');
       return false;
     }
   }
@@ -209,65 +222,8 @@ class InvitationService {
       });
       return true;
     } catch (e) {
-      print('Error declining invitation: $e');
       return false;
     }
-  }
-
-  static Future<void> _addTrustedContact({
-    required String userId, 
-    required String trustedUserId, 
-    required String name,
-  }) async {
-    // Check if contact already exists
-    final existingContact = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('contacts')
-        .where('id', isEqualTo: trustedUserId)
-        .limit(1)
-        .get();
-    
-    if (existingContact.docs.isNotEmpty) {
-      print('Contact already exists for $userId');
-      return;
-    }
-    
-    // Check contact limit (max 5)
-    final allContacts = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('contacts')
-        .get();
-    
-    if (allContacts.docs.length >= 5) {
-      print('User already has 5 contacts, cannot add more');
-      return;
-    }
-    
-    final contactId = DateTime.now().millisecondsSinceEpoch.toString();
-    
-    // Get phone number if available
-    final trustedUserDoc = await _firestore.collection('users').doc(trustedUserId).get();
-    final phone = trustedUserDoc.data()?['phone'] ?? '';
-    
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('contacts')
-        .doc(contactId)
-        .set({
-          'id': contactId,
-          'name': name,
-          'initials': name.isNotEmpty ? name[0].toUpperCase() : '?',
-          'color': Colors.primaries[DateTime.now().millisecond % Colors.primaries.length].value,
-          'active': true,
-          'phone': phone,
-          'relationship': 'Trusted Contact',
-          'socialLinks': {},
-        });
-    
-    print('Added contact $name to user $userId');
   }
 
   // Get all trusted contacts for a user
@@ -282,7 +238,7 @@ class InvitationService {
             final data = doc.data();
             return {
               'id': doc.id,
-              'userId': data['id'],
+              'userId': data['userId'],
               'name': data['name'],
               'phone': data['phone'],
             };

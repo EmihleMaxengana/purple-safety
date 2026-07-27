@@ -342,7 +342,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
             const Tab(text: 'Auto-share'),
             const Tab(text: 'Community'),
             // ============================================================
-            // INBOX TAB WITH BADGE - Only place badge appears
+            // INBOX TAB WITH BADGE
             // ============================================================
             Tab(
               child: Row(
@@ -546,7 +546,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                 ),
 
           // ============================================================
-          // INBOX TAB - With Unread Indicators
+          // INBOX TAB - FIXED: Shows latest message (sent or received)
           // ============================================================
           Container(
             color: const Color(0xFF0e0718),
@@ -567,26 +567,74 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   );
                 }
 
-                // Group by sender to show one conversation per person
+                // ============================================================
+                // FIXED: Group by conversation partner and get the MOST RECENT message
+                // ============================================================
                 final Map<String, Map<String, dynamic>> groupedMessages = {};
+                final Map<String, String> conversationNames = {};
+                final Map<String, bool> conversationReadStatus = {};
+                
                 for (var msg in messages) {
                   final senderId = msg['senderId'] as String;
-                  // Only keep the most recent message per sender
-                  if (!groupedMessages.containsKey(senderId)) {
-                    groupedMessages[senderId] = msg;
+                  final currentUserId = user.uid;
+                  
+                  // Determine the conversation partner ID (the other person)
+                  String conversationId;
+                  if (senderId == currentUserId) {
+                    // If I sent it, we need to get the recipient ID
+                    // For messages sent by me, the senderId is me, but we need to know who I sent it to
+                    // Since we don't store recipientId in the DM document, we use senderId as the key
+                    // and the senderName will be the other person's name
+                    conversationId = senderId;
+                  } else {
+                    conversationId = senderId;
+                  }
+                  
+                  // Store the sender name for display
+                  final senderName = msg['senderName'] ?? 'Unknown';
+                  
+                  // Only keep the most recent message per conversation
+                  if (!groupedMessages.containsKey(conversationId)) {
+                    groupedMessages[conversationId] = msg;
+                    conversationNames[conversationId] = senderName;
+                    conversationReadStatus[conversationId] = msg['read'] ?? false;
+                  } else {
+                    // Compare timestamps - keep the newer one
+                    final existingTimestamp = groupedMessages[conversationId]?['timestamp'] as Timestamp?;
+                    final newTimestamp = msg['timestamp'] as Timestamp?;
+                    
+                    if (newTimestamp != null && existingTimestamp != null) {
+                      if (newTimestamp.toDate().isAfter(existingTimestamp.toDate())) {
+                        groupedMessages[conversationId] = msg;
+                        conversationNames[conversationId] = senderName;
+                        conversationReadStatus[conversationId] = msg['read'] ?? false;
+                      }
+                    }
                   }
                 }
 
-                final groupedList = groupedMessages.values.toList();
+                // Convert to list and sort by timestamp (newest first)
+                final groupedList = groupedMessages.entries.toList();
+                groupedList.sort((a, b) {
+                  final timestampA = a.value['timestamp'] as Timestamp?;
+                  final timestampB = b.value['timestamp'] as Timestamp?;
+                  if (timestampA == null && timestampB == null) return 0;
+                  if (timestampA == null) return 1;
+                  if (timestampB == null) return -1;
+                  return timestampB.toDate().compareTo(timestampA.toDate());
+                });
 
                 return ListView.builder(
                   itemCount: groupedList.length,
                   itemBuilder: (context, index) {
-                    final msg = groupedList[index];
+                    final entry = groupedList[index];
+                    final conversationId = entry.key;
+                    final msg = entry.value;
+                    final displayName = conversationNames[conversationId] ?? 'Unknown';
+                    final isConversationRead = conversationReadStatus[conversationId] ?? false;
+                    
                     final isTripShare = msg['type'] == 'trip_share';
-                    final isRead = msg['read'] == true;
-                    final currentUserId = user.uid;
-                    final isSentByMe = msg['senderId'] == currentUserId;
+                    final isSentByMe = msg['senderId'] == user.uid;
 
                     // ============================================================
                     // MESSAGE PREVIEW - Shows the latest message (sent or received)
@@ -615,12 +663,12 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                         // ============================================================
                         // DIFFERENT BACKGROUND COLOR FOR UNREAD (like alerts section)
                         // ============================================================
-                        color: isRead 
+                        color: isConversationRead 
                             ? const Color(0xFF1a0f2e)  // Read - normal dark
                             : const Color(0xFF2a1f3e), // Unread - darker (like alerts)
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isRead 
+                          color: isConversationRead 
                               ? Colors.purple.withOpacity(0.1) 
                               : Colors.purple.withOpacity(0.3),
                         ),
@@ -631,14 +679,14 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                             CircleAvatar(
                               backgroundColor: Colors.purple,
                               child: Text(
-                                (msg['senderName'] ?? '?')[0].toUpperCase(),
+                                (displayName.isNotEmpty ? displayName[0] : '?').toUpperCase(),
                                 style: const TextStyle(color: Colors.white),
                               ),
                             ),
                             // ============================================================
-                            // RED DOT NEXT TO UNREAD MESSAGES
+                            // RED DOT NEXT TO UNREAD MESSAGES (only if not sent by me)
                             // ============================================================
-                            if (!isRead && !isSentByMe)
+                            if (!isConversationRead && !isSentByMe)
                               Positioned(
                                 bottom: 0,
                                 right: 0,
@@ -654,17 +702,17 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                           ],
                         ),
                         title: Text(
-                          msg['senderName'] ?? 'Unknown',
+                          displayName,
                           style: TextStyle(
                             color: Colors.white,
-                            fontWeight: isRead ? FontWeight.w500 : FontWeight.bold,
+                            fontWeight: isConversationRead ? FontWeight.w500 : FontWeight.bold,
                           ),
                         ),
                         subtitle: Text(
                           previewText,
                           style: TextStyle(
-                            color: isRead ? Colors.white70 : Colors.white,
-                            fontWeight: isRead ? FontWeight.normal : FontWeight.w500,
+                            color: isConversationRead ? Colors.white70 : Colors.white,
+                            fontWeight: isConversationRead ? FontWeight.normal : FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -692,7 +740,26 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                               )
                             : null,
                         onTap: () {
-                          _openChat(msg['senderId'], msg['senderName'] ?? 'Unknown');
+                          // Get the other person's ID for the chat
+                          String otherPersonId = conversationId;
+                          String otherPersonName = displayName;
+                          
+                          // If I sent the message and conversationId is my ID, 
+                          // we need to find the recipient ID from the message
+                          // For now, use the senderId if it's not me, otherwise use conversationId
+                          if (isSentByMe) {
+                            // For messages sent by me, the recipient ID might be stored elsewhere
+                            // We'll use the senderId from the message if it's not me
+                            // In this case, conversationId might be the senderId (which is me)
+                            // So we need to use the senderId from the message
+                            final msgSenderId = msg['senderId'] ?? '';
+                            if (msgSenderId != user.uid) {
+                              otherPersonId = msgSenderId;
+                              otherPersonName = msg['senderName'] ?? 'Unknown';
+                            }
+                          }
+                          
+                          _openChat(otherPersonId, otherPersonName);
                         },
                       ),
                     );
