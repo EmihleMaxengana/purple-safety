@@ -12,9 +12,31 @@ class AuthService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
+  static const String _sessionKeyPrefix = 'session_verified_';
+  static const String _requireReauthKey = 'require_reauth';
+
+  // save pin to secure storage
+  Future<void> savePin(String pin) async {
+    try {
+      await _storage.write(key: 'user_pin', value: pin);
+    } catch (e) {
+      print('Error saving PIN: $e');
+    }
+  }
+
+  // get pin from secure storage
+  Future<String?> getPin() async {
+    try {
+      return await _storage.read(key: 'user_pin');
+    } catch (e) {
+      print('Error getting PIN: $e');
+      return null;
+    }
+  }
+
   // Register with email and password, with optional next of kin and gender
   Future<User?> registerWithEmail(
-    String name,
+    String fullName,
     String email,
     String password,
     String phone, {
@@ -33,11 +55,12 @@ class AuthService {
 
       if (user != null) {
         Map<String, dynamic> userData = {
-          'name': name,
+          'name': fullName,
           'email': email,
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
         };
+      
         if (nextOfKinName != null && nextOfKinName.isNotEmpty)
           userData['nextOfKinName'] = nextOfKinName;
         if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty)
@@ -46,6 +69,8 @@ class AuthService {
           userData['nextOfKinRelation'] = nextOfKinRelation;
         if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty)
           userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
+        if (gender != null && gender.isNotEmpty)
+          userData['gender'] = gender;
 
         await _firestore.collection('users').doc(user.uid).set(userData);
       }
@@ -121,8 +146,6 @@ class AuthService {
   }
 
   // --- Session / re-auth helpers ---
-  static const String _sessionKeyPrefix = 'session_verified_';
-  static const String _requireReauthKey = 'require_reauth';
 
   /// Mark the session as verified (store timestamp for current user)
   Future<void> markSessionVerified() async {
@@ -193,11 +216,10 @@ class AuthService {
   }
 
   Future<bool> reauthenticateWithPIN(String pin) async {
-    String storedPin = await _storage.read(key: pin) ?? '';
-    if (storedPin.isEmpty) {
+    String? storedPin = await _storage.read(key: 'user_pin');
+    if (storedPin == null) {
       throw Exception("There is no pin available for this user.");
     }
-
     return pin == storedPin;
   }
 

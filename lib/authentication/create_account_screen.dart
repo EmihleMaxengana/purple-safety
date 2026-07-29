@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import 'package:purple_safety/authentication/otp_verification_screen.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/utils/pref_keys.dart';
 
 class CreateAccountScreen extends StatefulWidget {
   const CreateAccountScreen({Key? key}) : super(key: key);
@@ -15,23 +16,43 @@ class CreateAccountScreen extends StatefulWidget {
 class _CreateAccountScreenState extends State<CreateAccountScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _obscurePin = true;
+  bool _obscureConfirmPin = true;
   final _formKey = GlobalKey<FormState>();
+
+  // name and surname
   final _nameController = TextEditingController();
+  final _surnameController = TextEditingController();
+
+  // email
   final _emailController = TextEditingController();
   final _confirmEmailController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+  bool _emailsMatch = false;
+  bool _emailChecked = false;
 
-  // Next of Kin controllers
+  // phone
+  final _phoneController = TextEditingController();
+
+  // gender
+  String? _selectedGender;
+  final List<String> _genderOptions = ['Male', 'Female'];
+
+  // next of kin
   final _nextOfKinNameController = TextEditingController();
+  final _nextOfKinSurnameController = TextEditingController();
   final _nextOfKinPhoneController = TextEditingController();
   final _nextOfKinRelationController = TextEditingController();
   final _nextOfKinAltPhoneController = TextEditingController();
 
-  // Gender
-  String? _selectedGender;
-  final List<String> _genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
+  // password
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
+  // pin
+  final _pinController = TextEditingController();
+  final _confirmPinController = TextEditingController();
+  bool _pinsMatch = false;
+  bool _pinChecked = false;
 
   bool _useBiometrics = false;
   bool _isLoading = false;
@@ -43,16 +64,61 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _surnameController.dispose();
     _emailController.dispose();
     _confirmEmailController.dispose();
     _phoneController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
     _nextOfKinNameController.dispose();
+    _nextOfKinSurnameController.dispose();
     _nextOfKinPhoneController.dispose();
     _nextOfKinRelationController.dispose();
     _nextOfKinAltPhoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _pinController.dispose();
+    _confirmPinController.dispose();
     super.dispose();
+  }
+
+  // auto-capitalize first letter while typing
+  void _capitalizeWhileTyping(TextEditingController controller) {
+    final text = controller.text;
+    if (text.isNotEmpty) {
+      final firstChar = text[0];
+      if (firstChar != firstChar.toUpperCase()) {
+        final capitalized = firstChar.toUpperCase() + text.substring(1);
+        controller.value = TextEditingValue(
+          text: capitalized,
+          selection: TextSelection.collapsed(offset: capitalized.length),
+        );
+      }
+    }
+  }
+
+  // check if emails match
+  void _checkEmailsMatch() {
+    final email = _emailController.text.trim();
+    final confirmEmail = _confirmEmailController.text.trim();
+
+    setState(() {
+      _emailChecked = confirmEmail.isNotEmpty;
+      if (_emailChecked) {
+        _emailsMatch = email == confirmEmail && email.isNotEmpty;
+      }
+    });
+  }
+
+  // check if pins match
+  void _checkPinsMatch() {
+    final pin = _pinController.text.trim();
+    final confirmPin = _confirmPinController.text.trim();
+
+    setState(() {
+      _pinChecked = confirmPin.isNotEmpty;
+      if (_pinChecked) {
+        _pinsMatch = pin == confirmPin && pin.isNotEmpty && pin.length == 6;
+      }
+    });
   }
 
   @override
@@ -146,9 +212,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
 
-                          // Full Name
+                          // NAME
                           const Text(
-                            'Full Name *',
+                            'Name *',
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -159,8 +225,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
+                            onChanged: (value) => _capitalizeWhileTyping(_nameController),
                             decoration: InputDecoration(
-                              hintText: 'Enter your full legal name',
+                              hintText: 'Enter your first name',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -192,17 +259,68 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Please enter your full name';
-                              }
-                              if (value.split(' ').length < 2) {
-                                return 'Please enter your full name (first and last)';
+                                return 'Please enter your first name';
                               }
                               return null;
                             },
                           ),
                           const SizedBox(height: 20),
 
-                          // Email
+                          // SURNAME
+                          const Text(
+                            'Surname *',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFCCCCFF),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _surnameController,
+                            style: const TextStyle(color: Colors.white),
+                            onChanged: (value) => _capitalizeWhileTyping(_surnameController),
+                            decoration: InputDecoration(
+                              hintText: 'Enter your surname',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.person_outline,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your surname';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // EMAIL
                           const Text(
                             'Email *',
                             style: TextStyle(
@@ -215,6 +333,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _emailController,
                             style: const TextStyle(color: Colors.white),
+                            onChanged: (_) => _checkEmailsMatch(),
                             decoration: InputDecoration(
                               hintText: 'Enter your secure email',
                               hintStyle: const TextStyle(
@@ -279,7 +398,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Confirm Email
+                          // CONFIRM EMAIL
                           const Text(
                             'Confirm Email *',
                             style: TextStyle(
@@ -292,6 +411,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _confirmEmailController,
                             style: const TextStyle(color: Colors.white),
+                            onChanged: (_) => _checkEmailsMatch(),
                             decoration: InputDecoration(
                               hintText: 'Confirm your email',
                               hintStyle: const TextStyle(
@@ -328,15 +448,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               if (value == null || value.isEmpty) {
                                 return 'Please confirm your email';
                               }
-                              if (value != _emailController.text) {
-                                return 'Emails do not match';
-                              }
                               return null;
                             },
                           ),
+                          // email match validation message
+                          if (_emailChecked) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  _emailsMatch ? Icons.check_circle : Icons.error,
+                                  color: _emailsMatch ? Colors.green : Colors.red,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _emailsMatch ? 'Emails match' : 'Emails do not match',
+                                  style: TextStyle(
+                                    color: _emailsMatch ? Colors.green : Colors.red,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                           const SizedBox(height: 20),
 
-                          // Phone Number
+                          // PHONE NUMBER
                           const Text(
                             'Phone Number *',
                             style: TextStyle(
@@ -356,7 +495,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               _SouthAfricanPhoneFormatter(),
                             ],
                             decoration: InputDecoration(
-                              hintText: '12 345 6789',
+                              hintText: '71 234 5678',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -404,7 +543,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // GENDER - REQUIRED
+                          // GENDER
                           const Text(
                             'Gender *',
                             style: TextStyle(
@@ -451,7 +590,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // NEXT OF KIN - REQUIRED
+                          // NEXT OF KIN
                           Container(
                             margin: const EdgeInsets.only(top: 8),
                             child: const Text(
@@ -464,11 +603,14 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                           ),
                           const SizedBox(height: 8),
+
+                          // next of kin name
                           TextFormField(
                             controller: _nextOfKinNameController,
                             style: const TextStyle(color: Colors.white),
+                            onChanged: (value) => _capitalizeWhileTyping(_nextOfKinNameController),
                             decoration: InputDecoration(
-                              hintText: 'Full name of next of kin *',
+                              hintText: 'Next of kin first name *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -500,13 +642,59 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             ),
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Please enter next of kin name';
+                                return 'Please enter next of kin first name';
                               }
                               return null;
                             },
                           ),
                           const SizedBox(height: 12),
 
+                          // next of kin surname
+                          TextFormField(
+                            controller: _nextOfKinSurnameController,
+                            style: const TextStyle(color: Colors.white),
+                            onChanged: (value) => _capitalizeWhileTyping(_nextOfKinSurnameController),
+                            decoration: InputDecoration(
+                              hintText: 'Next of kin surname *',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.person_outline,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter next of kin surname';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 12),
+
+                          // next of kin phone
                           TextFormField(
                             controller: _nextOfKinPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -517,7 +705,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               _SouthAfricanPhoneFormatter(),
                             ],
                             decoration: InputDecoration(
-                              hintText: 'Phone number (e.g., 71 234 5678) *',
+                              hintText: '71 234 5678 *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -565,6 +753,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
+                          // next of kin relationship
                           TextFormField(
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
@@ -608,6 +797,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
+                          // next of kin alternative phone (optional)
                           TextFormField(
                             controller: _nextOfKinAltPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -618,7 +808,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               _SouthAfricanPhoneFormatter(),
                             ],
                             decoration: InputDecoration(
-                              hintText: 'Alternative phone number (optional)',
+                              hintText: '71 234 5678 (optional)',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -653,7 +843,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Password
+                          // PASSWORD
                           const Text(
                             'Password *',
                             style: TextStyle(
@@ -807,7 +997,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             const SizedBox(height: 20),
                           ],
 
-                          // Confirm Password
+                          // CONFIRM PASSWORD
                           const Text(
                             'Confirm Password *',
                             style: TextStyle(
@@ -876,6 +1066,178 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
+                          // PIN
+                          const Text(
+                            'PIN (6 digits) *',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFCCCCFF),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _pinController,
+                            obscureText: _obscurePin,
+                            style: const TextStyle(color: Colors.white),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(6),
+                            ],
+                            onChanged: (_) => _checkPinsMatch(),
+                            decoration: InputDecoration(
+                              hintText: 'Enter 6-digit PIN',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.lock,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePin
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFFBF7DCB),
+                                ),
+                                onPressed: () => setState(
+                                  () => _obscurePin = !_obscurePin,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter a PIN';
+                              }
+                              if (value.length != 6) {
+                                return 'PIN must be exactly 6 digits';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 20),
+
+                          // CONFIRM PIN
+                          const Text(
+                            'Confirm PIN *',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFFCCCCFF),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _confirmPinController,
+                            obscureText: _obscureConfirmPin,
+                            style: const TextStyle(color: Colors.white),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(6),
+                            ],
+                            onChanged: (_) => _checkPinsMatch(),
+                            decoration: InputDecoration(
+                              hintText: 'Confirm your 6-digit PIN',
+                              hintStyle: const TextStyle(
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(
+                                  color: Colors.grey.shade300,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFFD105FF),
+                                  width: 2,
+                                ),
+                              ),
+                              filled: true,
+                              fillColor: Colors.white.withOpacity(0.1),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline,
+                                color: Color(0xFFBF7DCB),
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPin
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: const Color(0xFFBF7DCB),
+                                ),
+                                onPressed: () => setState(
+                                  () => _obscureConfirmPin =
+                                      !_obscureConfirmPin,
+                                ),
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please confirm your PIN';
+                              }
+                              if (value.length != 6) {
+                                return 'PIN must be exactly 6 digits';
+                              }
+                              return null;
+                            },
+                          ),
+                          // pin match validation message
+                          if (_pinChecked) ...[
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Icon(
+                                  _pinsMatch ? Icons.check_circle : Icons.error,
+                                  color: _pinsMatch ? Colors.green : Colors.red,
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _pinsMatch ? 'PINs match' : 'PINs do not match',
+                                  style: TextStyle(
+                                    color: _pinsMatch ? Colors.green : Colors.red,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+
+                          // USE BIOMETRICS TOGGLE
                           SwitchListTile(
                             title: Text(
                               "Use Biometrics",
@@ -903,33 +1265,44 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 30),
 
-                          // Continue Button
+                          // CONTINUE BUTTON
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () async {
                                 if (_formKey.currentState!.validate()) {
+                                  // check email match
+                                  if (!_emailsMatch) {
+                                    setState(() {
+                                      _errorMessage = 'Emails do not match';
+                                    });
+                                    return;
+                                  }
+                                  // check pin match
+                                  if (!_pinsMatch) {
+                                    setState(() {
+                                      _errorMessage = 'PINs do not match';
+                                    });
+                                    return;
+                                  }
                                   setState(() {
                                     _isLoading = true;
                                     _errorMessage = '';
                                   });
 
                                   final auth = AuthService();
+                                  final fullName = '${_nameController.text.trim()} ${_surnameController.text.trim()}';
+                                  final nextOfKinFullName = '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
+
                                   final user = await auth.registerWithEmail(
-                                    _nameController.text,
-                                    _emailController.text,
-                                    _passwordController.text,
-                                    _phoneController.text,
-                                    nextOfKinName:
-                                        _nextOfKinNameController.text.trim(),
-                                    nextOfKinPhone:
-                                        _nextOfKinPhoneController.text.trim(),
-                                    nextOfKinRelation:
-                                        _nextOfKinRelationController.text.trim(),
-                                    nextOfKinAltPhone:
-                                        _nextOfKinAltPhoneController.text
-                                            .trim()
-                                            .isNotEmpty
+                                    fullName,
+                                    _emailController.text.trim(),
+                                    _passwordController.text.trim(),
+                                    _phoneController.text.trim(),
+                                    nextOfKinName: nextOfKinFullName,
+                                    nextOfKinPhone: _nextOfKinPhoneController.text.trim(),
+                                    nextOfKinRelation: _nextOfKinRelationController.text.trim(),
+                                    nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isNotEmpty
                                         ? _nextOfKinAltPhoneController.text.trim()
                                         : null,
                                     gender: _selectedGender,
@@ -940,9 +1313,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   });
 
                                   if (user != null) {
+                                    // save pin to secure storage
+                                    await auth.savePin(_pinController.text.trim());
+
+                                    // save biometrics preference
                                     final prefs = await SharedPreferences.getInstance();
                                     await prefs.setBool(
-                                      "useBiometrics",
+                                      PrefKeys.useBiometrics,
                                       _useBiometrics,
                                     );
 
@@ -997,7 +1374,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // Security Tips
+                          // SECURITY INFORMATION
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -1014,7 +1391,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       color: Colors.white,
                                       size: 20,
                                     ),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Text(
                                       'Security Information:',
                                       style: TextStyle(
@@ -1026,12 +1403,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 10),
-                                _buildSecurityTip(
-                                  'Your data is encrypted with AES-256 encryption',
-                                ),
-                                _buildSecurityTip(
-                                  'Two-factor authentication is required',
-                                ),
                                 _buildSecurityTip(
                                   'Biometric login adds an extra layer of security',
                                 ),
