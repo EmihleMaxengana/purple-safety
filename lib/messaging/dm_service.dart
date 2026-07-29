@@ -12,18 +12,32 @@ class DmService {
     return '${ids[0]}_${ids[1]}';
   }
 
+  static Future<String> getUserName(String userId) async {
+    final doc = await _firestore.collection('users').doc(userId).get();
+    return doc.data()?['name'] ?? 'User';
+  }
+
+  // send text message
   static Future<void> sendTextMessage({
     required String recipientUserId,
     required String senderId,
     required String senderName,
     required String message,
   }) async {
+    if (recipientUserId == senderId) {
+      throw Exception('You cannot send a message to yourself');
+    }
+
     final chatId = getChatId(senderId, recipientUserId);
+    final recipientName = await getUserName(recipientUserId);
+
     final messageData = {
       'type': 'text',
       'message': message,
       'senderId': senderId,
       'senderName': senderName,
+      'recipientId': recipientUserId,
+      'recipientName': recipientName,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
@@ -53,13 +67,19 @@ class DmService {
     });
   }
 
+  // send image message
   static Future<void> sendImageMessage({
     required String recipientUserId,
     required String senderId,
     required String senderName,
     required File imageFile,
   }) async {
+    if (recipientUserId == senderId) {
+      throw Exception('You cannot send a message to yourself');
+    }
+
     final chatId = getChatId(senderId, recipientUserId);
+    final recipientName = await getUserName(recipientUserId);
 
     final String imageUrl = await StorageService.uploadDMImage(
       file: imageFile,
@@ -72,6 +92,8 @@ class DmService {
       'imageUrl': imageUrl,
       'senderId': senderId,
       'senderName': senderName,
+      'recipientId': recipientUserId,
+      'recipientName': recipientName,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
@@ -101,13 +123,19 @@ class DmService {
     });
   }
 
+  // send video message
   static Future<void> sendVideoMessage({
     required String recipientUserId,
     required String senderId,
     required String senderName,
     required File videoFile,
   }) async {
+    if (recipientUserId == senderId) {
+      throw Exception('You cannot send a message to yourself');
+    }
+
     final chatId = getChatId(senderId, recipientUserId);
+    final recipientName = await getUserName(recipientUserId);
 
     final String videoUrl = await StorageService.uploadDMVideo(
       file: videoFile,
@@ -120,6 +148,8 @@ class DmService {
       'videoUrl': videoUrl,
       'senderId': senderId,
       'senderName': senderName,
+      'recipientId': recipientUserId,
+      'recipientName': recipientName,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
@@ -149,13 +179,19 @@ class DmService {
     });
   }
 
+  // send audio message
   static Future<void> sendAudioMessage({
     required String recipientUserId,
     required String senderId,
     required String senderName,
     required File audioFile,
   }) async {
+    if (recipientUserId == senderId) {
+      throw Exception('You cannot send a message to yourself');
+    }
+
     final chatId = getChatId(senderId, recipientUserId);
+    final recipientName = await getUserName(recipientUserId);
 
     final String audioUrl = await StorageService.uploadDMAudio(
       file: audioFile,
@@ -168,6 +204,8 @@ class DmService {
       'audioUrl': audioUrl,
       'senderId': senderId,
       'senderName': senderName,
+      'recipientId': recipientUserId,
+      'recipientName': recipientName,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
@@ -197,28 +235,46 @@ class DmService {
     });
   }
 
+  // send trip id message
   static Future<void> sendTripIdMessage({
     required String recipientUserId,
     required String senderName,
     required String tripId,
     required String senderId,
   }) async {
+    if (recipientUserId == senderId) {
+      throw Exception('You cannot share a trip with yourself');
+    }
+
+    final recipientName = await getUserName(recipientUserId);
+
     final messageData = {
       'type': 'trip_share',
       'senderId': senderId,
       'senderName': senderName,
+      'recipientId': recipientUserId,
+      'recipientName': recipientName,
       'tripId': tripId,
       'timestamp': FieldValue.serverTimestamp(),
       'read': false,
     };
-    
+
     await _firestore
         .collection('users')
         .doc(recipientUserId)
         .collection('dms')
         .add(messageData);
+
+    await _firestore
+        .collection('users')
+        .doc(senderId)
+        .collection('dms')
+        .add({
+      ...messageData,
+    });
   }
 
+  // get messages stream
   static Stream<List<Map<String, dynamic>>> getMessagesStream(String userId) {
     return _firestore
         .collection('users')
@@ -235,7 +291,7 @@ class DmService {
             }).toList());
   }
 
-  // Get unread count for inbox tab badge
+  // get unread count stream
   static Stream<int> getUnreadCountStream(String userId) {
     return _firestore
         .collection('users')
@@ -246,6 +302,7 @@ class DmService {
         .map((snapshot) => snapshot.docs.length);
   }
 
+  // get conversation stream
   static Stream<QuerySnapshot> getConversationStream(String userId1, String userId2) {
     final chatId = getChatId(userId1, userId2);
     return _firestore
@@ -256,6 +313,7 @@ class DmService {
         .snapshots();
   }
 
+  // mark as read
   static Future<void> markAsRead(String userId, String messageId) async {
     await _firestore
         .collection('users')
@@ -265,6 +323,7 @@ class DmService {
         .update({'read': true});
   }
 
+  // mark all from sender as read
   static Future<void> markAllFromSenderAsRead(String userId, String senderId) async {
     final snapshot = await _firestore
         .collection('users')
@@ -281,6 +340,7 @@ class DmService {
     await batch.commit();
   }
 
+  // get all users with profile
   static Future<List<Map<String, dynamic>>> getAllUsersWithProfile() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) return [];
@@ -301,11 +361,7 @@ class DmService {
         }).toList();
   }
 
-  static Future<String> getUserName(String userId) async {
-    final doc = await _firestore.collection('users').doc(userId).get();
-    return doc.data()?['name'] ?? 'User';
-  }
-
+  // get selected recipients
   static Future<List<String>> getSelectedRecipients() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return [];
@@ -314,6 +370,7 @@ class DmService {
     return list.cast<String>();
   }
 
+  // save selected recipients
   static Future<void> saveSelectedRecipients(List<String> recipientIds) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;

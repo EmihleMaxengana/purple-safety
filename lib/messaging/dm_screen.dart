@@ -34,7 +34,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   
   StreamSubscription? _contactsSubscription;
   
-  // Unread count for inbox tab badge
   int _unreadCount = 0;
   StreamSubscription<int>? _unreadCountSubscription;
 
@@ -118,10 +117,23 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   }
 
   Future<void> _loadCommunityData() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      setState(() {
+        _communityUsers = [];
+        _filteredCommunityUsers = [];
+        _isLoadingCommunity = false;
+      });
+      return;
+    }
+
     final users = await DmService.getAllUsersWithProfile();
+    
+    final filteredUsers = users.where((user) => user['id'] != currentUser.uid).toList();
+    
     setState(() {
-      _communityUsers = users;
-      _filteredCommunityUsers = users;
+      _communityUsers = filteredUsers;
+      _filteredCommunityUsers = filteredUsers;
       _isLoadingCommunity = false;
     });
   }
@@ -155,6 +167,8 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     final senderName = await DmService.getUserName(user.uid);
 
     for (var recipientId in _selectedRecipients) {
+      if (recipientId == user.uid) continue;
+      
       await DmService.sendTripIdMessage(
         recipientUserId: recipientId,
         senderName: senderName,
@@ -193,6 +207,16 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   }
 
   void _showUserProfile(Map<String, dynamic> user) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+    
+    if (user['id'] == currentUser.uid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot view your own profile here')),
+      );
+      return;
+    }
+
     final hasNextOfKin = user['nextOfKinName'] != null && user['nextOfKinName'].toString().isNotEmpty;
     showModalBottomSheet(
       context: context,
@@ -261,15 +285,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
               child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ChatScreen(
-                        recipientId: user['id'],
-                        recipientName: user['name'],
-                      ),
-                    ),
-                  );
+                  _openChat(user['id'], user['name']);
                 },
                 icon: const Icon(Icons.send, color: Colors.white),
                 label: const Text('Send Message', style: TextStyle(color: Colors.white)),
@@ -305,6 +321,13 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   void _openChat(String recipientId, String recipientName) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+    
+    if (recipientId == user.uid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You cannot send a message to yourself')),
+      );
+      return;
+    }
 
     await DmService.markAllFromSenderAsRead(user.uid, recipientId);
 
@@ -341,9 +364,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
           tabs: [
             const Tab(text: 'Auto-share'),
             const Tab(text: 'Community'),
-            // ============================================================
-            // INBOX TAB WITH BADGE
-            // ============================================================
             Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -377,9 +397,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ============================================================
-          // AUTO-SHARE TAB
-          // ============================================================
+          // auto-share tab
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -485,9 +503,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   ),
                 ),
 
-          // ============================================================
-          // COMMUNITY TAB
-          // ============================================================
+          // community tab
           _isLoadingCommunity
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -514,40 +530,59 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                         ),
                       ),
                       Expanded(
-                        child: ListView.builder(
-                          itemCount: _filteredCommunityUsers.length,
-                          itemBuilder: (context, index) {
-                            final userItem = _filteredCommunityUsers[index];
-                            return Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF1a0f2e),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: Colors.purple,
-                                  child: Text(
-                                    userItem['name'][0].toUpperCase(),
-                                    style: const TextStyle(color: Colors.white),
-                                  ),
+                        child: _filteredCommunityUsers.isEmpty
+                            ? const Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.people_outline, color: Colors.white38, size: 64),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'No users found',
+                                      style: TextStyle(color: Colors.white70),
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Try searching for someone else',
+                                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                                    ),
+                                  ],
                                 ),
-                                title: Text(userItem['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                                subtitle: Text(userItem['email'], style: const TextStyle(color: Colors.white70)),
-                                trailing: const Icon(Icons.chevron_right, color: Colors.white54),
-                                onTap: () => _showUserProfile(userItem),
+                              )
+                            : ListView.builder(
+                                itemCount: _filteredCommunityUsers.length,
+                                itemBuilder: (context, index) {
+                                  final userItem = _filteredCommunityUsers[index];
+                                  if (userItem['id'] == user.uid) return const SizedBox();
+                                  
+                                  return Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1a0f2e),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor: Colors.purple,
+                                        child: Text(
+                                          userItem['name'][0].toUpperCase(),
+                                          style: const TextStyle(color: Colors.white),
+                                        ),
+                                      ),
+                                      title: Text(userItem['name'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                                      subtitle: Text(userItem['email'], style: const TextStyle(color: Colors.white70)),
+                                      trailing: const Icon(Icons.chevron_right, color: Colors.white54),
+                                      onTap: () => _showUserProfile(userItem),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
                     ],
                   ),
                 ),
 
-          // ============================================================
-          // INBOX TAB - FIXED: Shows latest message (sent or received)
-          // ============================================================
+          // inbox tab
           Container(
             color: const Color(0xFF0e0718),
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -567,9 +602,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   );
                 }
 
-                // ============================================================
-                // FIXED: Group by conversation partner and get the MOST RECENT message
-                // ============================================================
+                // group by the other person
                 final Map<String, Map<String, dynamic>> groupedMessages = {};
                 final Map<String, String> conversationNames = {};
                 final Map<String, bool> conversationReadStatus = {};
@@ -578,42 +611,49 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   final senderId = msg['senderId'] as String;
                   final currentUserId = user.uid;
                   
-                  // Determine the conversation partner ID (the other person)
-                  String conversationId;
+                  String otherPersonId;
+                  String otherPersonName;
+                  
                   if (senderId == currentUserId) {
-                    // If I sent it, we need to get the recipient ID
-                    // For messages sent by me, the senderId is me, but we need to know who I sent it to
-                    // Since we don't store recipientId in the DM document, we use senderId as the key
-                    // and the senderName will be the other person's name
-                    conversationId = senderId;
+                    otherPersonId = msg['recipientId'] as String? ?? '';
+                    otherPersonName = msg['recipientName'] as String? ?? 'Unknown';
                   } else {
-                    conversationId = senderId;
+                    otherPersonId = senderId;
+                    otherPersonName = msg['senderName'] as String? ?? 'Unknown';
                   }
                   
-                  // Store the sender name for display
-                  final senderName = msg['senderName'] ?? 'Unknown';
+                  if (otherPersonId.isEmpty || otherPersonId == currentUserId) {
+                    continue;
+                  }
                   
-                  // Only keep the most recent message per conversation
-                  if (!groupedMessages.containsKey(conversationId)) {
-                    groupedMessages[conversationId] = msg;
-                    conversationNames[conversationId] = senderName;
-                    conversationReadStatus[conversationId] = msg['read'] ?? false;
+                  if (!groupedMessages.containsKey(otherPersonId)) {
+                    groupedMessages[otherPersonId] = msg;
+                    conversationNames[otherPersonId] = otherPersonName;
+                    conversationReadStatus[otherPersonId] = msg['read'] ?? false;
                   } else {
-                    // Compare timestamps - keep the newer one
-                    final existingTimestamp = groupedMessages[conversationId]?['timestamp'] as Timestamp?;
+                    final existingTimestamp = groupedMessages[otherPersonId]?['timestamp'] as Timestamp?;
                     final newTimestamp = msg['timestamp'] as Timestamp?;
                     
                     if (newTimestamp != null && existingTimestamp != null) {
                       if (newTimestamp.toDate().isAfter(existingTimestamp.toDate())) {
-                        groupedMessages[conversationId] = msg;
-                        conversationNames[conversationId] = senderName;
-                        conversationReadStatus[conversationId] = msg['read'] ?? false;
+                        groupedMessages[otherPersonId] = msg;
+                        conversationNames[otherPersonId] = otherPersonName;
+                        conversationReadStatus[otherPersonId] = msg['read'] ?? false;
                       }
                     }
                   }
                 }
 
-                // Convert to list and sort by timestamp (newest first)
+                if (groupedMessages.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      'No conversations yet.\nSend a message from the Community tab.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  );
+                }
+
                 final groupedList = groupedMessages.entries.toList();
                 groupedList.sort((a, b) {
                   final timestampA = a.value['timestamp'] as Timestamp?;
@@ -628,31 +668,27 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   itemCount: groupedList.length,
                   itemBuilder: (context, index) {
                     final entry = groupedList[index];
-                    final conversationId = entry.key;
+                    final otherPersonId = entry.key;
                     final msg = entry.value;
-                    final displayName = conversationNames[conversationId] ?? 'Unknown';
-                    final isConversationRead = conversationReadStatus[conversationId] ?? false;
+                    final displayName = conversationNames[otherPersonId] ?? 'Unknown';
+                    final isConversationRead = conversationReadStatus[otherPersonId] ?? false;
                     
                     final isTripShare = msg['type'] == 'trip_share';
                     final isSentByMe = msg['senderId'] == user.uid;
 
-                    // ============================================================
-                    // MESSAGE PREVIEW - Shows the latest message (sent or received)
-                    // ============================================================
                     String previewText = '';
                     if (isTripShare) {
-                      previewText = '📌 Shared a Trip ID with you';
+                      previewText = 'Shared a Trip ID with you';
                     } else if (msg['type'] == 'image') {
-                      previewText = '📷 Image';
+                      previewText = 'Image';
                     } else if (msg['type'] == 'video') {
-                      previewText = '🎬 Video';
+                      previewText = 'Video';
                     } else if (msg['type'] == 'audio') {
-                      previewText = '🎵 Audio';
+                      previewText = 'Audio';
                     } else {
                       previewText = msg['message'] ?? '';
                     }
 
-                    // Show "You: " prefix if we sent it
                     if (isSentByMe) {
                       previewText = 'You: $previewText';
                     }
@@ -660,12 +696,9 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        // ============================================================
-                        // DIFFERENT BACKGROUND COLOR FOR UNREAD (like alerts section)
-                        // ============================================================
                         color: isConversationRead 
-                            ? const Color(0xFF1a0f2e)  // Read - normal dark
-                            : const Color(0xFF2a1f3e), // Unread - darker (like alerts)
+                            ? const Color(0xFF1a0f2e)
+                            : const Color(0xFF2a1f3e),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isConversationRead 
@@ -683,9 +716,6 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                                 style: const TextStyle(color: Colors.white),
                               ),
                             ),
-                            // ============================================================
-                            // RED DOT NEXT TO UNREAD MESSAGES (only if not sent by me)
-                            // ============================================================
                             if (!isConversationRead && !isSentByMe)
                               Positioned(
                                 bottom: 0,
@@ -740,26 +770,13 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                               )
                             : null,
                         onTap: () {
-                          // Get the other person's ID for the chat
-                          String otherPersonId = conversationId;
-                          String otherPersonName = displayName;
-                          
-                          // If I sent the message and conversationId is my ID, 
-                          // we need to find the recipient ID from the message
-                          // For now, use the senderId if it's not me, otherwise use conversationId
-                          if (isSentByMe) {
-                            // For messages sent by me, the recipient ID might be stored elsewhere
-                            // We'll use the senderId from the message if it's not me
-                            // In this case, conversationId might be the senderId (which is me)
-                            // So we need to use the senderId from the message
-                            final msgSenderId = msg['senderId'] ?? '';
-                            if (msgSenderId != user.uid) {
-                              otherPersonId = msgSenderId;
-                              otherPersonName = msg['senderName'] ?? 'Unknown';
-                            }
+                          if (otherPersonId == user.uid) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('You cannot chat with yourself')),
+                            );
+                            return;
                           }
-                          
-                          _openChat(otherPersonId, otherPersonName);
+                          _openChat(otherPersonId, displayName);
                         },
                       ),
                     );
