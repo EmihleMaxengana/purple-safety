@@ -25,6 +25,15 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
   late TabController _tabController;
   late TabController _invitationTabController;
 
+  int _unreadNotificationsCount = 0;
+  int _unreadInvitationsCount = 0;
+  int _unreadSentInvitationsCount = 0;
+  int _unreadReceivedInvitationsCount = 0;
+
+  bool _notificationsViewed = false;
+  bool _sentInvitationsViewed = false;
+  bool _receivedInvitationsViewed = false;
+
   @override
   void initState() {
     super.initState();
@@ -34,6 +43,12 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     _tabController.addListener(() {
       setState(() {});
     });
+
+    _invitationTabController.addListener(() {
+      setState(() {});
+    });
+
+    _loadUnreadCounts();
   }
 
   @override
@@ -43,10 +58,129 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     super.dispose();
   }
 
+  void _loadUnreadCounts() {
+    final user = _auth.getCurrentUser();
+    if (user == null) return;
+
+    _firestoreService.getAlertsStream(user.uid).listen((alerts) {
+      final unreadNotifications = alerts
+          .where((a) => !a.read && a.type != 'invitation')
+          .length;
+      final unreadInvitations = alerts
+          .where((a) => !a.read && a.type == 'invitation')
+          .length;
+
+      setState(() {
+        _unreadNotificationsCount = unreadNotifications;
+        _unreadInvitationsCount = unreadInvitations;
+      });
+    });
+
+    FirebaseFirestore.instance
+        .collection('invitations')
+        .where('inviterId', isEqualTo: user.uid)
+        .where('status', whereIn: ['accepted', 'declined'])
+        .snapshots()
+        .listen((snapshot) {
+          final unreadSent = snapshot.docs.where((doc) {
+            final data = doc.data();
+            final viewed = data['viewedBySender'] ?? false;
+            return viewed == false;
+          }).length;
+
+          setState(() {
+            _unreadSentInvitationsCount = unreadSent;
+          });
+        });
+
+    FirebaseFirestore.instance
+        .collection('invitations')
+        .where('inviteeId', isEqualTo: user.uid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .listen((snapshot) {
+          final unreadReceived = snapshot.docs.where((doc) {
+            final data = doc.data();
+            final viewed = data['viewedByReceiver'] ?? false;
+            return viewed == false;
+          }).length;
+
+          setState(() {
+            _unreadReceivedInvitationsCount = unreadReceived;
+          });
+        });
+  }
+
+  void _markNotificationsViewed() {
+    if (_notificationsViewed) return;
+    _notificationsViewed = true;
+  }
+
+  Future<void> _markSentInvitationsViewed() async {
+    if (_sentInvitationsViewed) return;
+    _sentInvitationsViewed = true;
+
+    final user = _auth.getCurrentUser();
+    if (user == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('invitations')
+        .where('inviterId', isEqualTo: user.uid)
+        .where('status', whereIn: ['accepted', 'declined'])
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['viewedBySender'] == false) {
+        batch.update(doc.reference, {'viewedBySender': true});
+      }
+    }
+    await batch.commit();
+
+    setState(() {
+      _unreadSentInvitationsCount = 0;
+    });
+  }
+
+  Future<void> _markReceivedInvitationsViewed() async {
+    if (_receivedInvitationsViewed) return;
+    _receivedInvitationsViewed = true;
+
+    final user = _auth.getCurrentUser();
+    if (user == null) return;
+
+    final snapshot = await FirebaseFirestore.instance
+        .collection('invitations')
+        .where('inviteeId', isEqualTo: user.uid)
+        .where('status', isEqualTo: 'pending')
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['viewedByReceiver'] == false) {
+        batch.update(doc.reference, {'viewedByReceiver': true});
+      }
+    }
+    await batch.commit();
+
+    setState(() {
+      _unreadReceivedInvitationsCount = 0;
+    });
+  }
+
   Future<void> _onAlertTap(Alert alert) async {
     final user = _auth.getCurrentUser();
     if (user != null) {
       await _firestoreService.markAlertAsRead(user.uid, alert.id);
+      setState(() {
+        if (alert.type == 'invitation') {
+          _unreadInvitationsCount = _unreadInvitationsCount > 0 ? _unreadInvitationsCount - 1 : 0;
+        } else {
+          _unreadNotificationsCount = _unreadNotificationsCount > 0 ? _unreadNotificationsCount - 1 : 0;
+        }
+      });
     }
 
     if (alert.type == 'sos' && alert.sosEventId != null) {
@@ -98,9 +232,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     }
   }
 
-  // ============================================================
-  // BUILD RECEIVED INVITATIONS - SORTED BY DATE (NEWEST FIRST)
-  // ============================================================
   Widget _buildReceivedInvitations() {
     final user = _auth.getCurrentUser();
     if (user == null) return const SizedBox();
@@ -120,11 +251,11 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error, size: 64, color: Colors.red),
-                SizedBox(height: 16),
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
                 Text(
                   'Error loading invitations: ${snapshot.error}',
-                  style: TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -154,9 +285,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           );
         }
 
-        // ============================================================
-        // SORT MANUALLY: Most recent first (newest createdAt)
-        // ============================================================
         final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
         sortedDocs.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>;
@@ -181,19 +309,18 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             final status = data['status'] ?? 'pending';
             final createdAt = data['createdAt'] as Timestamp?;
 
-            // Determine status display
             String statusText = 'Pending';
             Color statusColor = Colors.orange;
             IconData statusIcon = Icons.hourglass_empty;
 
             switch (status) {
               case 'accepted':
-                statusText = 'Accepted ✓';
+                statusText = 'Accepted';
                 statusColor = Colors.green;
                 statusIcon = Icons.check_circle;
                 break;
               case 'declined':
-                statusText = 'Declined ✗';
+                statusText = 'Declined';
                 statusColor = Colors.red;
                 statusIcon = Icons.cancel;
                 break;
@@ -339,9 +466,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     );
   }
 
-  // ============================================================
-  // BUILD SENT INVITATIONS - SORTED BY DATE (NEWEST FIRST)
-  // ============================================================
   Widget _buildSentInvitations() {
     final user = _auth.getCurrentUser();
     if (user == null) return const SizedBox();
@@ -361,11 +485,11 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error, size: 64, color: Colors.red),
-                SizedBox(height: 16),
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
                 Text(
                   'Error loading invitations: ${snapshot.error}',
-                  style: TextStyle(color: Colors.white70),
+                  style: const TextStyle(color: Colors.white70),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -395,9 +519,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           );
         }
 
-        // ============================================================
-        // SORT MANUALLY: Most recent first (newest createdAt)
-        // ============================================================
         final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
         sortedDocs.sort((a, b) {
           final aData = a.data() as Map<String, dynamic>;
@@ -426,12 +547,12 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
 
             switch (status) {
               case 'accepted':
-                statusText = 'Accepted ✓';
+                statusText = 'Accepted';
                 statusColor = Colors.green;
                 statusIcon = Icons.check_circle;
                 break;
               case 'declined':
-                statusText = 'Declined ✗';
+                statusText = 'Declined';
                 statusColor = Colors.red;
                 statusIcon = Icons.cancel;
                 break;
@@ -711,14 +832,66 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          tabs: const [
+          tabs: [
+            // notifications tab
             Tab(
-              icon: Icon(Icons.notifications),
-              text: 'Notifications',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.notifications, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('Notifications'),
+                  if (_unreadNotificationsCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.rectangle,
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
+                      ),
+                      child: Text(
+                        _unreadNotificationsCount > 9 ? '9+' : '$_unreadNotificationsCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
+            // invitations tab
             Tab(
-              icon: Icon(Icons.mail),
-              text: 'Invitations',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.mail, size: 20),
+                  const SizedBox(width: 8),
+                  const Text('Invitations'),
+                  if (_unreadInvitationsCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.rectangle,
+                        borderRadius: BorderRadius.all(Radius.circular(10)),
+                      ),
+                      child: Text(
+                        _unreadInvitationsCount > 9 ? '9+' : '$_unreadInvitationsCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ],
         ),
@@ -727,6 +900,9 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             TextButton(
               onPressed: () async {
                 await _firestoreService.markAllAlertsAsRead(user.uid);
+                setState(() {
+                  _unreadNotificationsCount = 0;
+                });
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('All notifications marked as read')),
                 );
@@ -753,6 +929,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                 controller: _tabController,
                 children: [
                   _buildNotifications(),
+                  // invitations tab with sub-tabs
                   Column(
                     children: [
                       Container(
@@ -762,14 +939,73 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                           indicatorColor: Colors.white,
                           labelColor: Colors.white,
                           unselectedLabelColor: Colors.white70,
-                          tabs: const [
+                          onTap: (index) {
+                            if (index == 0) {
+                              _markSentInvitationsViewed();
+                            } else if (index == 1) {
+                              _markReceivedInvitationsViewed();
+                            }
+                          },
+                          tabs: [
+                            // sent sub-tab
                             Tab(
-                              icon: Icon(Icons.send),
-                              text: 'Sent',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.send, size: 18),
+                                  const SizedBox(width: 6),
+                                  const Text('Sent'),
+                                  if (_unreadSentInvitationsCount > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.rectangle,
+                                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                                      ),
+                                      child: Text(
+                                        _unreadSentInvitationsCount > 9 ? '9+' : '$_unreadSentInvitationsCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
+                            // received sub-tab
                             Tab(
-                              icon: Icon(Icons.inbox),
-                              text: 'Received',
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.inbox, size: 18),
+                                  const SizedBox(width: 6),
+                                  const Text('Received'),
+                                  if (_unreadReceivedInvitationsCount > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.rectangle,
+                                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                                      ),
+                                      child: Text(
+                                        _unreadReceivedInvitationsCount > 9 ? '9+' : '$_unreadReceivedInvitationsCount',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
