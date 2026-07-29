@@ -15,21 +15,32 @@ class SOSAlertService {
 
   static const String _pendingSOSKey = 'pending_sos';
 
+  // ============================================================
+  // SEND COMMUNITY SOS ALERT - WITH PRIVACY TOGGLE PARAMETERS
+  // ============================================================
   static Future<String?> sendCommunitySOSAlert({
     required String userId,
     required String userName,
-    required double latitude,
-    required double longitude,
+    double? latitude,
+    double? longitude,
     String? audioPath,
     String? videoPath,
     String? triggerLat,
     String? triggerLng,
     String? triggerTimestamp,
+    bool shareWithContacts = true,
+    bool shareWithCommunity = false,
   }) async {
-    final locationLink = 'https://www.google.com/maps?q=$latitude,$longitude';
-    final triggerLocationLink = (triggerLat != null && triggerLng != null)
-        ? 'https://www.google.com/maps?q=$triggerLat,$triggerLng'
-        : null;
+    // build location link only if location is provided
+    String? locationLink;
+    if (latitude != null && longitude != null) {
+      locationLink = 'https://www.google.com/maps?q=$latitude,$longitude';
+    }
+
+    String? triggerLocationLink;
+    if (triggerLat != null && triggerLng != null) {
+      triggerLocationLink = 'https://www.google.com/maps?q=$triggerLat,$triggerLng';
+    }
 
     String? audioUrl;
     if (audioPath != null && audioPath.isNotEmpty) {
@@ -57,15 +68,19 @@ class SOSAlertService {
         'id': sosEventId,
         'userId': userId,
         'userName': userName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'locationLink': locationLink,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'active',
         'audioUrl': audioUrl,
         'videoUrl': videoUrl,
         'responderCount': 0,
       };
+
+      // only add location if provided
+      if (latitude != null && longitude != null) {
+        eventData['latitude'] = latitude;
+        eventData['longitude'] = longitude;
+        eventData['locationLink'] = locationLink;
+      }
 
       if (triggerLat != null && triggerLng != null) {
         eventData['triggerLat'] = double.tryParse(triggerLat);
@@ -77,33 +92,56 @@ class SOSAlertService {
 
       await docRef.set(eventData);
 
-      String message = 'EMERGENCY: $userName needs immediate help at their location!';
-      if (triggerLocationLink != null) {
-        message = 'EMERGENCY: $userName needs immediate help!\n'
-            'Current: $locationLink\n'
-            'Triggered: $triggerLocationLink\n'
-            'Triggered at: $triggerTimestamp';
+      // build message based on what we share
+      String message;
+      if (shareWithContacts && locationLink != null) {
+        message = 'EMERGENCY: $userName needs immediate help at their location!';
+        if (triggerLocationLink != null) {
+          message = 'EMERGENCY: $userName needs immediate help!\n'
+              'Current: $locationLink\n'
+              'Triggered: $triggerLocationLink\n'
+              'Triggered at: $triggerTimestamp';
+        }
+      } else {
+        message = 'EMERGENCY: $userName needs immediate help!';
+        if (triggerLocationLink != null && shareWithContacts) {
+          message = 'EMERGENCY: $userName needs immediate help!\n'
+              'Triggered at: $triggerTimestamp';
+        }
       }
 
-      await _firestore.collection('global_alerts').add({
+      // save to global alerts
+      final Map<String, dynamic> globalAlertData = {
         'type': 'sos',
         'message': message,
         'userId': userId,
         'userName': userName,
-        'locationLink': locationLink,
-        'latitude': latitude,
-        'longitude': longitude,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'active',
         'sosEventId': sosEventId,
         'audioUrl': audioUrl,
         'videoUrl': videoUrl,
-        'triggerLat': triggerLat != null ? double.tryParse(triggerLat) : null,
-        'triggerLng': triggerLng != null ? double.tryParse(triggerLng) : null,
-        'triggerTimestamp': triggerTimestamp,
         'wasOffline': triggerLat != null,
-      });
+        'shareWithContacts': shareWithContacts,
+        'shareWithCommunity': shareWithCommunity,
+      };
 
+      // only add location if sharing with community is enabled
+      if (shareWithCommunity && latitude != null && longitude != null) {
+        globalAlertData['locationLink'] = locationLink;
+        globalAlertData['latitude'] = latitude;
+        globalAlertData['longitude'] = longitude;
+      }
+
+      if (triggerLat != null && triggerLng != null) {
+        globalAlertData['triggerLat'] = double.tryParse(triggerLat);
+        globalAlertData['triggerLng'] = double.tryParse(triggerLng);
+        globalAlertData['triggerTimestamp'] = triggerTimestamp;
+      }
+
+      await _firestore.collection('global_alerts').add(globalAlertData);
+
+      // send alerts to users
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
 
@@ -116,28 +154,43 @@ class SOSAlertService {
             .collection('alerts')
             .doc();
 
-        String alertMessage = 'SOS: $userName needs immediate help! Tap to view location.';
-        if (triggerLocationLink != null) {
-          alertMessage = 'SOS: $userName needs immediate help!\n'
-              'Current: $locationLink\n'
-              'Triggered: $triggerLocationLink';
+        // only include location in alert if shareWithContacts is true
+        String alertMessage;
+        if (shareWithContacts && locationLink != null) {
+          alertMessage = 'SOS: $userName needs immediate help! Tap to view location.';
+          if (triggerLocationLink != null) {
+            alertMessage = 'SOS: $userName needs immediate help!\n'
+                'Current: $locationLink\n'
+                'Triggered: $triggerLocationLink';
+          }
+        } else {
+          alertMessage = 'SOS: $userName needs immediate help!';
         }
 
-        batch.set(alertRef, {
+        final Map<String, dynamic> alertData = {
           'message': alertMessage,
           'type': 'sos',
           'timestamp': FieldValue.serverTimestamp(),
           'read': false,
           'sosEventId': sosEventId,
-          'latitude': latitude,
-          'longitude': longitude,
           'userName': userName,
           'audioUrl': audioUrl,
           'videoUrl': videoUrl,
-          'triggerLat': triggerLat != null ? double.tryParse(triggerLat) : null,
-          'triggerLng': triggerLng != null ? double.tryParse(triggerLng) : null,
           'wasOffline': triggerLat != null,
-        });
+        };
+
+        // only add location if shareWithContacts is true
+        if (shareWithContacts && latitude != null && longitude != null) {
+          alertData['latitude'] = latitude;
+          alertData['longitude'] = longitude;
+        }
+
+        if (triggerLat != null && triggerLng != null) {
+          alertData['triggerLat'] = double.tryParse(triggerLat);
+          alertData['triggerLng'] = double.tryParse(triggerLng);
+        }
+
+        batch.set(alertRef, alertData);
       }
 
       await batch.commit();
@@ -297,8 +350,8 @@ class SOSAlertService {
   static Future<void> storeSOSLocally({
     required String userId,
     required String userName,
-    required double triggerLat,
-    required double triggerLng,
+    double? triggerLat,
+    double? triggerLng,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -308,10 +361,13 @@ class SOSAlertService {
       final Map<String, String> sosData = {
         'userId': userId,
         'userName': userName,
-        'triggerLat': triggerLat.toString(),
-        'triggerLng': triggerLng.toString(),
         'triggerTimestamp': timestamp,
       };
+
+      if (triggerLat != null && triggerLng != null) {
+        sosData['triggerLat'] = triggerLat.toString();
+        sosData['triggerLng'] = triggerLng.toString();
+      }
 
       final jsonString = sosData.toString();
       final encoded = Uri.encodeComponent(jsonString);

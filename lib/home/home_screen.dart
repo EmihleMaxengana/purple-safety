@@ -25,6 +25,7 @@ import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
 import 'package:purple_safety/map/map.dart';
 import 'package:purple_safety/services/danger_zones_service.dart';
+import 'package:purple_safety/utils/pref_keys.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onNavigateToEmergency;
@@ -74,6 +75,10 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _hasCenteredMap = false;
 
+  // privacy toggles
+  bool _shareLocationWithContacts = true;
+  bool _shareLocationWithCommunity = false;
+
   void _getAllDangerZones() async {
     try {
       final dangerZones = await DangerZoneService().loadDangerZonesCircle();
@@ -97,6 +102,15 @@ class _HomeScreenState extends State<HomeScreen>
     _listenToContacts();
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
+    _loadPrivacyToggles();
+  }
+
+  Future<void> _loadPrivacyToggles() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _shareLocationWithContacts = prefs.getBool(PrefKeys.shareLocationWithContacts) ?? true;
+      _shareLocationWithCommunity = prefs.getBool(PrefKeys.shareLocationWithCommunity) ?? false;
+    });
   }
 
   Future<void> _restoreTripSharingState() async {
@@ -127,6 +141,7 @@ class _HomeScreenState extends State<HomeScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _restoreTripSharingState();
+      _loadPrivacyToggles();
     }
   }
 
@@ -228,7 +243,6 @@ class _HomeScreenState extends State<HomeScreen>
       controller.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: _currentPosition!, zoom: 13),
-          // CameraPosition(target: _currentPosition!, zoom: 14),
         ),
       );
     }
@@ -260,6 +274,9 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
+  // ============================================================
+  // TRIGGER SOS - WITH PRIVACY TOGGLE CHECKS
+  // ============================================================
   void _triggerSOS() async {
     setState(() {
       _isCountdownActive = false;
@@ -276,12 +293,19 @@ class _HomeScreenState extends State<HomeScreen>
       userName = userData?['name'] ?? 'A user';
     }
 
-    if (_currentPosition == null) {
-      return;
-    }
+    // check if we should include location
+    bool includeLocation = false;
+    double? lat;
+    double? lng;
 
-    final lat = _currentPosition!.latitude;
-    final lng = _currentPosition!.longitude;
+    // if either toggle is on, we include location
+    if (_shareLocationWithContacts || _shareLocationWithCommunity) {
+      if (_currentPosition != null) {
+        includeLocation = true;
+        lat = _currentPosition!.latitude;
+        lng = _currentPosition!.longitude;
+      }
+    }
 
     setState(() {
       _showSOSStatus = true;
@@ -289,12 +313,27 @@ class _HomeScreenState extends State<HomeScreen>
     });
 
     try {
-      await SOSAlertService.sendCommunitySOSAlert(
-        userId: userId,
-        userName: userName,
-        latitude: lat,
-        longitude: lng,
-      );
+      if (includeLocation && lat != null && lng != null) {
+        // send SOS with location
+        await SOSAlertService.sendCommunitySOSAlert(
+          userId: userId,
+          userName: userName,
+          latitude: lat,
+          longitude: lng,
+          shareWithContacts: _shareLocationWithContacts,
+          shareWithCommunity: _shareLocationWithCommunity,
+        );
+      } else {
+        // send SOS without location
+        await SOSAlertService.sendCommunitySOSAlert(
+          userId: userId,
+          userName: userName,
+          latitude: null,
+          longitude: null,
+          shareWithContacts: _shareLocationWithContacts,
+          shareWithCommunity: _shareLocationWithCommunity,
+        );
+      }
 
       setState(() {
         _sosStatusMessage = 'SOS sent!';
@@ -307,12 +346,22 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
     } catch (e) {
-      await SOSAlertService.storeSOSLocally(
-        userId: userId,
-        userName: userName,
-        triggerLat: lat,
-        triggerLng: lng,
-      );
+      // store pending SOS with or without location
+      if (lat != null && lng != null) {
+        await SOSAlertService.storeSOSLocally(
+          userId: userId,
+          userName: userName,
+          triggerLat: lat,
+          triggerLng: lng,
+        );
+      } else {
+        await SOSAlertService.storeSOSLocally(
+          userId: userId,
+          userName: userName,
+          triggerLat: null,
+          triggerLng: null,
+        );
+      }
 
       setState(() {
         _sosStatusMessage = 'SOS pending - Will send when connected';
@@ -325,7 +374,10 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      await _sendSMSFallback(userName, lat, lng);
+      // only send SMS fallback if location is available and contacts toggle is on
+      if (lat != null && lng != null && _shareLocationWithContacts) {
+        await _sendSMSFallback(userName, lat, lng);
+      }
     }
 
     EmergencyManager().setEmergencyActive(true);
@@ -334,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
     if (_contacts.isEmpty) return;
+    if (!_shareLocationWithContacts) return;
 
     final locationLink = 'https://maps.google.com/?q=$lat,$lng';
     final message =
@@ -406,7 +459,6 @@ class _HomeScreenState extends State<HomeScreen>
     if (!_locationEnabled) return;
     if (_currentPosition == null) return;
 
-    // String userName = 'User';
     final userData = await AuthService().getUserData(user.uid);
     String userName = userData?['name'] ?? 'User';
 
@@ -674,7 +726,6 @@ class _HomeScreenState extends State<HomeScreen>
             myLocation: false,
             myLocationButton: false,
             zoomControls: false,
-            // polygons: _getAllDangerZones(),
           ),
           Center(
             child: Container(
@@ -700,7 +751,6 @@ class _HomeScreenState extends State<HomeScreen>
         myLocation: true,
         myLocationButton: false,
         zoomControls: false,
-        // polygons: _getAllDangerZones(),
       );
     }
 
@@ -710,7 +760,6 @@ class _HomeScreenState extends State<HomeScreen>
       myLocation: true,
       myLocationButton: false,
       zoomControls: false,
-      // polygons: _getAllDangerZones(),
       circles: _dangerZones,
       markers: {
         Marker(
