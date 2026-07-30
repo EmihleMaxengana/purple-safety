@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:purple_safety/emergency/emergency_mode_screen.dart';
 import 'package:purple_safety/models/incident_model.dart';
@@ -53,6 +54,15 @@ class EmergencyManager {
       _emergencyActive = false;
       _emergencyStatusController.add(false);
     }
+  }
+
+  static Future<bool> hasActiveSOSEventForUser(String userId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('active_sos_events')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'active')
+        .get();
+    return snapshot.docs.isNotEmpty;
   }
 
   void dispose() {

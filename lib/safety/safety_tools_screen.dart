@@ -58,6 +58,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _listenToEmergencyStatus();
     _loadContacts();
     _initLocation();
+    _syncEmergencyStateFromBackend();
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -95,7 +96,27 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {}
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _syncEmergencyStateFromBackend();
+    }
+  }
+
+  Future<void> _syncEmergencyStateFromBackend() async {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+
+    final hasActiveSOS = await EmergencyManager.hasActiveSOSEventForUser(
+      user.uid,
+    );
+    EmergencyManager().setEmergencyActive(hasActiveSOS);
+
+    if (mounted) {
+      setState(() {
+        _isEmergencyActive = hasActiveSOS;
+      });
+    }
+  }
 
   Future<void> _loadContacts() async {
     final contacts = EmergencyManager().getCurrentContacts();
