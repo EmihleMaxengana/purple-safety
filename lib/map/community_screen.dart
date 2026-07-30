@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/map/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -45,6 +46,8 @@ class _CommunityScreenState extends State<CommunityScreen>
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
   Set<Circle> _dangerZones = {};
+
+  final _user = AuthService().getCurrentUser();
 
   void _getAllDangerZones() async {
     try {
@@ -172,8 +175,9 @@ class _CommunityScreenState extends State<CommunityScreen>
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
             title: 'SOS ACTIVE!',
-            snippet:
-                '${event['userName']} needs immediate help!\nTap to respond',
+            snippet: event['userId'] != _user!.uid
+                ? '${event['userName']} needs immediate help!\nTap to respond'
+                : null,
           ),
           onTap: () => _showSOSResponderModal(event),
         );
@@ -287,10 +291,11 @@ class _CommunityScreenState extends State<CommunityScreen>
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              '${sosEvent['userName']} needs immediate help!',
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
+            if (sosEvent['userId'] != _user!.uid)
+              Text(
+                '${sosEvent['userName']} needs immediate help!',
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
