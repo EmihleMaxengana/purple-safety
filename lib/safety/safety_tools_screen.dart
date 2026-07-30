@@ -58,7 +58,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _listenToEmergencyStatus();
     _loadContacts();
     _initLocation();
-    _syncEmergencyStateFromBackend();
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -96,27 +95,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _syncEmergencyStateFromBackend();
-    }
-  }
-
-  Future<void> _syncEmergencyStateFromBackend() async {
-    final user = AuthService().getCurrentUser();
-    if (user == null) return;
-
-    final hasActiveSOS = await EmergencyManager.hasActiveSOSEventForUser(
-      user.uid,
-    );
-    EmergencyManager().setEmergencyActive(hasActiveSOS);
-
-    if (mounted) {
-      setState(() {
-        _isEmergencyActive = hasActiveSOS;
-      });
-    }
-  }
+  void didChangeAppLifecycleState(AppLifecycleState state) {}
 
   Future<void> _loadContacts() async {
     final contacts = EmergencyManager().getCurrentContacts();
@@ -174,9 +153,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ============================================================
-  // I'M SAFE (UPDATED to pass userId to deactivation)
-  // ============================================================
+  // im safe
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -204,7 +181,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           .get();
 
       for (var doc in querySnapshot.docs) {
-        // Pass the userId to exclude the deactivator from notifications
         await SOSAlertService.deactivateSOSEvent(doc.id, userId: userId);
         debugPrint('Deactivated SOS event: ${doc.id}');
       }
@@ -361,9 +337,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // RECORDING METHODS (with Firebase Storage upload)
-  // ============================================================
+  // record audio - no biometric check
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) return;
@@ -398,6 +372,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
+  // record video - no biometric check
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) return;
@@ -417,7 +392,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // Upload file to Firebase Storage and share the URL
+  // upload file to firebase storage and share the url
   Future<void> _uploadAndShareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -454,9 +429,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // ============================================================
-  // LIVE STREAMING - Toggle
-  // ============================================================
+  // live streaming toggle
   void _toggleLiveStreaming() {
     setState(() {
       _isLiveStreaming = !_isLiveStreaming;
@@ -503,9 +476,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // CAPTURE IT! - Three buttons
-  // ============================================================
+  // recording controls
   Widget _buildRecordingControls() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -592,9 +563,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // AUTO-SHARE TOGGLE
-  // ============================================================
+  // auto share toggle
   Widget _buildAutoShareToggle() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -637,9 +606,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // LOCATION MAP
-  // ============================================================
+  // location map
   Widget _buildLocationMap() {
     if (!_locationEnabled || _currentPosition == null) {
       return Container(
@@ -698,9 +665,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // QUICK CALL BUTTONS
-  // ============================================================
+  // quick call buttons
   Widget _buildQuickCallButtons() {
     List<Widget> buttons = [];
     for (int i = 0; i < _contacts.length && i < 2; i++) {
@@ -761,9 +726,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // ============================================================
-  // CALL EMERGENCY BUTTON
-  // ============================================================
+  // call emergency button
   Widget _buildCallEmergencyButton() {
     return ElevatedButton.icon(
       onPressed: widget.onCallEmergency,
@@ -785,7 +748,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // safe button
+  // im safe button
   Widget _buildImSafeButton() {
     return ElevatedButton.icon(
       onPressed: _imSafe,

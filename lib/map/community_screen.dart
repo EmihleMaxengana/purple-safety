@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/map/map.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -37,7 +36,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
 
-  // resolved sos modal
+  // Resolved SOS modal
   bool _showResolvedModal = false;
   Map<String, dynamic>? _resolvedSOSData;
   final Set<String> _seenResolvedIds = {};
@@ -46,8 +45,6 @@ class _CommunityScreenState extends State<CommunityScreen>
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
   Set<Circle> _dangerZones = {};
-
-  final _user = AuthService().getCurrentUser();
 
   void _getAllDangerZones() async {
     try {
@@ -102,8 +99,6 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   void _listenToActiveSOS() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    
     FirebaseFirestore.instance
         .collection('active_sos_events')
         .where('status', isEqualTo: 'active')
@@ -111,22 +106,19 @@ class _CommunityScreenState extends State<CommunityScreen>
         .listen((snapshot) {
           setState(() {
             _isLoadingSOS = false;
-            // filter out own SOS events
-            _activeSOSEvents = snapshot.docs
-                .where((doc) => doc.data()['userId'] != currentUser?.uid)
-                .map((doc) {
-                  final data = doc.data();
-                  return {
-                    'id': doc.id,
-                    'userId': data['userId'],
-                    'userName': data['userName'] ?? 'Someone',
-                    'latitude': data['latitude'],
-                    'longitude': data['longitude'],
-                    'locationLink': data['locationLink'],
-                    'timestamp': data['timestamp'],
-                    'responderCount': data['responderCount'] ?? 0,
-                  };
-                }).toList();
+            _activeSOSEvents = snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'id': doc.id,
+                'userId': data['userId'],
+                'userName': data['userName'] ?? 'Someone',
+                'latitude': data['latitude'],
+                'longitude': data['longitude'],
+                'locationLink': data['locationLink'],
+                'timestamp': data['timestamp'],
+                'responderCount': data['responderCount'] ?? 0,
+              };
+            }).toList();
 
             _updateSOSMarkers();
           });
@@ -134,8 +126,6 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   void _listenToResolvedSOS() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    
     _resolvedSOSSubscription = FirebaseFirestore.instance
         .collection('global_alerts')
         .where('type', isEqualTo: 'sos_resolved')
@@ -143,21 +133,27 @@ class _CommunityScreenState extends State<CommunityScreen>
         .snapshots()
         .listen((snapshot) {
           if (snapshot.docs.isNotEmpty) {
-            final doc = snapshot.docs.last;
-            final data = doc.data();
-            final userId = data['userId'] ?? '';
-            
-            // skip if the resolved sos was triggered by the current user
-            if (currentUser != null && userId == currentUser.uid) {
-              return;
+            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+            QueryDocumentSnapshot? resolvedDoc;
+
+            for (var doc in snapshot.docs) {
+              final data = doc.data();
+              if (currentUserId == null || data['userId'] != currentUserId) {
+                resolvedDoc = doc;
+                break;
+              }
             }
-            
-            if (!_seenResolvedIds.contains(doc.id)) {
-              _seenResolvedIds.add(doc.id);
-              setState(() {
-                _resolvedSOSData = data;
-                _showResolvedModal = true;
-              });
+
+            if (resolvedDoc != null) {
+              final data = resolvedDoc.data();
+              debugPrint("[Community screen] data: ${data.toString()}");
+              if (!_seenResolvedIds.contains(resolvedDoc.id)) {
+                _seenResolvedIds.add(resolvedDoc.id);
+                setState(() {
+                  _resolvedSOSData = data as Map<String, dynamic>?;
+                  _showResolvedModal = true;
+                });
+              }
             }
           }
         });
@@ -175,9 +171,8 @@ class _CommunityScreenState extends State<CommunityScreen>
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
             title: 'SOS ACTIVE!',
-            snippet: event['userId'] != _user!.uid
-                ? '${event['userName']} needs immediate help!\nTap to respond'
-                : null,
+            snippet:
+                '${event['userName']} needs immediate help!\nTap to respond',
           ),
           onTap: () => _showSOSResponderModal(event),
         );
@@ -291,11 +286,10 @@ class _CommunityScreenState extends State<CommunityScreen>
               ),
             ),
             const SizedBox(height: 8),
-            if (sosEvent['userId'] != _user!.uid)
-              Text(
-                '${sosEvent['userName']} needs immediate help!',
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
+            Text(
+              '${sosEvent['userName']} needs immediate help!',
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),

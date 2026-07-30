@@ -33,11 +33,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _useBiometrics = false;
   bool _isBiometricAvailable = false;
 
+  bool _shareLocationWithContacts = true;
+  bool _shareLocationWithCommunity = false;
+
   @override
   void initState() {
     super.initState();
     _loadUserData();
     _loadIsBiometricEnabled();
+    _loadLocationSharingPreferences();
   }
 
   @override
@@ -64,6 +68,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _isLoading = false);
   }
 
+  Future<void> _loadLocationSharingPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _shareLocationWithContacts =
+          prefs.getBool(PrefKeys.shareLocationWithContacts) ?? true;
+      _shareLocationWithCommunity =
+          prefs.getBool(PrefKeys.shareLocationWithCommunity) ?? false;
+    });
+  }
+
+  Future<void> _saveLocationSharingPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(
+      PrefKeys.shareLocationWithContacts,
+      _shareLocationWithContacts,
+    );
+    await prefs.setBool(
+      PrefKeys.shareLocationWithCommunity,
+      _shareLocationWithCommunity,
+    );
+  }
+
   Future<void> _saveUserData() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
@@ -80,7 +106,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'email': _emailController.text,
         'phone': _phoneController.text,
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile updated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       setState(() => _isLoading = false);
     }
@@ -97,6 +135,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _saveIsBiometricEnabled(bool value) async {
     await BiometricService.setBiometricsEnabled(value);
+  }
+
+  // toggle with fingerprint - only for turning OFF
+  Future<void> _toggleWithFingerprintForOff(
+    String settingName,
+    bool currentValue,
+    Function(bool) onToggle,
+  ) async {
+    final authenticated = await BiometricService.authenticateWithUserPreference(
+      context: context,
+      reason: 'Authenticate to disable $settingName',
+    );
+    if (authenticated) {
+      onToggle(!currentValue);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Authentication failed. $settingName not changed.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _changeNextOfKin() async {
@@ -208,7 +268,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _nextOfKinRelation = relationController.text.trim();
           _nextOfKinAltPhone = altPhoneController.text.trim();
         });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Next of kin updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update next of kin: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
     setState(() => _isLoading = false);
@@ -223,36 +295,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Change Password'),
+        backgroundColor: const Color(0xFF1a0f2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: currentPasswordController,
               obscureText: true,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'Current Password',
+                labelStyle: TextStyle(color: Color(0xFFBF7DCB)),
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
+                prefixIcon: Icon(Icons.lock_outline, color: Color(0xFFBF7DCB)),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newPasswordController,
               obscureText: true,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'New Password',
+                labelStyle: TextStyle(color: Color(0xFFBF7DCB)),
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock),
+                prefixIcon: Icon(Icons.lock, color: Color(0xFFBF7DCB)),
               ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: confirmController,
               obscureText: true,
+              style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                 labelText: 'Confirm New Password',
+                labelStyle: TextStyle(color: Color(0xFFBF7DCB)),
                 border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.lock_outline),
+                prefixIcon: Icon(Icons.lock_outline, color: Color(0xFFBF7DCB)),
               ),
             ),
           ],
@@ -260,13 +343,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
           ),
           ElevatedButton(
             onPressed: () async {
-              if (newPasswordController.text != confirmController.text) return;
-              if (newPasswordController.text.length < 6) return;
-              if (currentPasswordController.text.isEmpty) return;
+              if (newPasswordController.text != confirmController.text) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              if (newPasswordController.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              if (currentPasswordController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter current password'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+
+              final authenticated = await BiometricService.authenticateWithUserPreference(
+                context: context,
+                reason: 'Authenticate to change your password',
+              );
+
+              if (!authenticated) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Authentication failed'), backgroundColor: Colors.red),
+                );
+                return;
+              }
 
               showDialog(
                 context: context,
@@ -287,9 +397,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await user.updatePassword(newPasswordController.text);
                   Navigator.pop(context);
                   Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password changed successfully!'), backgroundColor: Colors.green),
+                  );
                 }
               } catch (e) {
                 Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
@@ -343,6 +459,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   });
                   sheetSetState(() {});
                   await _saveIsBiometricEnabled(value);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(value ? 'Biometrics enabled' : 'Biometrics disabled'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
                 },
                 activeThumbColor: const Color(0xFF6A1B9A),
               ),
@@ -584,10 +706,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
 
-        // Delete all files from Firebase Storage
         await StorageService.deleteUserFiles(user.uid);
 
-        // Delete Firestore data
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -634,6 +754,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting account: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -963,32 +1089,123 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 const SizedBox(height: 32),
 
-                _buildSectionTitle('Next of Kin'),
+                _buildSectionTitle('Privacy & Security'),
                 const SizedBox(height: 8),
-                _buildNextOfKinDisplay(),
 
-                const SizedBox(height: 32),
-
-                _buildSectionTitle('Security'),
-                const SizedBox(height: 8),
-                _buildSettingTile(
-                  icon: Icons.lock,
-                  title: 'Change Password',
-                  subtitle: 'Update your password with current password',
-                  onTap: _showChangePasswordDialog,
+                // share location with trusted contacts
+                SwitchListTile(
+                  title: const Text(
+                    'Share location with trusted contacts',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: const Text(
+                    'Send your location to your trusted contacts every 15 minutes',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                  value: _shareLocationWithContacts,
+                  onChanged: (value) {
+                    if (value == false) {
+                      // turning off - require authentication
+                      _toggleWithFingerprintForOff(
+                        'Location Sharing with Contacts',
+                        _shareLocationWithContacts,
+                        (newVal) async {
+                          setState(() => _shareLocationWithContacts = newVal);
+                          await _saveLocationSharingPreferences();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Location sharing with contacts disabled'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      // turning on - no authentication needed
+                      setState(() => _shareLocationWithContacts = true);
+                      _saveLocationSharingPreferences();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Location sharing with contacts enabled'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  activeColor: Colors.purple,
                 ),
+
+                // share location with community
+                SwitchListTile(
+                  title: const Text(
+                    'Share location with community',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  subtitle: const Text(
+                    'Share your location with all Purple Safety users',
+                    style: TextStyle(color: Colors.white54, fontSize: 11),
+                  ),
+                  value: _shareLocationWithCommunity,
+                  onChanged: (value) {
+                    if (value == false) {
+                      // turning off - require authentication
+                      _toggleWithFingerprintForOff(
+                        'Location Sharing with Community',
+                        _shareLocationWithCommunity,
+                        (newVal) async {
+                          setState(() => _shareLocationWithCommunity = newVal);
+                          await _saveLocationSharingPreferences();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Location sharing with community disabled'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
+                        },
+                      );
+                    } else {
+                      // turning on - no authentication needed
+                      setState(() => _shareLocationWithCommunity = true);
+                      _saveLocationSharingPreferences();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Location sharing with community enabled'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  },
+                  activeColor: Colors.purple,
+                ),
+
+                const SizedBox(height: 8),
+
                 _buildSettingTile(
                   icon: Icons.fingerprint,
                   title: 'Manage Biometrics',
                   subtitle: 'Set up fingerprint for login',
                   onTap: _showManageBiometricsDialog,
                 ),
+
+                _buildSettingTile(
+                  icon: Icons.lock,
+                  title: 'Change Password',
+                  subtitle: 'Update your password with current password',
+                  onTap: _showChangePasswordDialog,
+                ),
+
                 _buildSettingTile(
                   icon: Icons.privacy_tip,
                   title: 'Privacy Policy',
                   subtitle: 'Read how we protect your data',
                   onTap: _showPrivacyPolicy,
                 ),
+
+                const SizedBox(height: 24),
+
+                _buildSectionTitle('Next of Kin'),
+                const SizedBox(height: 8),
+                _buildNextOfKinDisplay(),
 
                 const SizedBox(height: 24),
 

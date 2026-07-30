@@ -357,14 +357,15 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
-  Future<void> _toggleWithFingerprint(
+  // toggle with fingerprint - only for turning OFF
+  Future<void> _toggleWithFingerprintForOff(
     String settingName,
     bool currentValue,
     Function(bool) onToggle,
   ) async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
-      reason: 'Authenticate to change $settingName',
+      reason: 'Authenticate to disable $settingName',
     );
     if (authenticated) {
       onToggle(!currentValue);
@@ -1090,6 +1091,7 @@ class _UserProfileModalState extends State<UserProfileModal> {
     );
   }
 
+  // privacy & security - no biometric check for turning ON
   Widget _buildPrivacySecurity() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1110,20 +1112,35 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white54, fontSize: 11),
             ),
             value: _shareLocationWithContacts,
-            onChanged: (value) => _toggleWithFingerprint(
-              'Location Sharing with Contacts',
-              _shareLocationWithContacts,
-              (newVal) async {
-                setState(() => _shareLocationWithContacts = newVal);
-                await _saveLocationSharingPreferences();
+            onChanged: (value) {
+              if (value == false) {
+                // turning off - require authentication
+                _toggleWithFingerprintForOff(
+                  'Location Sharing with Contacts',
+                  _shareLocationWithContacts,
+                  (newVal) async {
+                    setState(() => _shareLocationWithContacts = newVal);
+                    await _saveLocationSharingPreferences();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Location sharing with contacts disabled'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  },
+                );
+              } else {
+                // turning on - no authentication needed
+                setState(() => _shareLocationWithContacts = true);
+                _saveLocationSharingPreferences();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(newVal ? 'Location sharing with contacts enabled' : 'Location sharing with contacts disabled'),
-                    backgroundColor: newVal ? Colors.green : Colors.orange,
+                    content: Text('Location sharing with contacts enabled'),
+                    backgroundColor: Colors.green,
                   ),
                 );
-              },
-            ),
+              }
+            },
             activeColor: Colors.purple,
           ),
           // share location with community
@@ -1137,20 +1154,35 @@ class _UserProfileModalState extends State<UserProfileModal> {
               style: TextStyle(color: Colors.white54, fontSize: 11),
             ),
             value: _shareLocationWithCommunity,
-            onChanged: (value) => _toggleWithFingerprint(
-              'Location Sharing with Community',
-              _shareLocationWithCommunity,
-              (newVal) async {
-                setState(() => _shareLocationWithCommunity = newVal);
-                await _saveLocationSharingPreferences();
+            onChanged: (value) {
+              if (value == false) {
+                // turning off - require authentication
+                _toggleWithFingerprintForOff(
+                  'Location Sharing with Community',
+                  _shareLocationWithCommunity,
+                  (newVal) async {
+                    setState(() => _shareLocationWithCommunity = newVal);
+                    await _saveLocationSharingPreferences();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Location sharing with community disabled'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  },
+                );
+              } else {
+                // turning on - no authentication needed
+                setState(() => _shareLocationWithCommunity = true);
+                _saveLocationSharingPreferences();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(newVal ? 'Location sharing with community enabled' : 'Location sharing with community disabled'),
-                    backgroundColor: newVal ? Colors.green : Colors.orange,
+                    content: Text('Location sharing with community enabled'),
+                    backgroundColor: Colors.green,
                   ),
                 );
-              },
-            ),
+              }
+            },
             activeColor: Colors.purple,
           ),
           // biometrics on/off
