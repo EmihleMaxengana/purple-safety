@@ -36,7 +36,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
 
-  // Resolved SOS modal
+  // resolved sos modal
   bool _showResolvedModal = false;
   Map<String, dynamic>? _resolvedSOSData;
   final Set<String> _seenResolvedIds = {};
@@ -99,6 +99,8 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   void _listenToActiveSOS() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
     FirebaseFirestore.instance
         .collection('active_sos_events')
         .where('status', isEqualTo: 'active')
@@ -106,19 +108,22 @@ class _CommunityScreenState extends State<CommunityScreen>
         .listen((snapshot) {
           setState(() {
             _isLoadingSOS = false;
-            _activeSOSEvents = snapshot.docs.map((doc) {
-              final data = doc.data();
-              return {
-                'id': doc.id,
-                'userId': data['userId'],
-                'userName': data['userName'] ?? 'Someone',
-                'latitude': data['latitude'],
-                'longitude': data['longitude'],
-                'locationLink': data['locationLink'],
-                'timestamp': data['timestamp'],
-                'responderCount': data['responderCount'] ?? 0,
-              };
-            }).toList();
+            // filter out own SOS events
+            _activeSOSEvents = snapshot.docs
+                .where((doc) => doc.data()['userId'] != currentUser?.uid)
+                .map((doc) {
+                  final data = doc.data();
+                  return {
+                    'id': doc.id,
+                    'userId': data['userId'],
+                    'userName': data['userName'] ?? 'Someone',
+                    'latitude': data['latitude'],
+                    'longitude': data['longitude'],
+                    'locationLink': data['locationLink'],
+                    'timestamp': data['timestamp'],
+                    'responderCount': data['responderCount'] ?? 0,
+                  };
+                }).toList();
 
             _updateSOSMarkers();
           });
@@ -126,6 +131,8 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   void _listenToResolvedSOS() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
     _resolvedSOSSubscription = FirebaseFirestore.instance
         .collection('global_alerts')
         .where('type', isEqualTo: 'sos_resolved')
@@ -133,27 +140,21 @@ class _CommunityScreenState extends State<CommunityScreen>
         .snapshots()
         .listen((snapshot) {
           if (snapshot.docs.isNotEmpty) {
-            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-            QueryDocumentSnapshot? resolvedDoc;
-
-            for (var doc in snapshot.docs) {
-              final data = doc.data();
-              if (currentUserId == null || data['userId'] != currentUserId) {
-                resolvedDoc = doc;
-                break;
-              }
+            final doc = snapshot.docs.last;
+            final data = doc.data();
+            final userId = data['userId'] ?? '';
+            
+            // skip if the resolved sos was triggered by the current user
+            if (currentUser != null && userId == currentUser.uid) {
+              return;
             }
-
-            if (resolvedDoc != null) {
-              final data = resolvedDoc.data();
-              debugPrint("[Community screen] data: ${data.toString()}");
-              if (!_seenResolvedIds.contains(resolvedDoc.id)) {
-                _seenResolvedIds.add(resolvedDoc.id);
-                setState(() {
-                  _resolvedSOSData = data as Map<String, dynamic>?;
-                  _showResolvedModal = true;
-                });
-              }
+            
+            if (!_seenResolvedIds.contains(doc.id)) {
+              _seenResolvedIds.add(doc.id);
+              setState(() {
+                _resolvedSOSData = data;
+                _showResolvedModal = true;
+              });
             }
           }
         });
