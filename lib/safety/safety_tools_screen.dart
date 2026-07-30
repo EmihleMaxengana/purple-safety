@@ -35,7 +35,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   bool _isRecordingAudio = false;
   bool _isRecordingVideo = false;
   bool _autoShareRecordings = false;
-  bool _isLiveStreaming = false;
 
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
@@ -429,14 +428,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // live streaming toggle
-  void _toggleLiveStreaming() {
-    setState(() {
-      _isLiveStreaming = !_isLiveStreaming;
-    });
-    debugPrint('Live streaming: ${_isLiveStreaming ? "ON" : "OFF"}');
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -476,7 +467,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // recording controls
+  // recording controls - removed live streaming button
   Widget _buildRecordingControls() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -513,13 +504,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
                     ? _stopAudioRecording
                     : _startAudioRecording,
                 color: _isRecordingAudio ? Colors.red : Colors.green,
-              ),
-              const SizedBox(height: 12),
-              _buildMediaButton(
-                icon: _isLiveStreaming ? Icons.stop : Icons.live_tv,
-                label: _isLiveStreaming ? 'Stop Live' : 'Start Live',
-                onTap: _toggleLiveStreaming,
-                color: _isLiveStreaming ? Colors.red : Colors.purple,
               ),
             ],
           ),
