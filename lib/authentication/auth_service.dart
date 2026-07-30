@@ -3,10 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// AuthService provides authentication helpers plus a small
-/// session / re-auth persistence layer used by the app to require
-/// short re-authentication when the user returns to the app.
-
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -60,7 +56,6 @@ class AuthService {
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
         };
-      
         if (nextOfKinName != null && nextOfKinName.isNotEmpty)
           userData['nextOfKinName'] = nextOfKinName;
         if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty)
@@ -81,7 +76,7 @@ class AuthService {
     }
   }
 
-  // Login with email and password
+  // Login with email and password - with proper error handling
   Future<User?> loginWithEmail(String email, String password) async {
     try {
       UserCredential result = await _auth.signInWithEmailAndPassword(
@@ -89,9 +84,33 @@ class AuthService {
         password: password,
       );
       return result.user;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'No account found with this email address. Please create an account first.';
+          break;
+        case 'wrong-password':
+          message = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email address format.';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled. Please contact support.';
+          break;
+        case 'too-many-requests':
+          message = 'Too many failed login attempts. Please try again later.';
+          break;
+        case 'network-request-failed':
+          message = 'Network error. Please check your internet connection.';
+          break;
+        default:
+          message = 'Login failed: ${e.message}';
+      }
+      throw Exception(message);
     } catch (e) {
-      print('Login error: $e');
-      return null;
+      throw Exception('An unexpected error occurred. Please try again.');
     }
   }
 
@@ -195,8 +214,7 @@ class AuthService {
     }
   }
 
-  /// Re-authenticate the current user using their password without
-  /// signing them out/in. Uses Firebase `reauthenticateWithCredential`.
+  /// Re-authenticate the current user using their password
   Future<bool> reauthenticateWithPassword(String password) async {
     try {
       final user = _auth.currentUser;
