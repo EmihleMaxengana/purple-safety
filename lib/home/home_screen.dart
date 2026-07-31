@@ -108,8 +108,10 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _loadPrivacyToggles() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _shareLocationWithContacts = prefs.getBool(PrefKeys.shareLocationWithContacts) ?? true;
-      _shareLocationWithCommunity = prefs.getBool(PrefKeys.shareLocationWithCommunity) ?? false;
+      _shareLocationWithContacts =
+          prefs.getBool(PrefKeys.shareLocationWithContacts) ?? true;
+      _shareLocationWithCommunity =
+          prefs.getBool(PrefKeys.shareLocationWithCommunity) ?? false;
     });
   }
 

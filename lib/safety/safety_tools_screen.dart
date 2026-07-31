@@ -455,7 +455,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               Row(
                 children: [
                   Expanded(child: _buildCallEmergencyButton()),
-                  const SizedBox(width: 12),
+                  if (_isEmergencyActive) const SizedBox(width: 12),
                   if (_isEmergencyActive) Expanded(child: _buildImSafeButton()),
                 ],
               ),
