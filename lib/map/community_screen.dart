@@ -46,6 +46,8 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Set<Circle> _dangerZones = {};
 
+  final User _user = FirebaseAuth.instance.currentUser!;
+
   void _getAllDangerZones() async {
     try {
       final dangerZones = await DangerZoneService().loadDangerZonesCircle();
@@ -171,8 +173,9 @@ class _CommunityScreenState extends State<CommunityScreen>
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
           infoWindow: InfoWindow(
             title: 'SOS ACTIVE!',
-            snippet:
-                '${event['userName']} needs immediate help!\nTap to respond',
+            snippet: event['userId'] != _user.uid
+                ? '${event['userName']} needs immediate help!\nTap to respond'
+                : null,
           ),
           onTap: () => _showSOSResponderModal(event),
         );
@@ -286,10 +289,11 @@ class _CommunityScreenState extends State<CommunityScreen>
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              '${sosEvent['userName']} needs immediate help!',
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
+            if (sosEvent['userId'] != _user.uid)
+              Text(
+                '${sosEvent['userName']} needs immediate help!',
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+              ),
             const SizedBox(height: 8),
             Container(
               padding: const EdgeInsets.all(12),
@@ -311,25 +315,26 @@ class _CommunityScreenState extends State<CommunityScreen>
             const SizedBox(height: 20),
             Row(
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      await _respondToSOS(sosEvent);
-                      _openNavigationToSOS(sosEvent);
-                    },
-                    icon: const Icon(Icons.directions_run),
-                    label: const Text('I Can Help!'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                if (sosEvent['userId'] != _user.uid)
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        await _respondToSOS(sosEvent);
+                        _openNavigationToSOS(sosEvent);
+                      },
+                      icon: const Icon(Icons.directions_run),
+                      label: const Text('I Can Help!'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                if (sosEvent['userId'] != _user.uid) const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => Navigator.pop(context),
