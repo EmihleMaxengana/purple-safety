@@ -18,6 +18,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _rememberMe = false;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  String _errorMessage = '';
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -55,6 +57,62 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // reset error message
+    setState(() {
+      _errorMessage = '';
+    });
+
+    // validate fields
+    if (email.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your email address';
+      });
+      return;
+    }
+
+    if (password.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter your password';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final auth = AuthService();
+      final user = await auth.loginWithEmail(email, password);
+
+      if (user != null) {
+        await _saveEmailPreference();
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const MainScreen(),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Logo - now bigger and without background color
+                        // Logo
                         Container(
                           width: 80,
                           height: 80,
@@ -121,6 +179,39 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(color: Colors.white, fontSize: 14),
                         ),
                         const SizedBox(height: 24),
+
+                        // Error message
+                        if (_errorMessage.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Colors.red.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.error_outline,
+                                  color: Colors.red,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
 
                         const Text(
                           'Email',
@@ -238,6 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               horizontal: 16,
                             ),
                           ),
+                          onSubmitted: (_) => _handleLogin(),
                         ),
 
                         const SizedBox(height: 14),
@@ -287,30 +379,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 18),
 
                         ElevatedButton(
-                          onPressed: () async {
-                            final email = _emailController.text.trim();
-                            final password = _passwordController.text.trim();
-                            if (email.isNotEmpty && password.isNotEmpty) {
-                              final auth = AuthService();
-                              final user = await auth.loginWithEmail(
-                                email,
-                                password,
-                              );
-                              if (user != null) {
-                                await _saveEmailPreference();
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const MainScreen(),
-                                  ),
-                                );
-                              } else {
-                                // Silent error – no snackbar
-                              }
-                            } else {
-                              // Silent error – no snackbar
-                            }
-                          },
+                          onPressed: _isLoading ? null : _handleLogin,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFD105FF),
                             foregroundColor: Colors.white,
@@ -321,13 +390,22 @@ class _LoginScreenState extends State<LoginScreen> {
                             elevation: 2,
                             shadowColor: Colors.purple.withOpacity(0.2),
                           ),
-                          child: const Text(
-                            'Sign In',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Sign In',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                         ),
 
                         const SizedBox(height: 20),
