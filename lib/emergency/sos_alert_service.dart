@@ -39,7 +39,8 @@ class SOSAlertService {
 
     String? triggerLocationLink;
     if (triggerLat != null && triggerLng != null) {
-      triggerLocationLink = 'https://www.google.com/maps?q=$triggerLat,$triggerLng';
+      triggerLocationLink =
+          'https://www.google.com/maps?q=$triggerLat,$triggerLng';
     }
 
     String? audioUrl;
@@ -95,9 +96,11 @@ class SOSAlertService {
       // build message based on what we share
       String message;
       if (shareWithContacts && locationLink != null) {
-        message = 'EMERGENCY: $userName needs immediate help at their location!';
+        message =
+            'EMERGENCY: $userName needs immediate help at their location!';
         if (triggerLocationLink != null) {
-          message = 'EMERGENCY: $userName needs immediate help!\n'
+          message =
+              'EMERGENCY: $userName needs immediate help!\n'
               'Current: $locationLink\n'
               'Triggered: $triggerLocationLink\n'
               'Triggered at: $triggerTimestamp';
@@ -105,7 +108,8 @@ class SOSAlertService {
       } else {
         message = 'EMERGENCY: $userName needs immediate help!';
         if (triggerLocationLink != null && shareWithContacts) {
-          message = 'EMERGENCY: $userName needs immediate help!\n'
+          message =
+              'EMERGENCY: $userName needs immediate help!\n'
               'Triggered at: $triggerTimestamp';
         }
       }
@@ -157,9 +161,11 @@ class SOSAlertService {
         // only include location in alert if shareWithContacts is true
         String alertMessage;
         if (shareWithContacts && locationLink != null) {
-          alertMessage = 'SOS: $userName needs immediate help! Tap to view location.';
+          alertMessage =
+              'SOS: $userName needs immediate help! Tap to view location.';
           if (triggerLocationLink != null) {
-            alertMessage = 'SOS: $userName needs immediate help!\n'
+            alertMessage =
+                'SOS: $userName needs immediate help!\n'
                 'Current: $locationLink\n'
                 'Triggered: $triggerLocationLink';
           }
@@ -195,20 +201,25 @@ class SOSAlertService {
 
       await batch.commit();
       return sosEventId;
-
     } catch (e) {
       rethrow;
     }
   }
 
-  static Future<void> deactivateSOSEvent(String sosEventId, {String? userId}) async {
+  static Future<void> deactivateSOSEvent(
+    String sosEventId, {
+    String? userId,
+  }) async {
     try {
       await _firestore.collection('active_sos_events').doc(sosEventId).update({
         'status': 'resolved',
         'resolvedAt': FieldValue.serverTimestamp(),
       });
 
-      final eventDoc = await _firestore.collection('active_sos_events').doc(sosEventId).get();
+      final eventDoc = await _firestore
+          .collection('active_sos_events')
+          .doc(sosEventId)
+          .get();
       if (!eventDoc.exists) return;
       final eventData = eventDoc.data()!;
       final userName = eventData['userName'] ?? 'Someone';
@@ -241,7 +252,8 @@ class SOSAlertService {
             .doc();
 
         batch.set(alertRef, {
-          'message': 'SAFE: $userName is now safe. The SOS alert has been resolved.',
+          'message':
+              'SAFE: $userName is now safe. The SOS alert has been resolved.',
           'type': 'sos_resolved',
           'timestamp': FieldValue.serverTimestamp(),
           'read': false,
@@ -255,8 +267,9 @@ class SOSAlertService {
 
       await batch.commit();
 
-      debugPrint('SOS event $sosEventId deactivated and notifications sent (excluding deactivator).');
-
+      debugPrint(
+        'SOS event $sosEventId deactivated and notifications sent (excluding deactivator).',
+      );
     } catch (e) {
       debugPrint('Error deactivating SOS event: $e');
       rethrow;
@@ -269,13 +282,12 @@ class SOSAlertService {
         .where('status', isEqualTo: 'active')
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-          final data = doc.data();
-          return {
-            'id': doc.id,
-            ...data,
-          };
-        }).toList());
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {'id': doc.id, ...data};
+          }).toList(),
+        );
   }
 
   static Future<void> respondToSOS({
@@ -303,7 +315,10 @@ class SOSAlertService {
         'responderCount': FieldValue.increment(1),
       });
 
-      final sosEvent = await _firestore.collection('active_sos_events').doc(sosEventId).get();
+      final sosEvent = await _firestore
+          .collection('active_sos_events')
+          .doc(sosEventId)
+          .get();
       if (sosEvent.exists) {
         final eventData = sosEvent.data();
         await _firestore
@@ -319,7 +334,6 @@ class SOSAlertService {
               'responderName': responderName,
             });
       }
-
     } catch (e) {
       rethrow;
     }
@@ -403,7 +417,8 @@ class SOSAlertService {
             }
           }
 
-          if (data.containsKey('userId') && data.containsKey('triggerTimestamp')) {
+          if (data.containsKey('userId') &&
+              data.containsKey('triggerTimestamp')) {
             result.add(data);
           }
         } catch (e) {
@@ -434,5 +449,14 @@ class SOSAlertService {
     } catch (e) {
       return false;
     }
+  }
+
+  static Future<bool> hasActiveSOSEventForUser(String userId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('active_sos_events')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'active')
+        .get();
+    return snapshot.docs.isNotEmpty;
   }
 }
