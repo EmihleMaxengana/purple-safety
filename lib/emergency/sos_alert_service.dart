@@ -15,9 +15,6 @@ class SOSAlertService {
 
   static const String _pendingSOSKey = 'pending_sos';
 
-  // ============================================================
-  // SEND COMMUNITY SOS ALERT - WITH PRIVACY TOGGLE PARAMETERS
-  // ============================================================
   static Future<String?> sendCommunitySOSAlert({
     required String userId,
     required String userName,
@@ -31,7 +28,6 @@ class SOSAlertService {
     bool shareWithContacts = true,
     bool shareWithCommunity = false,
   }) async {
-    // build location link only if location is provided
     String? locationLink;
     if (latitude != null && longitude != null) {
       locationLink = 'https://www.google.com/maps?q=$latitude,$longitude';
@@ -75,7 +71,6 @@ class SOSAlertService {
         'responderCount': 0,
       };
 
-      // only add location if provided
       if (latitude != null && longitude != null) {
         eventData['latitude'] = latitude;
         eventData['longitude'] = longitude;
@@ -92,7 +87,6 @@ class SOSAlertService {
 
       await docRef.set(eventData);
 
-      // build message based on what we share
       String message;
       if (shareWithContacts && locationLink != null) {
         message = 'EMERGENCY: $userName needs immediate help at their location!';
@@ -110,7 +104,6 @@ class SOSAlertService {
         }
       }
 
-      // save to global alerts
       final Map<String, dynamic> globalAlertData = {
         'type': 'sos',
         'message': message,
@@ -126,7 +119,6 @@ class SOSAlertService {
         'shareWithCommunity': shareWithCommunity,
       };
 
-      // only add location if sharing with community is enabled
       if (shareWithCommunity && latitude != null && longitude != null) {
         globalAlertData['locationLink'] = locationLink;
         globalAlertData['latitude'] = latitude;
@@ -141,7 +133,6 @@ class SOSAlertService {
 
       await _firestore.collection('global_alerts').add(globalAlertData);
 
-      // send alerts to users
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
 
@@ -154,7 +145,6 @@ class SOSAlertService {
             .collection('alerts')
             .doc();
 
-        // only include location in alert if shareWithContacts is true
         String alertMessage;
         if (shareWithContacts && locationLink != null) {
           alertMessage = 'SOS: $userName needs immediate help! Tap to view location.';
@@ -179,7 +169,6 @@ class SOSAlertService {
           'wasOffline': triggerLat != null,
         };
 
-        // only add location if shareWithContacts is true
         if (shareWithContacts && latitude != null && longitude != null) {
           alertData['latitude'] = latitude;
           alertData['longitude'] = longitude;
@@ -201,20 +190,27 @@ class SOSAlertService {
     }
   }
 
-  static Future<void> deactivateSOSEvent(String sosEventId, {String? userId}) async {
+  static Future<void> deactivateSOSEvent(String sosEventId, {String? userId, double? finalLat, double? finalLng}) async {
     try {
+      final eventDoc = await _firestore.collection('active_sos_events').doc(sosEventId).get();
+      if (!eventDoc.exists) return;
+      
+      final eventData = eventDoc.data()!;
+      final triggerLat = eventData['triggerLat'];
+      final triggerLng = eventData['triggerLng'];
+      final triggerTimestamp = eventData['triggerTimestamp'];
+      final userName = eventData['userName'] ?? 'Someone';
+      final userIdFromEvent = eventData['userId'];
+      
       await _firestore.collection('active_sos_events').doc(sosEventId).update({
         'status': 'resolved',
         'resolvedAt': FieldValue.serverTimestamp(),
+        'finalLatitude': finalLat ?? eventData['latitude'],
+        'finalLongitude': finalLng ?? eventData['longitude'],
+        'deactivationReason': finalLat != null ? 'user_safe' : 'system_ended',
       });
 
-      final eventDoc = await _firestore.collection('active_sos_events').doc(sosEventId).get();
-      if (!eventDoc.exists) return;
-      final eventData = eventDoc.data()!;
-      final userName = eventData['userName'] ?? 'Someone';
-      final locationLink = eventData['locationLink'] ?? 'Location unavailable';
-      final latitude = eventData['latitude'];
-      final longitude = eventData['longitude'];
+      final locationLink = 'https://www.google.com/maps?q=${finalLat ?? eventData['latitude']},${finalLng ?? eventData['longitude']}';
 
       await _firestore.collection('global_alerts').add({
         'type': 'sos_resolved',
@@ -222,17 +218,25 @@ class SOSAlertService {
         'sosEventId': sosEventId,
         'userName': userName,
         'locationLink': locationLink,
-        'latitude': latitude,
-        'longitude': longitude,
+        'latitude': finalLat ?? eventData['latitude'],
+        'longitude': finalLng ?? eventData['longitude'],
         'timestamp': FieldValue.serverTimestamp(),
         'userId': eventData['userId'],
+        'triggerLat': triggerLat,
+        'triggerLng': triggerLng,
+        'triggerTimestamp': triggerTimestamp,
+        'resolvedAt': FieldValue.serverTimestamp(),
+        'deactivationReason': finalLat != null ? 'user_safe' : 'system_ended',
       });
 
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
 
       for (var userDoc in usersSnapshot.docs) {
-        if (userId != null && userDoc.id == userId) continue;
+        // Critical: Skip the trigger user completely - they get NO notification
+        if (userDoc.id == userIdFromEvent) {
+          continue;
+        }
 
         final alertRef = _firestore
             .collection('users')
@@ -242,20 +246,24 @@ class SOSAlertService {
 
         batch.set(alertRef, {
           'message': 'SAFE: $userName is now safe. The SOS alert has been resolved.',
-          'type': 'sos_resolved',
+          'type': 'sos_deactivated',
           'timestamp': FieldValue.serverTimestamp(),
           'read': false,
           'sosEventId': sosEventId,
-          'latitude': latitude,
-          'longitude': longitude,
+          'latitude': finalLat ?? eventData['latitude'],
+          'longitude': finalLng ?? eventData['longitude'],
           'userName': userName,
           'locationLink': locationLink,
+          'triggerLat': triggerLat,
+          'triggerLng': triggerLng,
+          'triggerTimestamp': triggerTimestamp,
+          'resolvedAt': FieldValue.serverTimestamp(),
+          'deactivationReason': finalLat != null ? 'user_safe' : 'system_ended',
         });
       }
 
       await batch.commit();
-
-      debugPrint('SOS event $sosEventId deactivated and notifications sent (excluding deactivator).');
+      debugPrint('SOS event $sosEventId deactivated and notifications sent (excluding trigger user).');
 
     } catch (e) {
       debugPrint('Error deactivating SOS event: $e');

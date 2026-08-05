@@ -16,7 +16,9 @@ import '../settings/next_of_kin_modal.dart';
 import '../services/danger_zones_service.dart';
 
 class CommunityScreen extends StatefulWidget {
-  const CommunityScreen({Key? key}) : super(key: key);
+  final Map<String, dynamic>? arguments;
+
+  const CommunityScreen({Key? key, this.arguments}) : super(key: key);
 
   @override
   State<CommunityScreen> createState() => _CommunityScreenState();
@@ -36,11 +38,10 @@ class _CommunityScreenState extends State<CommunityScreen>
   List<Map<String, dynamic>> _activeSOSEvents = [];
   bool _isLoadingSOS = true;
 
-  // Resolved SOS modal
-  bool _showResolvedModal = false;
-  Map<String, dynamic>? _resolvedSOSData;
-  final Set<String> _seenResolvedIds = {};
-  StreamSubscription? _resolvedSOSSubscription;
+  bool _showDeactivationModal = false;
+  Map<String, dynamic>? _deactivationSOSData;
+  bool _isDeactivationModalVisible = false;
+  String? _handledDeactivationSOSId;
 
   static const LatLng _saCenter = LatLng(-28.4795, 24.6728);
 
@@ -51,7 +52,6 @@ class _CommunityScreenState extends State<CommunityScreen>
   void _getAllDangerZones() async {
     try {
       final dangerZones = await DangerZoneService().loadDangerZonesCircle();
-
       setState(() {
         _dangerZones = dangerZones;
       });
@@ -69,13 +69,14 @@ class _CommunityScreenState extends State<CommunityScreen>
     _listenToActiveSOS();
     _loadIncidentsAsMarkers();
     _startMapLoadTimer();
-    _listenToResolvedSOS();
     _getAllDangerZones();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handleDeactivationModal();
+    });
   }
 
   @override
   void dispose() {
-    _resolvedSOSSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _mapController?.dispose();
     super.dispose();
@@ -90,6 +91,16 @@ class _CommunityScreenState extends State<CommunityScreen>
     }
   }
 
+  @override
+  void didUpdateWidget(covariant CommunityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.arguments != oldWidget.arguments) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleDeactivationModal();
+      });
+    }
+  }
+
   void _startMapLoadTimer() {
     Future.delayed(const Duration(seconds: 5), () {
       if (!_isMapReady && mounted) {
@@ -98,6 +109,40 @@ class _CommunityScreenState extends State<CommunityScreen>
         });
       }
     });
+  }
+
+  void _handleDeactivationModal() {
+    final args = widget.arguments;
+    if (args == null || args is! Map<String, dynamic>) return;
+
+    if (args['showDeactivationModal'] != true) return;
+
+    final sosEventId = args['sosEventId'] as String?;
+    if (sosEventId == null || sosEventId.isEmpty) return;
+    if (_handledDeactivationSOSId == sosEventId) return;
+
+    _handledDeactivationSOSId = sosEventId;
+    _loadDeactivationSOSData(sosEventId);
+  }
+
+  Future<void> _loadDeactivationSOSData(String sosEventId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('active_sos_events')
+          .doc(sosEventId)
+          .get();
+      
+      if (doc.exists) {
+        final data = doc.data()!;
+        setState(() {
+          _deactivationSOSData = data;
+          _showDeactivationModal = true;
+          _isDeactivationModalVisible = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading deactivation SOS data: $e');
+    }
   }
 
   void _listenToActiveSOS() {
@@ -127,39 +172,6 @@ class _CommunityScreenState extends State<CommunityScreen>
         });
   }
 
-  void _listenToResolvedSOS() {
-    _resolvedSOSSubscription = FirebaseFirestore.instance
-        .collection('global_alerts')
-        .where('type', isEqualTo: 'sos_resolved')
-        .orderBy('timestamp', descending: false)
-        .snapshots()
-        .listen((snapshot) {
-          if (snapshot.docs.isNotEmpty) {
-            final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-            QueryDocumentSnapshot? resolvedDoc;
-
-            for (var doc in snapshot.docs) {
-              final data = doc.data();
-              if (currentUserId == null || data['userId'] != currentUserId) {
-                resolvedDoc = doc;
-                break;
-              }
-            }
-
-            if (resolvedDoc != null) {
-              final data = resolvedDoc.data();
-              debugPrint("[Community screen] data: ${data.toString()}");
-              if (!_seenResolvedIds.contains(resolvedDoc.id)) {
-                _seenResolvedIds.add(resolvedDoc.id);
-                setState(() {
-                  _resolvedSOSData = data as Map<String, dynamic>?;
-                  _showResolvedModal = true;
-                });
-              }
-            }
-          }
-        });
-  }
 
   void _updateSOSMarkers() {
     setState(() {
@@ -400,156 +412,242 @@ class _CommunityScreenState extends State<CommunityScreen>
     }
   }
 
-  Widget _buildResolvedSOSModal() {
-    if (!_showResolvedModal || _resolvedSOSData == null)
+  Widget _buildDeactivationModal() {
+    if (!_showDeactivationModal || _deactivationSOSData == null) {
       return const SizedBox();
-    final data = _resolvedSOSData!;
+    }
+    
+    final data = _deactivationSOSData!;
     final userName = data['userName'] ?? 'Someone';
-    final locationLink = data['locationLink'] ?? 'Location unavailable';
-    final lat = data['latitude'];
-    final lng = data['longitude'];
-    final locationString = (lat != null && lng != null)
-        ? '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}'
-        : 'Unknown location';
-
+    final userId = data['userId'] ?? '';
+    final triggerLat = _toDouble(data['triggerLat']) ?? _toDouble(data['latitude']);
+    final triggerLng = _toDouble(data['triggerLng']) ?? _toDouble(data['longitude']);
+    final triggerTimestamp = data['triggerTimestamp'];
+    final finalLat = _toDouble(data['finalLatitude']) ?? _toDouble(data['latitude']);
+    final finalLng = _toDouble(data['finalLongitude']) ?? _toDouble(data['longitude']);
+    final resolvedAt = data['resolvedAt'];
+    final deactivationReason = data['deactivationReason'] as String?;
+    
+    final String startLocation = _coordinateString(triggerLat, triggerLng);
+    final String endLocation = _coordinateString(finalLat, finalLng);
+    
+    final String triggerTime = _formatDateTimeFromData(triggerTimestamp) ??
+        _formatDateTimeFromData(data['timestamp']) ??
+        'Unknown';
+    final String resolvedTime = _formatDateTimeFromData(resolvedAt) ??
+        _formatDateTimeFromData(data['timestamp']) ??
+        'Unknown';
+    
+    String deactivationType = deactivationReason == 'user_safe' 
+        ? 'User marked themselves safe' 
+        : 'System ended (device offline or inactive)';
+    
     return Positioned.fill(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
         child: Container(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withOpacity(0.3),
           child: Center(
             child: Container(
-              margin: const EdgeInsets.all(24),
-              padding: const EdgeInsets.all(24),
+              margin: const EdgeInsets.symmetric(horizontal: 40, vertical: 80),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: const Color(0xFF1a0f2e),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.green.withOpacity(0.5)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.2),
-                    blurRadius: 20,
-                    spreadRadius: 5,
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.orange.withOpacity(0.3)),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 60),
-                  const SizedBox(height: 16),
-                  Text(
-                    '$userName is SAFE!',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Colors.orange,
+                        size: 32,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'The SOS alert has been resolved.',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 14,
+                    const SizedBox(height: 12),
+                    Text(
+                      'SOS Deactivated',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 6),
+                    Text(
+                      '$userName\'s SOS alert has been deactivated',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 13,
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.location_on,
-                              color: Colors.green,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                locationString,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Tap the link to view location',
-                          style: TextStyle(color: Colors.white38, fontSize: 11),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            setState(() {
-                              _showResolvedModal = false;
-                              _resolvedSOSData = null;
-                            });
-                            if (locationLink.isNotEmpty &&
-                                locationLink != 'Location unavailable') {
-                              _openNavigationToLocation(locationLink);
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildDetailRow(
+                            icon: Icons.person,
+                            label: 'Triggered by',
+                            value: userName,
                           ),
-                          child: const Text(
-                            'View on Map',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow(
+                            icon: Icons.location_on,
+                            label: 'Start location',
+                            value: startLocation,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow(
+                            icon: Icons.location_off,
+                            label: 'End location',
+                            value: endLocation,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow(
+                            icon: Icons.timer,
+                            label: 'Triggered at',
+                            value: triggerTime,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow(
+                            icon: Icons.check_circle,
+                            label: 'Deactivated at',
+                            value: resolvedTime,
+                          ),
+                          const SizedBox(height: 10),
+                          _buildDetailRow(
+                            icon: Icons.info_outline,
+                            label: 'Status',
+                            value: deactivationType,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _showDeactivationModal = false;
+                            _isDeactivationModalVisible = false;
+                            _deactivationSOSData = null;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6A1B9A),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Close',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            setState(() {
-                              _showResolvedModal = false;
-                              _resolvedSOSData = null;
-                            });
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white70,
-                            side: const BorderSide(color: Colors.white24),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Close'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFFBF7DCB), size: 16),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatDateTime(DateTime time) {
+    return '${time.day.toString().padLeft(2, '0')}/${time.month.toString().padLeft(2, '0')}/${time.year} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  String? _formatDateTimeFromData(dynamic timestamp) {
+    if (timestamp == null) return null;
+
+    if (timestamp is Timestamp) {
+      return _formatDateTime(timestamp.toDate());
+    }
+
+    if (timestamp is DateTime) {
+      return _formatDateTime(timestamp);
+    }
+
+    if (timestamp is String) {
+      try {
+        return _formatDateTime(DateTime.parse(timestamp));
+      } catch (_) {
+        return timestamp;
+      }
+    }
+
+    return null;
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  String _coordinateString(double? lat, double? lng) {
+    if (lat == null || lng == null) {
+      return 'Location not available';
+    }
+    return '${lat.toStringAsFixed(6)}, ${lng.toStringAsFixed(6)}';
   }
 
   @override
@@ -607,7 +705,13 @@ class _CommunityScreenState extends State<CommunityScreen>
             ),
           ],
         ),
-        body: _selectedView == 'map' ? _buildMapView() : _buildListView(),
+        body: Stack(
+          children: [
+            _selectedView == 'map' ? _buildMapView() : _buildListView(),
+            if (_showDeactivationModal && _deactivationSOSData != null)
+              _buildDeactivationModal(),
+          ],
+        ),
       ),
     );
   }
@@ -715,7 +819,6 @@ class _CommunityScreenState extends State<CommunityScreen>
                   child: _buildLegendItem(Colors.red, 'Active SOS'),
                 ),
               ),
-              if (_showResolvedModal) _buildResolvedSOSModal(),
             ],
           ),
         ),

@@ -30,6 +30,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final EmergencyManager _emergencyManager = EmergencyManager();
   final FirestoreService _firestoreService = FirestoreService();
   int _unreadAlertsCount = 0;
+  Map<String, dynamic>? _communityScreenArgs;
 
   @override
   void initState() {
@@ -76,16 +77,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
-  late final List<Widget> _pages = <Widget>[
-    HomeScreen(
-      onNavigateToTools: _goToToolsTab,
-      onNavigateToEmergency: _goToEmergencyTab,
-    ),
-    const EmergencyModeScreen(),
-    const CommunityScreen(),
-    SafetyToolsScreen(onCallEmergency: _goToEmergencyTab),
-    const SettingsScreen(),
-  ];
+  List<Widget> get _pages => <Widget>[
+        HomeScreen(
+          onNavigateToTools: _goToToolsTab,
+          onNavigateToEmergency: _goToEmergencyTab,
+        ),
+        const EmergencyModeScreen(),
+        CommunityScreen(arguments: _communityScreenArgs),
+        SafetyToolsScreen(onCallEmergency: _goToEmergencyTab),
+        const SettingsScreen(),
+      ];
 
   void _goToToolsTab() {
     setState(() {
@@ -121,7 +122,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         builder: (context) => const SafetyAlertsScreen(),
       ),
     );
-    if (result == 'sos') {
+
+    if (result is Map<String, dynamic>) {
+      _communityScreenArgs = result;
       setState(() {
         _selectedIndex = 2;
       });

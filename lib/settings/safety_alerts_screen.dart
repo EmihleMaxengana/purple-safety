@@ -183,23 +183,77 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
       });
     }
 
-    if (alert.type == 'sos' && alert.sosEventId != null) {
-      final isActive = await _isSOSActive(alert.sosEventId!);
-      if (!isActive) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('This SOS alert has already been resolved.'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-        Navigator.pop(context, 'sos');
-        return;
+    final currentUserId = _auth.getCurrentUser()?.uid;
+
+    // Handle deactivated SOS notifications - sos_deactivated and safe
+    if ((alert.type == 'sos_deactivated' || alert.type == 'safe') && alert.sosEventId != null) {
+      try {
+        final eventDoc = await FirebaseFirestore.instance
+            .collection('active_sos_events')
+            .doc(alert.sosEventId)
+            .get();
+        
+        if (eventDoc.exists) {
+          final data = eventDoc.data()!;
+          
+          // If current user is the trigger user, do absolutely nothing
+          if (currentUserId == data['userId']) {
+            return;
+          }
+          
+          Navigator.pop(context, {
+            'showDeactivationModal': true,
+            'sosEventId': alert.sosEventId,
+          });
+        } else {
+          // Event doesn't exist, just pop back
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint('Error fetching deactivated SOS data: $e');
+        Navigator.pop(context);
       }
-      Navigator.pop(context, 'sos');
       return;
     }
 
+    // Handle active SOS notifications
+    if (alert.type == 'sos' && alert.sosEventId != null) {
+      final isActive = await _isSOSActive(alert.sosEventId!);
+      
+      if (isActive) {
+        Navigator.pop(context, 'sos');
+        return;
+      }
+      
+      // If SOS is no longer active, treat it as deactivated
+      try {
+        final eventDoc = await FirebaseFirestore.instance
+            .collection('active_sos_events')
+            .doc(alert.sosEventId)
+            .get();
+        
+        if (eventDoc.exists) {
+          final data = eventDoc.data()!;
+          
+          if (currentUserId == data['userId']) {
+            return;
+          }
+          
+          Navigator.pop(context, {
+            'showDeactivationModal': true,
+            'sosEventId': alert.sosEventId,
+          });
+        } else {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        debugPrint('Error fetching deactivated SOS data: $e');
+        Navigator.pop(context);
+      }
+      return;
+    }
+
+    // Handle incident notifications
     if (alert.type == 'incident' && alert.incidentId != null) {
       final incident = await _incidentService.getIncident(alert.incidentId!);
       if (incident != null && mounted) {
@@ -213,6 +267,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
       return;
     }
 
+    // Handle invitation notifications
     if (alert.type == 'invitation' && alert.invitationId != null) {
       _tabController.animateTo(1);
     }
@@ -716,6 +771,9 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             } else if (alert.type == 'sos') {
               color = Colors.red;
               icon = Icons.sos;
+            } else if (alert.type == 'sos_deactivated') {
+              color = Colors.orange;
+              icon = Icons.check_circle;
             } else if (alert.type == 'safe') {
               color = Colors.green;
               icon = Icons.check_circle;
@@ -787,7 +845,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                           shape: BoxShape.circle,
                         ),
                       ),
-                    if (alert.type == 'incident' || alert.type == 'sos')
+                    if (alert.type == 'incident' || alert.type == 'sos' || alert.type == 'sos_deactivated' || alert.type == 'safe')
                       const Icon(
                         Icons.arrow_forward_ios,
                         color: Colors.white38,
@@ -833,7 +891,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: [
-            // notifications tab
             Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -863,7 +920,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                 ],
               ),
             ),
-            // invitations tab
             Tab(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -929,7 +985,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                 controller: _tabController,
                 children: [
                   _buildNotifications(),
-                  // invitations tab with sub-tabs
                   Column(
                     children: [
                       Container(
@@ -947,7 +1002,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                             }
                           },
                           tabs: [
-                            // sent sub-tab
                             Tab(
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -977,7 +1031,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                                 ],
                               ),
                             ),
-                            // received sub-tab
                             Tab(
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,

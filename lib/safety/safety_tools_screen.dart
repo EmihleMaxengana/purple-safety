@@ -152,7 +152,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // im safe
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -180,7 +179,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           .get();
 
       for (var doc in querySnapshot.docs) {
-        await SOSAlertService.deactivateSOSEvent(doc.id, userId: userId);
+        await SOSAlertService.deactivateSOSEvent(
+          doc.id,
+          userId: userId,
+          finalLat: _currentPosition?.latitude,
+          finalLng: _currentPosition?.longitude,
+        );
         debugPrint('Deactivated SOS event: ${doc.id}');
       }
     } catch (e) {
@@ -336,7 +340,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // record audio - no biometric check
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) return;
@@ -371,7 +374,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // record video - no biometric check
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) return;
@@ -391,7 +393,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  // upload file to firebase storage and share the url
   Future<void> _uploadAndShareFile(String filePath, String type) async {
     final file = File(filePath);
     if (!await file.exists()) {
@@ -467,7 +468,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // recording controls - removed live streaming button
   Widget _buildRecordingControls() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -547,7 +547,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // auto share toggle
   Widget _buildAutoShareToggle() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -590,7 +589,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // location map
   Widget _buildLocationMap() {
     if (!_locationEnabled || _currentPosition == null) {
       return Container(
@@ -649,7 +647,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // quick call buttons
   Widget _buildQuickCallButtons() {
     List<Widget> buttons = [];
     for (int i = 0; i < _contacts.length && i < 2; i++) {
@@ -710,7 +707,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // call emergency button
   Widget _buildCallEmergencyButton() {
     return ElevatedButton.icon(
       onPressed: widget.onCallEmergency,
@@ -732,7 +728,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  // im safe button
   Widget _buildImSafeButton() {
     return ElevatedButton.icon(
       onPressed: _imSafe,
