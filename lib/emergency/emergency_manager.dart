@@ -56,6 +56,13 @@ class EmergencyManager {
     }
   }
 
+  static bool canActivateSOS({
+    required bool isEmergencyActive,
+    required bool hasActiveSOS,
+  }) {
+    return !isEmergencyActive && !hasActiveSOS;
+  }
+
   static Future<bool> hasActiveSOSEventForUser(String userId) async {
     final snapshot = await FirebaseFirestore.instance
         .collection('active_sos_events')

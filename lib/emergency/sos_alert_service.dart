@@ -58,6 +58,12 @@ class SOSAlertService {
     }
 
     try {
+      final existingActiveEventId = await getActiveSOSEventIdForUser(userId);
+      if (existingActiveEventId != null) {
+        debugPrint('Active SOS already exists for $userId, skipping duplicate creation');
+        return existingActiveEventId;
+      }
+
       final docRef = _firestore.collection('active_sos_events').doc();
       final sosEventId = docRef.id;
 
@@ -201,6 +207,18 @@ class SOSAlertService {
     if (value is int) return value.toDouble();
     if (value is String) return double.tryParse(value);
     return null;
+  }
+
+  static Future<String?> getActiveSOSEventIdForUser(String userId) async {
+    final snapshot = await _firestore
+        .collection('active_sos_events')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'active')
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isEmpty) return null;
+    return snapshot.docs.first.id;
   }
 
   static Future<void> deactivateSOSEvent(String sosEventId, {String? userId, double? finalLat, double? finalLng}) async {

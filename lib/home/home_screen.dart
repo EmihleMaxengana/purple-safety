@@ -355,8 +355,26 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  void _startSOSCountdown() {
-    if (_isCountdownActive) return;
+  Future<void> _startSOSCountdown() async {
+    if (_isCountdownActive || _isEmergencyActive) return;
+
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
+
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
+    if (!EmergencyManager.canActivateSOS(
+      isEmergencyActive: _isEmergencyActive,
+      hasActiveSOS: hasActiveSOS,
+    )) {
+      if (mounted) {
+        setState(() {
+          _isEmergencyActive = true;
+        });
+      }
+      EmergencyManager().setEmergencyActive(true);
+      return;
+    }
+
     setState(() {
       _isCountdownActive = true;
       _sosCountdown = 3;
@@ -389,6 +407,17 @@ class _HomeScreenState extends State<HomeScreen>
       _isCountdownActive = false;
       _sosCountdown = 0;
     });
+
+    if (!EmergencyManager.canActivateSOS(
+      isEmergencyActive: _isEmergencyActive,
+      hasActiveSOS: false,
+    )) {
+      EmergencyManager().setEmergencyActive(true);
+      setState(() {
+        _isEmergencyActive = true;
+      });
+      return;
+    }
 
     // await _showSOSNotification();
 
@@ -489,6 +518,11 @@ class _HomeScreenState extends State<HomeScreen>
       }
     }
 
+    if (mounted) {
+      setState(() {
+        _isEmergencyActive = true;
+      });
+    }
     EmergencyManager().setEmergencyActive(true);
     widget.onNavigateToTools?.call();
   }
@@ -1083,7 +1117,10 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Column(
                       children: [
                         GestureDetector(
-                          onTap: _isCountdownActive ? null : _startSOSCountdown,
+                          onTap:
+                              (_isCountdownActive || _isEmergencyActive)
+                                  ? null
+                                  : () => _startSOSCountdown(),
                           child: Container(
                             width: 140,
                             height: 140,
@@ -1102,7 +1139,9 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                             child: Center(
                               child: Text(
-                                _isCountdownActive ? '$_sosCountdown' : 'SOS',
+                                _isCountdownActive
+                                    ? '$_sosCountdown'
+                                    : (_isEmergencyActive ? 'ACTIVE' : 'SOS'),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 28,
