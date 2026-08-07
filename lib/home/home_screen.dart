@@ -111,10 +111,27 @@ class _HomeScreenState extends State<HomeScreen>
     _syncEmergencyStateFromBackend();
     _listenToContacts();
     _listenToIncomingSOSAlerts();
+    _listenToEmergencyStatus(); //(ADDED: listen to EmergencyManager stream)
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
     _loadPrivacyToggles();
     _initializeLocalNotifications();
+  }
+
+  //(ADDED: listen to EmergencyManager stream for state changes)
+  void _listenToEmergencyStatus() {
+    EmergencyManager().emergencyStatusStream.listen((isEmergency) {
+      if (mounted) {
+        setState(() {
+          _isEmergencyActive = isEmergency;
+        });
+        //(if deactivated, reset SOS button state)
+        if (!isEmergency) {
+          _isSosActive = false;
+          _showSOSStatus = false;
+        }
+      }
+    });
   }
 
   Future<void> _syncEmergencyStateFromBackend() async {
@@ -129,6 +146,10 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) {
       setState(() {
         _isEmergencyActive = hasActiveSOS;
+        if (!hasActiveSOS) {
+          _isSosActive = false;
+          _showSOSStatus = false;
+        }
       });
     }
   }
@@ -149,8 +170,8 @@ class _HomeScreenState extends State<HomeScreen>
 
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+              AndroidFlutterLocalNotificationsPlugin
+            >();
 
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
@@ -521,6 +542,7 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) {
       setState(() {
         _isEmergencyActive = true;
+        _isSosActive = true;
       });
     }
     EmergencyManager().setEmergencyActive(true);
@@ -1094,6 +1116,25 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final isMaxContacts = _contacts.length >= 5;
 
+    //(determine button text and color based on state)
+    String buttonText;
+    Color buttonColor;
+    VoidCallback? onButtonTap;
+
+    if (_isCountdownActive) {
+      buttonText = '$_sosCountdown';
+      buttonColor = const Color(0xFFe060c0);
+      onButtonTap = null;
+    } else if (_isEmergencyActive) {
+      buttonText = 'ACTIVE';
+      buttonColor = Colors.red;
+      onButtonTap = null;
+    } else {
+      buttonText = 'SOS';
+      buttonColor = const Color(0xFFe060c0);
+      onButtonTap = _startSOSCountdown;
+    }
+
     return Stack(
       children: [
         Container(
@@ -1117,21 +1158,25 @@ class _HomeScreenState extends State<HomeScreen>
                     child: Column(
                       children: [
                         GestureDetector(
-                          onTap:
-                              (_isCountdownActive || _isEmergencyActive)
-                                  ? null
-                                  : () => _startSOSCountdown(),
+                          onTap: onButtonTap,
                           child: Container(
                             width: 140,
                             height: 140,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: const RadialGradient(
-                                colors: [Color(0xFFe060c0), Color(0xFF5c0070)],
+                              gradient: RadialGradient(
+                                colors: [
+                                  buttonColor,
+                                  _isEmergencyActive
+                                      ? Colors.red.shade900
+                                      : const Color(0xFF5c0070),
+                                ],
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.purple.withOpacity(0.3),
+                                  color: _isEmergencyActive
+                                      ? Colors.red.withOpacity(0.5)
+                                      : Colors.purple.withOpacity(0.3),
                                   blurRadius: 20,
                                   spreadRadius: 2,
                                 ),
@@ -1139,14 +1184,12 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                             child: Center(
                               child: Text(
-                                _isCountdownActive
-                                    ? '$_sosCountdown'
-                                    : (_isEmergencyActive ? 'ACTIVE' : 'SOS'),
-                                style: const TextStyle(
+                                buttonText,
+                                style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 28,
+                                  fontSize: _isEmergencyActive ? 20 : 28,
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: 4,
+                                  letterSpacing: _isEmergencyActive ? 2 : 4,
                                 ),
                               ),
                             ),

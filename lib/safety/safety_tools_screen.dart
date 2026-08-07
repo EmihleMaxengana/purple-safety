@@ -171,6 +171,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
+  //(I'm Safe - deactivate SOS)
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -191,12 +192,14 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     try {
+      //(get all active SOS events for this user)
       final querySnapshot = await FirebaseFirestore.instance
           .collection('active_sos_events')
           .where('userId', isEqualTo: userId)
           .where('status', isEqualTo: 'active')
           .get();
 
+      //(deactivate each active SOS event)
       for (var doc in querySnapshot.docs) {
         await SOSAlertService.deactivateSOSEvent(
           doc.id,
@@ -210,22 +213,28 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       debugPrint('Error deactivating SOS event: $e');
     }
 
+    //(stop location sharing if active)
     if (LocationSharingService.isSharing) {
       LocationSharingService.stopSharing();
     }
 
+    //(stop audio recording if active)
     if (_isRecordingAudio) {
       await _stopAudioRecording();
     }
 
+    //(send global safe alert)
     await _sendGlobalSafeAlert(userName, userId);
 
+    //(deactivate emergency mode in the manager)
     EmergencyManager().deactivateEmergencyMode();
 
+    //(update local state)
     setState(() {
       _isEmergencyActive = false;
     });
 
+    //(show confirmation popup)
     _showSafeConfirmationDialog();
   }
 
