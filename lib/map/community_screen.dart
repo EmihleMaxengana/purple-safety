@@ -14,6 +14,7 @@ import '../emergency/sos_alert_service.dart';
 import '../incidents/incident_detail_screen.dart';
 import '../settings/next_of_kin_modal.dart';
 import '../services/danger_zones_service.dart';
+import '../contacts/firestore_service.dart';
 
 class CommunityScreen extends StatefulWidget {
   final Map<String, dynamic>? arguments;
@@ -48,6 +49,8 @@ class _CommunityScreenState extends State<CommunityScreen>
   Set<Circle> _dangerZones = {};
 
   final User _user = FirebaseAuth.instance.currentUser!;
+
+  final FirestoreService _firestoreService = FirestoreService();
 
   void _getAllDangerZones() async {
     try {
@@ -252,122 +255,339 @@ class _CommunityScreenState extends State<CommunityScreen>
     }
   }
 
+  //(check if current user is a trusted contact of the SOS trigger user)
+  Future<bool> _isTrustedContact(String triggerUserId) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || triggerUserId == currentUser.uid) {
+        return false;
+      }
+
+      final contactCheck = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(triggerUserId)
+          .collection('contacts')
+          .where('userId', isEqualTo: currentUser.uid)
+          .limit(1)
+          .get();
+
+      return contactCheck.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking trusted contact: $e');
+      return false;
+    }
+  }
+
+  //(get next of kin data for a user)
+  Future<Map<String, dynamic>?> _getNextOfKinData(String userId) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      if (!userDoc.exists) return null;
+      final data = userDoc.data();
+      return {
+        'name': data?['nextOfKinName'] as String?,
+        'phone': data?['nextOfKinPhone'] as String?,
+        'relation': data?['nextOfKinRelation'] as String?,
+        'altPhone': data?['nextOfKinAltPhone'] as String?,
+      };
+    } catch (e) {
+      debugPrint('Error getting next of kin data: $e');
+      return null;
+    }
+  }
+
   void _showSOSResponderModal(Map<String, dynamic> sosEvent) {
+    final triggerUserId = sosEvent['userId'] as String?;
+    final triggerUserName = sosEvent['userName'] as String? ?? 'Someone';
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: true,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1a0f2e),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border.all(color: Colors.red.withOpacity(0.5)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: () => showNextOfKinModal(
-                context,
-                sosEvent['userId'],
-                sosEvent['userName'],
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(8),
+      isScrollControlled: true,
+      builder: (context) => FutureBuilder<bool>(
+        future: _isTrustedContact(triggerUserId ?? ''),
+        builder: (context, trustedSnapshot) {
+          final isTrusted = trustedSnapshot.data ?? false;
+
+          return FutureBuilder<Map<String, dynamic>?>(
+            future: isTrusted ? _getNextOfKinData(triggerUserId ?? '') : Future.value(null),
+            builder: (context, kinSnapshot) {
+              final nextOfKinData = kinSnapshot.data;
+
+              return Container(
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.red, width: 2),
+                  color: const Color(0xFF1a0f2e),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: Colors.red.withOpacity(0.5)),
                 ),
-                child: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: Colors.red.withOpacity(0.2),
-                  child: Text(
-                    (sosEvent['userName'] as String).isNotEmpty
-                        ? (sosEvent['userName'] as String)[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(color: Colors.red, fontSize: 20),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'ACTIVE SOS EMERGENCY',
-              style: TextStyle(
-                color: Colors.red,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (sosEvent['userId'] != _user.uid)
-              Text(
-                '${sosEvent['userName']} needs immediate help!',
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-              ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.people, color: Colors.orange, size: 16),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${sosEvent['responderCount']} people are on their way to help',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              children: [
-                if (sosEvent['userId'] != _user.uid)
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        await _respondToSOS(sosEvent);
-                        _openNavigationToSOS(sosEvent);
-                      },
-                      icon: const Icon(Icons.directions_run),
-                      label: const Text('I Can Help!'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      //(header with user avatar)
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => showNextOfKinModal(
+                              context,
+                              sosEvent['userId'],
+                              sosEvent['userName'],
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.red, width: 2),
+                              ),
+                              child: CircleAvatar(
+                                radius: 24,
+                                backgroundColor: Colors.red.withOpacity(0.2),
+                                child: Text(
+                                  (sosEvent['userName'] as String).isNotEmpty
+                                      ? (sosEvent['userName'] as String)[0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(color: Colors.red, fontSize: 20),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'ACTIVE SOS EMERGENCY',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  sosEvent['userName'],
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      const Divider(color: Colors.white24),
+
+                      //(show next of kin details only for trusted contacts)
+                      if (isTrusted && nextOfKinData != null) ...[
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Next of Kin Information',
+                          style: TextStyle(
+                            color: Color(0xFFa078c0),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (nextOfKinData['name'] != null && nextOfKinData['name']!.isNotEmpty) ...[
+                          _buildInfoRow(
+                            icon: Icons.person,
+                            label: 'Name',
+                            value: nextOfKinData['name']!,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (nextOfKinData['relation'] != null && nextOfKinData['relation']!.isNotEmpty) ...[
+                          _buildInfoRow(
+                            icon: Icons.people,
+                            label: 'Relationship',
+                            value: nextOfKinData['relation']!,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (nextOfKinData['phone'] != null && nextOfKinData['phone']!.isNotEmpty) ...[
+                          _buildClickablePhoneRow(
+                            label: 'Phone',
+                            value: nextOfKinData['phone']!,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        if (nextOfKinData['altPhone'] != null && nextOfKinData['altPhone']!.isNotEmpty) ...[
+                          _buildClickablePhoneRow(
+                            label: 'Alternative',
+                            value: nextOfKinData['altPhone']!,
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                        const Divider(color: Colors.white24),
+                      ],
+
+                      //(responder count)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.people, color: Colors.orange, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${sosEvent['responderCount']} people are on their way to help',
+                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                if (sosEvent['userId'] != _user.uid) const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                    label: const Text('Close'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 16),
+
+                      //(action buttons)
+                      Row(
+                        children: [
+                          if (sosEvent['userId'] != _user.uid)
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  Navigator.pop(context);
+                                  await _respondToSOS(sosEvent);
+                                  _openNavigationToSOS(sosEvent);
+                                },
+                                icon: const Icon(Icons.directions_run),
+                                label: const Text('I Can Help!'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (sosEvent['userId'] != _user.uid) const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close),
+                              label: const Text('Close'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.white70,
+                                side: const BorderSide(color: Colors.white24),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ],
-        ),
+              );
+            },
+          );
+        },
       ),
     );
+  }
+
+  Widget _buildInfoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFFBF7DCB), size: 16),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildClickablePhoneRow({
+    required String label,
+    required String value,
+  }) {
+    final cleanedNumber = value.replaceAll(RegExp(r'\D'), '');
+    final displayNumber = _formatPhoneForDisplay(value);
+
+    return Row(
+      children: [
+        const Icon(Icons.phone, color: Colors.green, size: 16),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 13,
+            ),
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () async {
+              final Uri url = Uri(scheme: 'tel', path: cleanedNumber);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url);
+              }
+            },
+            child: Text(
+              displayNumber,
+              style: const TextStyle(
+                color: Colors.green,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _formatPhoneForDisplay(String phone) {
+    if (phone.isEmpty) return 'Not set';
+    String cleaned = phone.replaceAll(RegExp(r'\D'), '');
+    if (cleaned.startsWith('27') && cleaned.length == 11) {
+      cleaned = cleaned.substring(2);
+    }
+    if (cleaned.length == 9) {
+      return '+27 ${cleaned.substring(0, 2)} ${cleaned.substring(2, 5)} ${cleaned.substring(5)}';
+    }
+    return phone;
   }
 
   Future<void> _respondToSOS(Map<String, dynamic> sosEvent) async {
