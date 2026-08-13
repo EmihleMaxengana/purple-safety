@@ -22,39 +22,17 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
   final AuthService _auth = AuthService();
   final IncidentService _incidentService = IncidentService();
 
-  late TabController _tabController;
-  late TabController _invitationTabController;
-
   int _unreadNotificationsCount = 0;
   int _unreadInvitationsCount = 0;
-  int _unreadSentInvitationsCount = 0;
-  int _unreadReceivedInvitationsCount = 0;
-
-  bool _notificationsViewed = false;
-  bool _sentInvitationsViewed = false;
-  bool _receivedInvitationsViewed = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _invitationTabController = TabController(length: 2, vsync: this);
-    
-    _tabController.addListener(() {
-      setState(() {});
-    });
-
-    _invitationTabController.addListener(() {
-      setState(() {});
-    });
-
     _loadUnreadCounts();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _invitationTabController.dispose();
     super.dispose();
   }
 
@@ -75,99 +53,6 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
         _unreadInvitationsCount = unreadInvitations;
       });
     });
-
-    FirebaseFirestore.instance
-        .collection('invitations')
-        .where('inviterId', isEqualTo: user.uid)
-        .where('status', whereIn: ['accepted', 'declined'])
-        .snapshots()
-        .listen((snapshot) {
-          final unreadSent = snapshot.docs.where((doc) {
-            final data = doc.data();
-            final viewed = data['viewedBySender'] ?? false;
-            return viewed == false;
-          }).length;
-
-          setState(() {
-            _unreadSentInvitationsCount = unreadSent;
-          });
-        });
-
-    FirebaseFirestore.instance
-        .collection('invitations')
-        .where('inviteeId', isEqualTo: user.uid)
-        .where('status', isEqualTo: 'pending')
-        .snapshots()
-        .listen((snapshot) {
-          final unreadReceived = snapshot.docs.where((doc) {
-            final data = doc.data();
-            final viewed = data['viewedByReceiver'] ?? false;
-            return viewed == false;
-          }).length;
-
-          setState(() {
-            _unreadReceivedInvitationsCount = unreadReceived;
-          });
-        });
-  }
-
-  void _markNotificationsViewed() {
-    if (_notificationsViewed) return;
-    _notificationsViewed = true;
-  }
-
-  Future<void> _markSentInvitationsViewed() async {
-    if (_sentInvitationsViewed) return;
-    _sentInvitationsViewed = true;
-
-    final user = _auth.getCurrentUser();
-    if (user == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('invitations')
-        .where('inviterId', isEqualTo: user.uid)
-        .where('status', whereIn: ['accepted', 'declined'])
-        .get();
-
-    final batch = FirebaseFirestore.instance.batch();
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      if (data['viewedBySender'] == false) {
-        batch.update(doc.reference, {'viewedBySender': true});
-      }
-    }
-    await batch.commit();
-
-    setState(() {
-      _unreadSentInvitationsCount = 0;
-    });
-  }
-
-  Future<void> _markReceivedInvitationsViewed() async {
-    if (_receivedInvitationsViewed) return;
-    _receivedInvitationsViewed = true;
-
-    final user = _auth.getCurrentUser();
-    if (user == null) return;
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('invitations')
-        .where('inviteeId', isEqualTo: user.uid)
-        .where('status', isEqualTo: 'pending')
-        .get();
-
-    final batch = FirebaseFirestore.instance.batch();
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      if (data['viewedByReceiver'] == false) {
-        batch.update(doc.reference, {'viewedByReceiver': true});
-      }
-    }
-    await batch.commit();
-
-    setState(() {
-      _unreadReceivedInvitationsCount = 0;
-    });
   }
 
   Future<void> _onAlertTap(Alert alert) async {
@@ -185,7 +70,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
 
     final currentUserId = _auth.getCurrentUser()?.uid;
 
-    // Handle deactivated SOS notifications - sos_deactivated and safe
+    //(handle deactivated SOS notifications - sos_deactivated and safe)
     if ((alert.type == 'sos_deactivated' || alert.type == 'safe') && alert.sosEventId != null) {
       try {
         final eventDoc = await FirebaseFirestore.instance
@@ -196,7 +81,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
         if (eventDoc.exists) {
           final data = eventDoc.data()!;
           
-          // If current user is the trigger user, do absolutely nothing
+          //(if current user is the trigger user, do absolutely nothing)
           if (currentUserId == data['userId']) {
             return;
           }
@@ -206,7 +91,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
             'sosEventId': alert.sosEventId,
           });
         } else {
-          // Event doesn't exist, just pop back
+          //(event doesn't exist, just pop back)
           Navigator.pop(context);
         }
       } catch (e) {
@@ -216,7 +101,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
       return;
     }
 
-    // Handle active SOS notifications
+    //(handle active SOS notifications)
     if (alert.type == 'sos' && alert.sosEventId != null) {
       final isActive = await _isSOSActive(alert.sosEventId!);
       
@@ -225,7 +110,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
         return;
       }
       
-      // If SOS is no longer active, treat it as deactivated
+      //(if SOS is no longer active, treat it as deactivated)
       try {
         final eventDoc = await FirebaseFirestore.instance
             .collection('active_sos_events')
@@ -253,7 +138,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
       return;
     }
 
-    // Handle incident notifications
+    //(handle incident notifications)
     if (alert.type == 'incident' && alert.incidentId != null) {
       final incident = await _incidentService.getIncident(alert.incidentId!);
       if (incident != null && mounted) {
@@ -267,9 +152,10 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
       return;
     }
 
-    // Handle invitation notifications
+    //(handle invitation notifications - mark invitation as read when tapped)
     if (alert.type == 'invitation' && alert.invitationId != null) {
-      _tabController.animateTo(1);
+      //(invitation is already marked read above, just refresh)
+      setState(() {});
     }
   }
 
@@ -298,46 +184,17 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SizedBox();
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading invitations: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
+          return const SizedBox();
         }
 
         final docs = snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.inbox, size: 64, color: Colors.white38),
-                SizedBox(height: 16),
-                Text(
-                  'No invitations received',
-                  style: TextStyle(color: Colors.white70),
-                ),
-                Text(
-                  'When someone invites you, it will appear here',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
-                ),
-              ],
-            ),
-          );
+          return const SizedBox();
         }
 
         final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
@@ -352,11 +209,8 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           return bTime.toDate().compareTo(aTime.toDate());
         });
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: sortedDocs.length,
-          itemBuilder: (context, index) {
-            final doc = sortedDocs[index];
+        return Column(
+          children: sortedDocs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final invitationId = doc.id;
             final inviterName = data['inviterName'] ?? 'Someone';
@@ -387,135 +241,137 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
 
             final isPending = status == 'pending';
 
-            return Card(
-              color: const Color(0xFF1a0f2e),
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: status == 'pending'
+                    ? Colors.orange.withOpacity(0.1)
+                    : Colors.white.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: statusColor.withOpacity(0.3)),
+                border: Border.all(
+                  color: status == 'pending'
+                      ? Colors.orange.withOpacity(0.3)
+                      : statusColor.withOpacity(0.2),
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: statusColor.withOpacity(0.2),
+                        radius: 16,
+                        child: Text(
+                          inviterName[0].toUpperCase(),
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Invitation from $inviterName',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              inviterEmail,
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: statusColor.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(statusIcon, color: statusColor, size: 12),
+                            const SizedBox(width: 4),
+                            Text(
+                              statusText,
+                              style: TextStyle(
+                                color: statusColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (createdAt != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, left: 44),
+                      child: Text(
+                        'Received ${_formatTime(createdAt.toDate())}',
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  if (isPending) ...[
+                    const SizedBox(height: 12),
                     Row(
                       children: [
-                        CircleAvatar(
-                          backgroundColor: statusColor.withOpacity(0.2),
-                          child: Text(
-                            inviterName[0].toUpperCase(),
-                            style: const TextStyle(color: Colors.white),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final success = await InvitationService.declineInvitation(invitationId);
+                              if (success && mounted) {
+                                _showPopup(context, 'Invitation declined');
+                              }
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: const BorderSide(color: Colors.red),
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            child: const Text('Decline'),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                inviterName,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                inviterEmail,
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      statusText,
-                                      style: TextStyle(
-                                        color: statusColor,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  if (createdAt != null) ...[
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Received ${_formatTime(createdAt.toDate())}',
-                                      style: const TextStyle(
-                                        color: Colors.white38,
-                                        fontSize: 10,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              final success = await InvitationService.acceptInvitation(invitationId);
+                              if (success && mounted) {
+                                _showPopup(context, 'You are now $inviterName\'s trusted contact!');
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                            ),
+                            child: const Text('Accept'),
                           ),
                         ),
                       ],
                     ),
-                    if (isPending) ...[
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: () async {
-                                final success = await InvitationService.declineInvitation(invitationId);
-                                if (success && mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Invitation declined'),
-                                      backgroundColor: Colors.orange,
-                                    ),
-                                  );
-                                }
-                              },
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                side: const BorderSide(color: Colors.red),
-                              ),
-                              child: const Text('Decline'),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                final success = await InvitationService.acceptInvitation(invitationId);
-                                if (success && mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('You are now $inviterName\'s trusted contact!'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green,
-                              ),
-                              child: const Text('Accept'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
             );
-          },
+          }).toList(),
         );
       },
     );
@@ -532,46 +388,17 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const SizedBox();
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(
-                  'Error loading invitations: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.white70),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          );
+          return const SizedBox();
         }
 
         final docs = snapshot.data?.docs ?? [];
 
         if (docs.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.send, size: 64, color: Colors.white38),
-                SizedBox(height: 16),
-                Text(
-                  'No invitations sent',
-                  style: TextStyle(color: Colors.white70),
-                ),
-                Text(
-                  'Invitations you send will appear here',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
-                ),
-              ],
-            ),
-          );
+          return const SizedBox();
         }
 
         final sortedDocs = List<QueryDocumentSnapshot>.from(docs);
@@ -586,11 +413,8 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           return bTime.toDate().compareTo(aTime.toDate());
         });
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: sortedDocs.length,
-          itemBuilder: (context, index) {
-            final doc = sortedDocs[index];
+        return Column(
+          children: sortedDocs.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
             final status = data['status'] ?? 'pending';
             final inviteeEmail = data['inviteeEmail'] ?? 'Unknown';
@@ -617,86 +441,107 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                 statusIcon = Icons.hourglass_empty;
             }
 
-            return Card(
-              color: const Color(0xFF1a0f2e),
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(
+            return Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: status == 'pending'
+                    ? Colors.orange.withOpacity(0.05)
+                    : Colors.white.withOpacity(0.03),
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: statusColor.withOpacity(0.3)),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: statusColor.withOpacity(0.2),
-                      child: Icon(
-                        statusIcon,
-                        color: statusColor,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            inviteeEmail,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  statusText,
-                                  style: TextStyle(
-                                    color: statusColor,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                              if (createdAt != null) ...[
-                                const SizedBox(width: 8),
-                                Text(
-                                  _formatTime(createdAt.toDate()),
-                                  style: const TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (status == 'pending')
-                      Icon(
-                        Icons.hourglass_top,
-                        color: Colors.orange,
-                        size: 20,
-                      ),
-                  ],
+                border: Border.all(
+                  color: status == 'pending'
+                      ? Colors.orange.withOpacity(0.2)
+                      : statusColor.withOpacity(0.15),
                 ),
               ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: statusColor.withOpacity(0.2),
+                    radius: 16,
+                    child: Icon(
+                      statusIcon,
+                      color: statusColor,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Invitation sent to $inviteeEmail',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (createdAt != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatTime(createdAt.toDate()),
+                                style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (status == 'pending')
+                    Icon(
+                      Icons.hourglass_top,
+                      color: Colors.orange,
+                      size: 18,
+                    ),
+                ],
+              ),
             );
-          },
+          }).toList(),
         );
       },
+    );
+  }
+
+  void _showPopup(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -722,7 +567,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                   style: TextStyle(color: Colors.white70),
                 ),
                 Text(
-                  'Alerts from the community will appear here',
+                  'Alerts and invitations will appear here',
                   style: TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],
@@ -730,11 +575,34 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
           );
         }
 
-        final alerts = snapshot.data!
-            .where((alert) => alert.type != 'invitation')
-            .toList();
+        final allAlerts = snapshot.data!;
+        final notifications = allAlerts.where((a) => a.type != 'invitation').toList();
+        final invitationAlerts = allAlerts.where((a) => a.type == 'invitation').toList();
 
-        if (alerts.isEmpty) {
+        //(sort all items by timestamp descending)
+        final allItems = <Map<String, dynamic>>[];
+        
+        for (var alert in notifications) {
+          allItems.add({
+            'type': 'alert',
+            'data': alert,
+            'timestamp': alert.timestamp,
+          });
+        }
+
+        for (var alert in invitationAlerts) {
+          allItems.add({
+            'type': 'invitation_alert',
+            'data': alert,
+            'timestamp': alert.timestamp,
+          });
+        }
+
+        allItems.sort((a, b) {
+          return b['timestamp'].compareTo(a['timestamp']);
+        });
+
+        if (allItems.isEmpty) {
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -746,7 +614,7 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
                   style: TextStyle(color: Colors.white70),
                 ),
                 Text(
-                  'Alerts from the community will appear here',
+                  'Alerts and invitations will appear here',
                   style: TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],
@@ -756,108 +624,298 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
 
         return ListView.builder(
           padding: const EdgeInsets.all(16),
-          itemCount: alerts.length,
+          itemCount: allItems.length,
           itemBuilder: (context, index) {
-            final alert = alerts[index];
-            Color color;
-            IconData icon;
-
-            if (alert.type == 'warning') {
-              color = Colors.red;
-              icon = Icons.warning;
-            } else if (alert.type == 'incident') {
-              color = Colors.orange;
-              icon = Icons.report;
-            } else if (alert.type == 'sos') {
-              color = Colors.red;
-              icon = Icons.sos;
-            } else if (alert.type == 'sos_deactivated') {
-              color = Colors.orange;
-              icon = Icons.check_circle;
-            } else if (alert.type == 'safe') {
-              color = Colors.green;
-              icon = Icons.check_circle;
-            } else if (alert.type == 'location_share') {
-              color = Colors.blue;
-              icon = Icons.location_on;
+            final item = allItems[index];
+            
+            if (item['type'] == 'invitation_alert') {
+              final alert = item['data'] as Alert;
+              return _buildInvitationAlert(alert);
             } else {
-              color = Colors.blue;
-              icon = Icons.info;
+              final alert = item['data'] as Alert;
+              return _buildNotificationAlert(alert);
             }
-
-            return GestureDetector(
-              onTap: () => _onAlertTap(alert),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: alert.read
-                      ? Colors.white.withOpacity(0.05)
-                      : color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: alert.read
-                        ? Colors.white.withOpacity(0.1)
-                        : color.withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(icon, color: color, size: 16),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            alert.message,
-                            style: TextStyle(
-                              color: alert.read ? Colors.white70 : Colors.white,
-                              fontSize: 14,
-                              fontWeight: alert.read ? FontWeight.normal : FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _formatTime(alert.timestamp),
-                            style: const TextStyle(
-                              color: Colors.white38,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!alert.read)
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    if (alert.type == 'incident' || alert.type == 'sos' || alert.type == 'sos_deactivated' || alert.type == 'safe')
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        color: Colors.white38,
-                        size: 14,
-                      ),
-                  ],
-                ),
-              ),
-            );
           },
         );
       },
+    );
+  }
+
+  Widget _buildInvitationAlert(Alert alert) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('invitations')
+          .doc(alert.invitationId)
+          .get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return const SizedBox();
+        }
+
+        final data = snapshot.data!.data() as Map<String, dynamic>;
+        final inviterName = data['inviterName'] ?? 'Someone';
+        final inviterEmail = data['inviterEmail'] ?? '';
+        final status = data['status'] ?? 'pending';
+        final createdAt = data['createdAt'] as Timestamp?;
+
+        String statusText = 'Pending';
+        Color statusColor = Colors.orange;
+        IconData statusIcon = Icons.hourglass_empty;
+
+        switch (status) {
+          case 'accepted':
+            statusText = 'Accepted';
+            statusColor = Colors.green;
+            statusIcon = Icons.check_circle;
+            break;
+          case 'declined':
+            statusText = 'Declined';
+            statusColor = Colors.red;
+            statusIcon = Icons.cancel;
+            break;
+          default:
+            statusText = 'Pending';
+            statusColor = Colors.orange;
+            statusIcon = Icons.hourglass_empty;
+        }
+
+        final isPending = status == 'pending';
+        final isReceived = data['inviteeId'] == _auth.getCurrentUser()?.uid;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: alert.read
+                ? Colors.white.withOpacity(0.05)
+                : statusColor.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: alert.read
+                  ? Colors.white.withOpacity(0.1)
+                  : statusColor.withOpacity(0.3),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(statusIcon, color: statusColor, size: 16),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isReceived
+                              ? 'Invitation from $inviterName'
+                              : 'Invitation to $inviterEmail',
+                          style: TextStyle(
+                            color: alert.read ? Colors.white70 : Colors.white,
+                            fontSize: 14,
+                            fontWeight: alert.read ? FontWeight.normal : FontWeight.w500,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                statusText,
+                                style: TextStyle(
+                                  color: statusColor,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            if (createdAt != null) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                _formatTime(createdAt.toDate()),
+                                style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!alert.read)
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                ],
+              ),
+              if (isPending && isReceived) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () async {
+                          final success = await InvitationService.declineInvitation(alert.invitationId!);
+                          if (success && mounted) {
+                            _showPopup(context, 'Invitation declined');
+                          }
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        child: const Text('Decline'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final success = await InvitationService.acceptInvitation(alert.invitationId!);
+                          if (success && mounted) {
+                            _showPopup(context, 'You are now $inviterName\'s trusted contact!');
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        ),
+                        child: const Text('Accept'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationAlert(Alert alert) {
+    Color color;
+    IconData icon;
+
+    if (alert.type == 'warning') {
+      color = Colors.red;
+      icon = Icons.warning;
+    } else if (alert.type == 'incident') {
+      color = Colors.orange;
+      icon = Icons.report;
+    } else if (alert.type == 'sos') {
+      color = Colors.red;
+      icon = Icons.sos;
+    } else if (alert.type == 'sos_deactivated') {
+      color = Colors.orange;
+      icon = Icons.check_circle;
+    } else if (alert.type == 'safe') {
+      color = Colors.green;
+      icon = Icons.check_circle;
+    } else if (alert.type == 'location_share') {
+      color = Colors.blue;
+      icon = Icons.location_on;
+    } else if (alert.type == 'found') {
+      color = Colors.green;
+      icon = Icons.check_circle;
+    } else {
+      color = Colors.blue;
+      icon = Icons.info;
+    }
+
+    return GestureDetector(
+      onTap: () => _onAlertTap(alert),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: alert.read
+              ? Colors.white.withOpacity(0.05)
+              : color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: alert.read
+                ? Colors.white.withOpacity(0.1)
+                : color.withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 16),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    alert.message,
+                    style: TextStyle(
+                      color: alert.read ? Colors.white70 : Colors.white,
+                      fontSize: 14,
+                      fontWeight: alert.read ? FontWeight.normal : FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatTime(alert.timestamp),
+                    style: const TextStyle(
+                      color: Colors.white38,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!alert.read)
+              Container(
+                width: 8,
+                height: 8,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            if (alert.type == 'incident' || alert.type == 'sos' || alert.type == 'sos_deactivated' || alert.type == 'safe')
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white38,
+                size: 14,
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -880,94 +938,28 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     final user = _auth.getCurrentUser();
     if (user == null) return const SizedBox();
 
+    final totalUnread = _unreadNotificationsCount + _unreadInvitationsCount;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Safety Alerts'),
         backgroundColor: const Color(0xFF6A1B9A),
         foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: [
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.notifications, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('Notifications'),
-                  if (_unreadNotificationsCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.rectangle,
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
-                      ),
-                      child: Text(
-                        _unreadNotificationsCount > 9 ? '9+' : '$_unreadNotificationsCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.mail, size: 20),
-                  const SizedBox(width: 8),
-                  const Text('Invitations'),
-                  if (_unreadInvitationsCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.rectangle,
-                        borderRadius: BorderRadius.all(Radius.circular(10)),
-                      ),
-                      child: Text(
-                        _unreadInvitationsCount > 9 ? '9+' : '$_unreadInvitationsCount',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
         actions: [
-          if (_tabController.index == 0)
-            TextButton(
-              onPressed: () async {
-                await _firestoreService.markAllAlertsAsRead(user.uid);
-                setState(() {
-                  _unreadNotificationsCount = 0;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All notifications marked as read')),
-                );
-              },
-              child: const Text(
-                'Read all',
-                style: TextStyle(color: Colors.white),
-              ),
+          TextButton(
+            onPressed: () async {
+              await _firestoreService.markAllAlertsAsRead(user.uid);
+              setState(() {
+                _unreadNotificationsCount = 0;
+                _unreadInvitationsCount = 0;
+              });
+              _showPopup(context, 'All notifications marked as read');
+            },
+            child: const Text(
+              'Read all',
+              style: TextStyle(color: Colors.white),
             ),
+          ),
         ],
       ),
       body: Container(
@@ -980,102 +972,35 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
         ),
         child: Column(
           children: [
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildNotifications(),
-                  Column(
-                    children: [
-                      Container(
-                        color: const Color(0xFF1a0f2e),
-                        child: TabBar(
-                          controller: _invitationTabController,
-                          indicatorColor: Colors.white,
-                          labelColor: Colors.white,
-                          unselectedLabelColor: Colors.white70,
-                          onTap: (index) {
-                            if (index == 0) {
-                              _markSentInvitationsViewed();
-                            } else if (index == 1) {
-                              _markReceivedInvitationsViewed();
-                            }
-                          },
-                          tabs: [
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.send, size: 18),
-                                  const SizedBox(width: 6),
-                                  const Text('Sent'),
-                                  if (_unreadSentInvitationsCount > 0) ...[
-                                    const SizedBox(width: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.rectangle,
-                                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                                      ),
-                                      child: Text(
-                                        _unreadSentInvitationsCount > 9 ? '9+' : '$_unreadSentInvitationsCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            Tab(
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.inbox, size: 18),
-                                  const SizedBox(width: 6),
-                                  const Text('Received'),
-                                  if (_unreadReceivedInvitationsCount > 0) ...[
-                                    const SizedBox(width: 4),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.rectangle,
-                                        borderRadius: BorderRadius.all(Radius.circular(8)),
-                                      ),
-                                      child: Text(
-                                        _unreadReceivedInvitationsCount > 9 ? '9+' : '$_unreadReceivedInvitationsCount',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
+            if (totalUnread > 0)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                color: Colors.red.withOpacity(0.15),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
                       ),
-                      Expanded(
-                        child: TabBarView(
-                          controller: _invitationTabController,
-                          children: [
-                            _buildSentInvitations(),
-                            _buildReceivedInvitations(),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$totalUnread unread item${totalUnread > 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
+            Expanded(
+              child: _buildNotifications(),
             ),
           ],
         ),
