@@ -46,6 +46,289 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  //(show popup dialog)
+  void _showPopup(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  //(show edit dialog)
+  void _showEditDialog(String messageId, String currentMessage) {
+    final TextEditingController editController = TextEditingController(text: currentMessage);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Message'),
+        content: TextField(
+          controller: editController,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Edit your message...',
+            hintStyle: TextStyle(color: Colors.white54),
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newText = editController.text.trim();
+              if (newText.isEmpty) {
+                _showPopup(context, 'Message cannot be empty');
+                return;
+              }
+              if (newText == currentMessage) {
+                Navigator.pop(context);
+                return;
+              }
+              Navigator.pop(context);
+              await _editMessage(messageId, newText);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6A1B9A),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+        backgroundColor: const Color(0xFF1a0f2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+        ),
+      ),
+    );
+  }
+
+  //(edit message)
+  Future<void> _editMessage(String messageId, String newText) async {
+    try {
+      final chatId = DmService.getChatId(_currentUserId, widget.recipientId);
+      final now = DateTime.now();
+
+      //(get the current edit history)
+      final docSnapshot = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .get();
+
+      final existingData = docSnapshot.data() as Map<String, dynamic>?;
+      List<dynamic> existingHistory = existingData?['editHistory'] ?? [];
+
+      //(create new history entry with plain timestamp string)
+      final newHistoryEntry = {
+        'message': newText,
+        'timestamp': now.toIso8601String(),
+      };
+
+      //(update the message in the chat collection)
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .update({
+            'message': newText,
+            'edited': true,
+            'editedAt': now.toIso8601String(),
+            'editHistory': [...existingHistory, newHistoryEntry],
+          });
+
+      //(update the message in both users' DM collections)
+      final senderDmQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('dms')
+          .where(FieldPath.documentId, isEqualTo: messageId)
+          .get();
+
+      if (senderDmQuery.docs.isNotEmpty) {
+        await senderDmQuery.docs.first.reference.update({
+          'message': newText,
+          'edited': true,
+          'editedAt': now.toIso8601String(),
+        });
+      }
+
+      final recipientDmQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.recipientId)
+          .collection('dms')
+          .where(FieldPath.documentId, isEqualTo: messageId)
+          .get();
+
+      if (recipientDmQuery.docs.isNotEmpty) {
+        await recipientDmQuery.docs.first.reference.update({
+          'message': newText,
+          'edited': true,
+          'editedAt': now.toIso8601String(),
+        });
+      }
+    } catch (e) {
+      _showPopup(context, 'Failed to edit message: $e');
+    }
+  }
+
+  //(delete message - replaces with "Message deleted")
+  Future<void> _deleteMessage(String messageId) async {
+    try {
+      final chatId = DmService.getChatId(_currentUserId, widget.recipientId);
+      final now = DateTime.now();
+
+      //(update the message in the chat collection)
+      await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(messageId)
+          .update({
+            'message': 'Message deleted',
+            'deleted': true,
+            'deletedAt': now.toIso8601String(),
+          });
+
+      //(update the message in both users' DM collections)
+      final senderDmQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_currentUserId)
+          .collection('dms')
+          .where(FieldPath.documentId, isEqualTo: messageId)
+          .get();
+
+      if (senderDmQuery.docs.isNotEmpty) {
+        await senderDmQuery.docs.first.reference.update({
+          'message': 'Message deleted',
+          'deleted': true,
+          'deletedAt': now.toIso8601String(),
+        });
+      }
+
+      final recipientDmQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.recipientId)
+          .collection('dms')
+          .where(FieldPath.documentId, isEqualTo: messageId)
+          .get();
+
+      if (recipientDmQuery.docs.isNotEmpty) {
+        await recipientDmQuery.docs.first.reference.update({
+          'message': 'Message deleted',
+          'deleted': true,
+          'deletedAt': now.toIso8601String(),
+        });
+      }
+    } catch (e) {
+      _showPopup(context, 'Failed to delete message: $e');
+    }
+  }
+
+  //(show long-press menu for sent messages)
+  void _showMessageOptions(String messageId, String currentMessage) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a0f2e),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Message Options',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white24),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Colors.blue),
+              title: const Text(
+                'Edit Message',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                _showEditDialog(messageId, currentMessage);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text(
+                'Delete Message',
+                style: TextStyle(color: Colors.red),
+              ),
+              onTap: () async {
+                //(close the bottom sheet immediately)
+                Navigator.pop(context);
+
+                //(show confirmation dialog)
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete Message'),
+                    content: const Text('Are you sure you want to delete this message?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        child: const Text('Delete'),
+                      ),
+                    ],
+                    backgroundColor: const Color(0xFF1a0f2e),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+                    ),
+                  ),
+                );
+
+                if (confirm == true) {
+                  await _deleteMessage(messageId);
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // -------------------------------
   // SEND TEXT
   // -------------------------------
@@ -95,14 +378,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // -------------------------------
-  // SEND AUDIO (pick from gallery - for demo, or you can integrate recorder)
+  // SEND AUDIO
   // -------------------------------
   Future<void> _sendAudio() async {
-    // We'll use a simple file picker; actually there's no audio picker, so we'll use a workaround:
-    // You could use a recording button. For simplicity, we'll show a snackbar.
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Audio recording not implemented here. Use Safety Tools.')),
-    );
+    _showPopup(context, 'Audio recording not implemented here. Use Safety Tools.');
   }
 
   void _scrollToBottom() {
@@ -189,20 +468,57 @@ class _ChatScreenState extends State<ChatScreen> {
                   padding: const EdgeInsets.all(12),
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final data = messages[index].data() as Map<String, dynamic>;
+                    final doc = messages[index];
+                    final data = doc.data() as Map<String, dynamic>;
                     final isMe = data['senderId'] == _currentUserId;
                     final type = data['type'] ?? 'text';
-                    return Align(
-                      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isMe ? const Color(0xFF6A1B9A) : const Color(0xFF2a1f3e),
-                          borderRadius: BorderRadius.circular(16),
+                    final isDeleted = data['deleted'] == true;
+                    final isEdited = data['edited'] == true;
+
+                    //(only allow long-press on messages sent by current user, not deleted)
+                    final canLongPress = isMe && !isDeleted;
+
+                    return GestureDetector(
+                      onLongPress: canLongPress
+                          ? () {
+                              //(long press 3 seconds)
+                              Future.delayed(const Duration(seconds: 3), () {
+                                if (mounted && isMe && !isDeleted) {
+                                  final currentMessage = data['message'] ?? '';
+                                  _showMessageOptions(doc.id, currentMessage);
+                                }
+                              });
+                            }
+                          : null,
+                      child: Align(
+                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isMe ? const Color(0xFF6A1B9A) : const Color(0xFF2a1f3e),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isEdited && !isDeleted)
+                                const Padding(
+                                  padding: EdgeInsets.only(bottom: 4),
+                                  child: Text(
+                                    'edited',
+                                    style: TextStyle(
+                                      color: Colors.white54,
+                                      fontSize: 10,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              _buildMessageContent(type, data),
+                            ],
+                          ),
                         ),
-                        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                        child: _buildMessageContent(type, data),
                       ),
                     );
                   },
@@ -210,7 +526,7 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          // Input row with attachment buttons
+          //(input row with attachment buttons)
           Container(
             padding: const EdgeInsets.all(8),
             color: const Color(0xFF1a0f2e),
@@ -257,6 +573,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildMessageContent(String type, Map<String, dynamic> data) {
+    final isDeleted = data['deleted'] == true;
+
+    if (isDeleted) {
+      return const Text(
+        'Message deleted',
+        style: TextStyle(
+          color: Colors.white54,
+          fontStyle: FontStyle.italic,
+        ),
+      );
+    }
+
     switch (type) {
       case 'image':
         final imageUrl = data['imageUrl'] as String?;
@@ -312,10 +640,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (videoUrl == null) return const Text('Video unavailable');
         return GestureDetector(
           onTap: () {
-            // In production, you'd use a video player.
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Video player coming soon.')),
-            );
+            _showPopup(context, 'Video player coming soon.');
           },
           child: Stack(
             alignment: Alignment.center,
@@ -381,7 +706,7 @@ class _ChatScreenState extends State<ChatScreen> {
         );
 
       default:
-        // text
+        //(text)
         return Text(
           data['message'] ?? '',
           style: const TextStyle(color: Colors.white),
