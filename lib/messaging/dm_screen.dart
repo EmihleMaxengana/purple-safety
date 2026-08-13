@@ -35,7 +35,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   StreamSubscription? _contactsSubscription;
   
   int _unreadCount = 0;
-  StreamSubscription<int>? _unreadCountSubscription;
+  StreamSubscription? _unreadCountSubscription;
 
   @override
   void initState() {
@@ -59,9 +59,19 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    //(listen to DMs and count only unread messages received from others)
     _unreadCountSubscription = DmService
-        .getUnreadCountStream(user.uid)
-        .listen((count) {
+        .getMessagesStream(user.uid)
+        .listen((messages) {
+          int count = 0;
+          for (var msg in messages) {
+            final senderId = msg['senderId'] as String?;
+            final isRead = msg['read'] as bool? ?? true;
+            //(only count unread messages sent by others)
+            if (senderId != null && senderId != user.uid && !isRead) {
+              count++;
+            }
+          }
           if (mounted) {
             setState(() {
               _unreadCount = count;
@@ -155,9 +165,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
   Future<void> _shareTripId() async {
     if (widget.shareTripId == null) return;
     if (_selectedRecipients.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Select at least one contact to share')),
-      );
+      _showPopup(context, 'Select at least one contact to share');
       return;
     }
 
@@ -177,16 +185,28 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
       );
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Trip ID sent to ${_selectedRecipients.length} contact(s)')),
-    );
+    _showPopup(context, 'Trip ID sent to ${_selectedRecipients.length} contact(s)');
     Navigator.pop(context);
   }
 
   Future<void> _saveSelection() async {
     await DmService.saveSelectedRecipients(_selectedRecipients);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Auto-share recipients saved')),
+    _showPopup(context, 'Auto-share recipients saved');
+  }
+
+  void _showPopup(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -201,9 +221,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
 
   void _copyTripId(String tripId) {
     Clipboard.setData(ClipboardData(text: tripId));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Trip ID copied'), duration: Duration(seconds: 1)),
-    );
+    _showPopup(context, 'Trip ID copied');
   }
 
   void _showUserProfile(Map<String, dynamic> user) {
@@ -211,9 +229,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     if (currentUser == null) return;
     
     if (user['id'] == currentUser.uid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot view your own profile here')),
-      );
+      _showPopup(context, 'You cannot view your own profile here');
       return;
     }
 
@@ -323,9 +339,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
     if (user == null) return;
     
     if (recipientId == user.uid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot send a message to yourself')),
-      );
+      _showPopup(context, 'You cannot send a message to yourself');
       return;
     }
 
@@ -397,7 +411,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
       body: TabBarView(
         controller: _tabController,
         children: [
-          // auto-share tab
+          //(auto-share tab)
           _isLoading
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -503,7 +517,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   ),
                 ),
 
-          // community tab
+          //(community tab)
           _isLoadingCommunity
               ? const Center(child: CircularProgressIndicator(color: Colors.purple))
               : Container(
@@ -582,7 +596,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   ),
                 ),
 
-          // inbox tab
+          //(inbox tab)
           Container(
             color: const Color(0xFF0e0718),
             child: StreamBuilder<List<Map<String, dynamic>>>(
@@ -602,10 +616,10 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   );
                 }
 
-                // group by the other person
+                //(group by the other person)
                 final Map<String, Map<String, dynamic>> groupedMessages = {};
                 final Map<String, String> conversationNames = {};
-                final Map<String, bool> conversationReadStatus = {};
+                final Map<String, bool> conversationHasUnreadReceived = {};
                 
                 for (var msg in messages) {
                   final senderId = msg['senderId'] as String;
@@ -629,7 +643,10 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                   if (!groupedMessages.containsKey(otherPersonId)) {
                     groupedMessages[otherPersonId] = msg;
                     conversationNames[otherPersonId] = otherPersonName;
-                    conversationReadStatus[otherPersonId] = msg['read'] ?? false;
+                    //(only mark as unread if the message was sent TO the current user and is unread)
+                    final isReceived = senderId != currentUserId;
+                    final isUnread = msg['read'] == false;
+                    conversationHasUnreadReceived[otherPersonId] = isReceived && isUnread;
                   } else {
                     final existingTimestamp = groupedMessages[otherPersonId]?['timestamp'] as Timestamp?;
                     final newTimestamp = msg['timestamp'] as Timestamp?;
@@ -638,7 +655,10 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                       if (newTimestamp.toDate().isAfter(existingTimestamp.toDate())) {
                         groupedMessages[otherPersonId] = msg;
                         conversationNames[otherPersonId] = otherPersonName;
-                        conversationReadStatus[otherPersonId] = msg['read'] ?? false;
+                        //(update unread status for the latest message)
+                        final isReceived = senderId != currentUserId;
+                        final isUnread = msg['read'] == false;
+                        conversationHasUnreadReceived[otherPersonId] = isReceived && isUnread;
                       }
                     }
                   }
@@ -671,7 +691,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     final otherPersonId = entry.key;
                     final msg = entry.value;
                     final displayName = conversationNames[otherPersonId] ?? 'Unknown';
-                    final isConversationRead = conversationReadStatus[otherPersonId] ?? false;
+                    final hasUnreadReceived = conversationHasUnreadReceived[otherPersonId] ?? false;
                     
                     final isTripShare = msg['type'] == 'trip_share';
                     final isSentByMe = msg['senderId'] == user.uid;
@@ -696,14 +716,14 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                     return Container(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isConversationRead 
-                            ? const Color(0xFF1a0f2e)
-                            : const Color(0xFF2a1f3e),
+                        color: hasUnreadReceived 
+                            ? const Color(0xFF2a1f3e)
+                            : const Color(0xFF1a0f2e),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isConversationRead 
-                              ? Colors.purple.withOpacity(0.1) 
-                              : Colors.purple.withOpacity(0.3),
+                          color: hasUnreadReceived 
+                              ? Colors.purple.withOpacity(0.3) 
+                              : Colors.purple.withOpacity(0.1),
                         ),
                       ),
                       child: ListTile(
@@ -716,7 +736,8 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                                 style: const TextStyle(color: Colors.white),
                               ),
                             ),
-                            if (!isConversationRead && !isSentByMe)
+                            //(red dot only shows if there are unread messages received from this person)
+                            if (hasUnreadReceived)
                               Positioned(
                                 bottom: 0,
                                 right: 0,
@@ -735,14 +756,14 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                           displayName,
                           style: TextStyle(
                             color: Colors.white,
-                            fontWeight: isConversationRead ? FontWeight.w500 : FontWeight.bold,
+                            fontWeight: hasUnreadReceived ? FontWeight.bold : FontWeight.w500,
                           ),
                         ),
                         subtitle: Text(
                           previewText,
                           style: TextStyle(
-                            color: isConversationRead ? Colors.white70 : Colors.white,
-                            fontWeight: isConversationRead ? FontWeight.normal : FontWeight.w500,
+                            color: hasUnreadReceived ? Colors.white : Colors.white70,
+                            fontWeight: hasUnreadReceived ? FontWeight.w500 : FontWeight.normal,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -771,9 +792,7 @@ class _DMScreenState extends State<DMScreen> with SingleTickerProviderStateMixin
                             : null,
                         onTap: () {
                           if (otherPersonId == user.uid) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('You cannot chat with yourself')),
-                            );
+                            _showPopup(context, 'You cannot chat with yourself');
                             return;
                           }
                           _openChat(otherPersonId, displayName);
