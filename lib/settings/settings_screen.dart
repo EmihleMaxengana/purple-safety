@@ -20,8 +20,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final AuthService _auth = AuthService();
-  final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
 
   String _nextOfKinName = '';
   String _nextOfKinPhone = '';
@@ -46,8 +44,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _phoneController.dispose();
     super.dispose();
   }
 
@@ -57,8 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (user != null) {
       final data = await _auth.getUserData(user.uid);
       if (data != null) {
-        _emailController.text = data['email'] ?? '';
-        _phoneController.text = data['phone'] ?? '';
         _nextOfKinName = data['nextOfKinName'] ?? '';
         _nextOfKinPhone = data['nextOfKinPhone'] ?? '';
         _nextOfKinRelation = data['nextOfKinRelation'] ?? '';
@@ -90,40 +84,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _saveUserData() async {
-    final authenticated = await BiometricService.authenticateWithUserPreference(
-      context: context,
-      reason: 'Authenticate to update your profile',
-    );
-    if (!authenticated) return;
-
-    setState(() => _isLoading = true);
-    final user = _auth.getCurrentUser();
-    if (user == null) return;
-
-    try {
-      await _auth.updateUserData(user.uid, {
-        'email': _emailController.text,
-        'phone': _phoneController.text,
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profile updated successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update profile: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
   Future<void> _loadIsBiometricEnabled() async {
     final available = await BiometricService.isFingerprintAvailable();
     final enabled = await BiometricService.isBiometricsEnabled();
@@ -137,7 +97,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await BiometricService.setBiometricsEnabled(value);
   }
 
-  // toggle with fingerprint - only for turning OFF
+  //(toggle with fingerprint - only for turning OFF)
   Future<void> _toggleWithFingerprintForOff(
     String settingName,
     bool currentValue,
@@ -150,13 +110,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (authenticated) {
       onToggle(!currentValue);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Authentication failed. $settingName not changed.'),
-          backgroundColor: Colors.red,
-        ),
+      _showPopup(
+        context,
+        'Authentication failed. $settingName not changed.',
+        isError: true,
       );
     }
+  }
+
+  void _showPopup(BuildContext context, String message, {bool isError = false}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(isError ? 'Error' : 'Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _changeNextOfKin() async {
@@ -268,19 +243,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _nextOfKinRelation = relationController.text.trim();
           _nextOfKinAltPhone = altPhoneController.text.trim();
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Next of kin updated successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        _showPopup(context, 'Next of kin updated successfully');
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update next of kin: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showPopup(context, 'Failed to update next of kin: $e', isError: true);
       }
     }
     setState(() => _isLoading = false);
@@ -348,21 +313,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ElevatedButton(
             onPressed: () async {
               if (newPasswordController.text != confirmController.text) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Passwords do not match'), backgroundColor: Colors.red),
-                );
+                _showPopup(context, 'Passwords do not match', isError: true);
                 return;
               }
               if (newPasswordController.text.length < 6) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password must be at least 6 characters'), backgroundColor: Colors.red),
-                );
+                _showPopup(context, 'Password must be at least 6 characters', isError: true);
                 return;
               }
               if (currentPasswordController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter current password'), backgroundColor: Colors.red),
-                );
+                _showPopup(context, 'Please enter current password', isError: true);
                 return;
               }
 
@@ -372,9 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               );
 
               if (!authenticated) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Authentication failed'), backgroundColor: Colors.red),
-                );
+                _showPopup(context, 'Authentication failed', isError: true);
                 return;
               }
 
@@ -397,15 +354,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   await user.updatePassword(newPasswordController.text);
                   Navigator.pop(context);
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password changed successfully!'), backgroundColor: Colors.green),
-                  );
+                  _showPopup(context, 'Password changed successfully!');
                 }
               } catch (e) {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                );
+                _showPopup(context, 'Error: $e', isError: true);
               }
             },
             style: ElevatedButton.styleFrom(
@@ -459,12 +412,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   });
                   sheetSetState(() {});
                   await _saveIsBiometricEnabled(value);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(value ? 'Biometrics enabled' : 'Biometrics disabled'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
+                  _showPopup(context, value ? 'Biometrics enabled' : 'Biometrics disabled');
                 },
                 activeThumbColor: const Color(0xFF6A1B9A),
               ),
@@ -539,15 +487,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               SizedBox(height: 12),
               Text(
-                '• Location data (only during active SOS or with your consent)',
+                'Location data (only during active SOS or with your consent)',
                 style: TextStyle(color: Colors.white70),
               ),
               Text(
-                '• Contacts (only the ones you manually add as trusted contacts)',
+                'Contacts (only the ones you manually add as trusted contacts)',
                 style: TextStyle(color: Colors.white70),
               ),
               Text(
-                '• Incident reports (anonymously or with your name)',
+                'Incident reports (anonymously or with your name)',
                 style: TextStyle(color: Colors.white70),
               ),
               SizedBox(height: 12),
@@ -574,9 +522,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               SizedBox(height: 8),
               Text(
-                '• Incident posts are automatically deleted after 24 hours\n'
-                '• Account deletion removes all your data permanently\n'
-                '• You can request data export at any time',
+                'Incident posts are automatically deleted after 24 hours\n'
+                'Account deletion removes all your data permanently\n'
+                'You can request data export at any time',
                 style: TextStyle(color: Colors.white70),
               ),
               SizedBox(height: 12),
@@ -642,10 +590,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SizedBox(height: 12),
             Text(
               'All your data will be deleted:\n'
-              '• Your profile information\n'
-              '• Your trusted contacts\n'
-              '• Your safety alerts\n'
-              '• Your account credentials\n\n'
+              'Your profile information\n'
+              'Your trusted contacts\n'
+              'Your safety alerts\n'
+              'Your account credentials\n\n'
               'You will need to create a new account to use the app again.\n\n'
               'Are you absolutely sure?',
               style: TextStyle(color: Colors.white70),
@@ -754,12 +702,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error deleting account: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showPopup(context, 'Error deleting account: $e', isError: true);
     }
   }
 
@@ -831,30 +774,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         fontSize: 18,
         fontWeight: FontWeight.bold,
         letterSpacing: 1,
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-  }) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white),
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Color(0xFFBF7DCB)),
-        prefixIcon: Icon(icon, color: const Color(0xFFBF7DCB)),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
       ),
     );
   }
@@ -1061,38 +980,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                _buildSectionTitle('Profile Information'),
-                const SizedBox(height: 8),
-                _buildTextField(
-                  controller: _emailController,
-                  label: 'Email',
-                  icon: Icons.email,
-                ),
-                const SizedBox(height: 12),
-                _buildTextField(
-                  controller: _phoneController,
-                  label: 'Phone Number',
-                  icon: Icons.phone,
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _saveUserData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6A1B9A),
-                    minimumSize: const Size(double.infinity, 48),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Save Changes'),
-                ),
-
-                const SizedBox(height: 32),
-
                 _buildSectionTitle('Privacy & Security'),
                 const SizedBox(height: 8),
 
-                // share location with trusted contacts
+                //(share location with trusted contacts)
                 SwitchListTile(
                   title: const Text(
                     'Share location with trusted contacts',
@@ -1105,37 +996,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _shareLocationWithContacts,
                   onChanged: (value) {
                     if (value == false) {
-                      // turning off - require authentication
+                      //(turning off - require authentication)
                       _toggleWithFingerprintForOff(
                         'Location Sharing with Contacts',
                         _shareLocationWithContacts,
                         (newVal) async {
                           setState(() => _shareLocationWithContacts = newVal);
                           await _saveLocationSharingPreferences();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Location sharing with contacts disabled'),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
+                          _showPopup(context, 'Location sharing with contacts disabled');
                         },
                       );
                     } else {
-                      // turning on - no authentication needed
+                      //(turning on - no authentication needed)
                       setState(() => _shareLocationWithContacts = true);
                       _saveLocationSharingPreferences();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Location sharing with contacts enabled'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
+                      _showPopup(context, 'Location sharing with contacts enabled');
                     }
                   },
                   activeColor: Colors.purple,
                 ),
 
-                // share location with community
+                //(share location with community)
                 SwitchListTile(
                   title: const Text(
                     'Share location with community',
@@ -1148,31 +1029,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _shareLocationWithCommunity,
                   onChanged: (value) {
                     if (value == false) {
-                      // turning off - require authentication
+                      //(turning off - require authentication)
                       _toggleWithFingerprintForOff(
                         'Location Sharing with Community',
                         _shareLocationWithCommunity,
                         (newVal) async {
                           setState(() => _shareLocationWithCommunity = newVal);
                           await _saveLocationSharingPreferences();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Location sharing with community disabled'),
-                              backgroundColor: Colors.orange,
-                            ),
-                          );
+                          _showPopup(context, 'Location sharing with community disabled');
                         },
                       );
                     } else {
-                      // turning on - no authentication needed
+                      //(turning on - no authentication needed)
                       setState(() => _shareLocationWithCommunity = true);
                       _saveLocationSharingPreferences();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Location sharing with community enabled'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
+                      _showPopup(context, 'Location sharing with community enabled');
                     }
                   },
                   activeColor: Colors.purple,
