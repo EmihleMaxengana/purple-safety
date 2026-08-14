@@ -10,6 +10,8 @@ import 'package:record/record.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/safety/biometric_services.dart';
 import 'package:purple_safety/services/location_sharing_service.dart';
@@ -49,6 +51,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   String _securityNumber = '10111';
 
   final FirestoreService _firestoreService = FirestoreService();
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -192,14 +195,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     try {
-      //(get all active SOS events for this user)
       final querySnapshot = await FirebaseFirestore.instance
           .collection('active_sos_events')
           .where('userId', isEqualTo: userId)
           .where('status', isEqualTo: 'active')
           .get();
 
-      //(deactivate each active SOS event)
       for (var doc in querySnapshot.docs) {
         await SOSAlertService.deactivateSOSEvent(
           doc.id,
@@ -213,28 +214,22 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       debugPrint('Error deactivating SOS event: $e');
     }
 
-    //(stop location sharing if active)
     if (LocationSharingService.isSharing) {
       LocationSharingService.stopSharing();
     }
 
-    //(stop audio recording if active)
     if (_isRecordingAudio) {
       await _stopAudioRecording();
     }
 
-    //(send global safe alert)
     await _sendGlobalSafeAlert(userName, userId);
 
-    //(deactivate emergency mode in the manager)
     EmergencyManager().deactivateEmergencyMode();
 
-    //(update local state)
     setState(() {
       _isEmergencyActive = false;
     });
 
-    //(show confirmation popup)
     _showSafeConfirmationDialog();
   }
 
@@ -368,14 +363,197 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  //(show popup dialog)
+  void _showPopup(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  //(TAKE PHOTO)
+  Future<void> _takePhoto() async {
+    final cameraStatus = await Permission.camera.request();
+    if (!cameraStatus.isGranted) {
+      _showPopup(context, 'Camera permission is required to take photos');
+      return;
+    }
+
+    final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+    if (photo == null) return;
+
+    final file = File(photo.path);
+    final user = AuthService().getCurrentUser();
+
+    if (user == null) {
+      _showPopup(context, 'You must be logged in');
+      return;
+    }
+
+    //(get user name)
+    final userData = await AuthService().getUserData(user.uid);
+    final userName = userData?['name'] ?? 'User';
+
+    //(save locally)
+    final String localPath = await _saveToLocalStorage(file, 'photo');
+
+    //(upload to Firebase Storage)
+    String? storageUrl;
+    try {
+      storageUrl = await StorageService.uploadRecording(
+        file: file,
+        userId: user.uid,
+        subFolder: _isEmergencyActive ? 'sos' : 'recordings',
+      );
+    } catch (e) {
+      debugPrint('Failed to upload photo to storage: $e');
+    }
+
+    //(save to Firestore)
+    await _saveToFirestore(
+      type: 'photo',
+      localPath: localPath,
+      storageUrl: storageUrl,
+      userName: userName,
+      userId: user.uid,
+    );
+
+    //(share with trusted contacts if auto-share is enabled)
+    if (_autoShareRecordings) {
+      await _shareMediaWithContacts(
+        type: 'photo',
+        localPath: localPath,
+        storageUrl: storageUrl,
+        userName: userName,
+      );
+    }
+
+    _showPopup(context, 'Photo captured and saved');
+  }
+
+  //(save to local storage)
+  Future<String> _saveToLocalStorage(File file, String type) async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = '${type}_$timestamp.${file.path.split('.').last}';
+      final localPath = '${directory.path}/$fileName';
+      await file.copy(localPath);
+      debugPrint('Saved locally: $localPath');
+      return localPath;
+    } catch (e) {
+      debugPrint('Error saving locally: $e');
+      return file.path;
+    }
+  }
+
+  //(save to Firestore)
+  Future<void> _saveToFirestore({
+    required String type,
+    required String localPath,
+    String? storageUrl,
+    required String userName,
+    required String userId,
+  }) async {
+    try {
+      final Map<String, dynamic> data = {
+        'type': type,
+        'localPath': localPath,
+        'storageUrl': storageUrl ?? '',
+        'userId': userId,
+        'userName': userName,
+        'timestamp': FieldValue.serverTimestamp(),
+        'latitude': _currentPosition?.latitude,
+        'longitude': _currentPosition?.longitude,
+        'locationLink': _currentPosition != null
+            ? 'https://www.google.com/maps?q=${_currentPosition!.latitude},${_currentPosition!.longitude}'
+            : null,
+        'sharedWithContacts': _autoShareRecordings,
+        'isSOS': _isEmergencyActive,
+      };
+
+      await FirebaseFirestore.instance
+          .collection('user_media')
+          .add(data);
+
+      debugPrint('Saved to Firestore: $type');
+    } catch (e) {
+      debugPrint('Error saving to Firestore: $e');
+    }
+  }
+
+  //(share media with trusted contacts)
+  Future<void> _shareMediaWithContacts({
+    required String type,
+    required String localPath,
+    String? storageUrl,
+    required String userName,
+  }) async {
+    if (_contacts.isEmpty) {
+      debugPrint('No trusted contacts to share with');
+      return;
+    }
+
+    final message = 'Media shared from $userName';
+
+    //(share via system share)
+    await Share.shareXFiles(
+      [XFile(localPath)],
+      text: message,
+      subject: 'Purple Safety - $type',
+    );
+
+    //(send notification to trusted contacts)
+    final currentUser = AuthService().getCurrentUser();
+    if (currentUser == null) return;
+
+    for (var contact in _contacts) {
+      if (contact.id == currentUser.uid) continue;
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(contact.id)
+            .collection('alerts')
+            .add({
+              'message': '$userName shared a $type with you. Tap to view.',
+              'type': 'media_share',
+              'timestamp': FieldValue.serverTimestamp(),
+              'read': false,
+              'mediaType': type,
+              'mediaUrl': storageUrl ?? localPath,
+              'userName': userName,
+              'userId': currentUser.uid,
+            });
+      } catch (e) {
+        debugPrint('Error sending alert to ${contact.name}: $e');
+      }
+    }
+
+    debugPrint('Shared $type with ${_contacts.length} contacts');
+  }
+
+  //(RECORD AUDIO)
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) return;
+    if (!micStatus.isGranted) {
+      _showPopup(context, 'Microphone permission is required');
+      return;
+    }
 
     if (await _audioRecorder.hasPermission()) {
-      final dir = Directory.systemTemp;
+      final dir = await getApplicationDocumentsDirectory();
       final path =
-          '${dir.path}/safety_recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
       await _audioRecorder.start(
         RecordConfig(encoder: AudioEncoder.aacLc),
         path: path,
@@ -394,66 +572,106 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       setState(() => _isRecordingAudio = false);
 
       if (path != null) {
-        debugPrint('Audio recording saved at: $path');
-        if (_autoShareRecordings) {
-          await _uploadAndShareFile(path, 'audio');
+        final file = File(path);
+        final user = AuthService().getCurrentUser();
+
+        if (user != null) {
+          final userData = await AuthService().getUserData(user.uid);
+          final userName = userData?['name'] ?? 'User';
+
+          //(save locally - already saved by recorder)
+          final localPath = path;
+
+          //(upload to Firebase Storage)
+          String? storageUrl;
+          try {
+            storageUrl = await StorageService.uploadRecording(
+              file: file,
+              userId: user.uid,
+              subFolder: _isEmergencyActive ? 'sos' : 'recordings',
+            );
+          } catch (e) {
+            debugPrint('Failed to upload audio to storage: $e');
+          }
+
+          //(save to Firestore)
+          await _saveToFirestore(
+            type: 'audio',
+            localPath: localPath,
+            storageUrl: storageUrl,
+            userName: userName,
+            userId: user.uid,
+          );
+
+          //(share with trusted contacts if auto-share is enabled)
+          if (_autoShareRecordings) {
+            await _shareMediaWithContacts(
+              type: 'audio',
+              localPath: localPath,
+              storageUrl: storageUrl,
+              userName: userName,
+            );
+          }
+
+          _showPopup(context, 'Audio recording saved');
         }
       }
     }
   }
 
+  //(RECORD VIDEO)
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
-    if (!cameraStatus.isGranted) return;
-
-    final picker = ImagePicker();
-    final XFile? video = await picker.pickVideo(source: ImageSource.camera);
-    if (video != null) {
-      setState(() {
-        _isRecordingVideo = true;
-      });
-      debugPrint('Video recorded: ${video.path}');
-
-      if (_autoShareRecordings) {
-        await _uploadAndShareFile(video.path, 'video');
-      }
-      setState(() => _isRecordingVideo = false);
-    }
-  }
-
-  Future<void> _uploadAndShareFile(String filePath, String type) async {
-    final file = File(filePath);
-    if (!await file.exists()) {
-      debugPrint('File does not exist: $filePath');
+    if (!cameraStatus.isGranted) {
+      _showPopup(context, 'Camera permission is required');
       return;
     }
 
-    try {
-      final user = AuthService().getCurrentUser();
-      if (user == null) {
-        throw Exception('User not logged in');
+    final XFile? video = await _picker.pickVideo(source: ImageSource.camera);
+    if (video == null) return;
+
+    final file = File(video.path);
+    final user = AuthService().getCurrentUser();
+
+    if (user != null) {
+      final userData = await AuthService().getUserData(user.uid);
+      final userName = userData?['name'] ?? 'User';
+
+      //(save locally)
+      final String localPath = await _saveToLocalStorage(file, 'video');
+
+      //(upload to Firebase Storage)
+      String? storageUrl;
+      try {
+        storageUrl = await StorageService.uploadRecording(
+          file: file,
+          userId: user.uid,
+          subFolder: _isEmergencyActive ? 'sos' : 'recordings',
+        );
+      } catch (e) {
+        debugPrint('Failed to upload video to storage: $e');
       }
 
-      final url = await StorageService.uploadRecording(
-        file: file,
+      //(save to Firestore)
+      await _saveToFirestore(
+        type: 'video',
+        localPath: localPath,
+        storageUrl: storageUrl,
+        userName: userName,
         userId: user.uid,
-        subFolder: _isEmergencyActive ? 'sos' : 'recordings',
       );
 
-      final time = DateTime.now().toLocal().toString();
-      final message =
-          'Safety recording: $type recording from $time\n\n'
-          'Location: ${_currentPosition != null ? '${_currentPosition!.latitude},${_currentPosition!.longitude}' : 'unknown'}\n'
-          'Download: $url';
+      //(share with trusted contacts if auto-share is enabled)
+      if (_autoShareRecordings) {
+        await _shareMediaWithContacts(
+          type: 'video',
+          localPath: localPath,
+          storageUrl: storageUrl,
+          userName: userName,
+        );
+      }
 
-      await Share.share(message);
-    } catch (e) {
-      debugPrint('Failed to upload recording: $e');
-      await Share.shareXFiles(
-        [XFile(filePath)],
-        text: 'Safety recording',
-        subject: 'Purple Safety - Recording',
-      );
+      _showPopup(context, 'Video recording saved');
     }
   }
 
@@ -518,6 +736,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           const SizedBox(height: 12),
           Column(
             children: [
+              _buildMediaButton(
+                icon: Icons.camera_alt,
+                label: 'Take Photo',
+                onTap: _takePhoto,
+                color: Colors.purple,
+              ),
+              const SizedBox(height: 12),
               _buildMediaButton(
                 icon: Icons.videocam,
                 label: 'Record Video',
