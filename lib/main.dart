@@ -17,7 +17,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   final incidentService = IncidentService();
   incidentService.deleteExpiredIncidents();
@@ -133,13 +134,16 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
       }
 
       final currentLocation = await locationPlugin.getLocation();
-      if (currentLocation.latitude == null || currentLocation.longitude == null) {
+      if (currentLocation.latitude == null ||
+          currentLocation.longitude == null) {
         print('❌ Failed to get current location');
         _isSendingPending = false;
         return;
       }
 
-      print('📍 Current location: ${currentLocation.latitude}, ${currentLocation.longitude}');
+      print(
+        '📍 Current location: ${currentLocation.latitude}, ${currentLocation.longitude}',
+      );
 
       int sentCount = 0;
       for (var sosData in pendingList) {
@@ -165,7 +169,6 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
         await SOSAlertService.clearPendingSOS();
         print('🧹 Pending SOS cleared from storage');
       }
-
     } catch (e) {
       print('❌ Error in _sendPendingSOS: $e');
     } finally {
