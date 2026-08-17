@@ -1,16 +1,13 @@
 import 'dart:async';
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/models/danger_zone_model.dart';
+import 'package:purple_safety/services/cloud_functions_service.dart';
+import 'package:purple_safety/services/local_notifications_service.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/manage_contacts_modal.dart';
@@ -84,9 +81,8 @@ class _HomeScreenState extends State<HomeScreen>
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
-  bool _notificationsInitialized = false;
+  final LocalNotificationsService _localNotificationsService =
+      LocalNotificationsService.instance();
 
   void _getAllDangerZones() async {
     try {
@@ -115,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen>
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
     _loadPrivacyToggles();
-    _initializeLocalNotifications();
   }
 
   //(ADDED: listen to EmergencyManager stream for state changes)
@@ -151,52 +146,6 @@ class _HomeScreenState extends State<HomeScreen>
           _showSOSStatus = false;
         }
       });
-    }
-  }
-
-  Future<void> _initializeLocalNotifications() async {
-    const initializationSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-
-    try {
-      final initialized = await _localNotifications.initialize(
-        settings: initializationSettings,
-      );
-      if (initialized != true) {
-        debugPrint('Local notifications failed to initialize');
-        return;
-      }
-
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
-
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'sos_alerts',
-          'SOS alerts',
-          description: 'Notifications shown when an SOS is activated',
-          importance: Importance.max,
-          playSound: true,
-        ),
-      );
-
-      // Older Android versions do not return a runtime notification permission
-      // result because notifications are enabled through app settings.
-      final permissionGranted =
-          await androidPlugin?.requestNotificationsPermission() ?? true;
-      final notificationsEnabled =
-          await androidPlugin?.areNotificationsEnabled() ?? true;
-      _notificationsInitialized = permissionGranted && notificationsEnabled;
-
-      debugPrint(
-        'Local notifications initialized; permission granted: '
-        '$permissionGranted, enabled: $notificationsEnabled',
-      );
-    } catch (e) {
-      debugPrint('Unable to initialize local notifications: $e');
     }
   }
 
@@ -261,6 +210,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // TODO: compare and test functionality with 'FirebaseMessaging.onMessage.listen(_onForegroundMessage)'
   void _listenToIncomingSOSAlerts() {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -281,12 +231,19 @@ class _HomeScreenState extends State<HomeScreen>
 
             final data = change.doc.data();
             if (data?['type'] != 'sos') continue;
+          }
 
-            _showSOSNotification(
-              message:
-                  data?['message'] as String? ??
-                  'Someone has triggered an SOS alert.',
-            );
+          for (final item in snapshot.docs) {
+            final data = item.data();
+            if (data['type'] == 'sos') {
+              if (user.displayName != data['userName']) {
+                _localNotificationsService.showNotification(
+                  "SOS Alert",
+                  data['message'],
+                  null,
+                );
+              }
+            }
           }
         });
   }
@@ -382,7 +339,9 @@ class _HomeScreenState extends State<HomeScreen>
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(
+      user.uid,
+    );
     if (!EmergencyManager.canActivateSOS(
       isEmergencyActive: _isEmergencyActive,
       hasActiveSOS: hasActiveSOS,
@@ -440,8 +399,6 @@ class _HomeScreenState extends State<HomeScreen>
       return;
     }
 
-    // await _showSOSNotification();
-
     final user = AuthService().getCurrentUser();
     String userName = 'Someone';
     String userId = 'anonymous';
@@ -497,6 +454,7 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
+
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           setState(() {
@@ -504,7 +462,25 @@ class _HomeScreenState extends State<HomeScreen>
           });
         }
       });
+
+      final users = await FirebaseFirestore.instance.collection('users').get();
+      for (final user in users.docs) {
+        final List<dynamic>? devices = user.data()['devices'];
+        if (devices != null) {
+          for (final device in devices) {
+            debugPrint("device token - ${device['token']}");
+
+            CloudFunctionsService().sendSOSAlert(
+              token: device['token'],
+              title: "SOS Alert Testing",
+              body:
+                  "Tumelo Testing SOS Alert. An SOS alert - by $userName - has been activated.",
+            );
+          }
+        }
+      }
     } catch (e) {
+      debugPrint("[Home Screen] Error - $e");
       // store pending SOS with or without location
       if (lat != null && lng != null) {
         await SOSAlertService.storeSOSLocally(
@@ -547,56 +523,6 @@ class _HomeScreenState extends State<HomeScreen>
     }
     EmergencyManager().setEmergencyActive(true);
     widget.onNavigateToTools?.call();
-  }
-
-  Future<void> _showSOSNotification({required String message}) async {
-    try {
-      if (!_notificationsInitialized) {
-        await _initializeLocalNotifications();
-      }
-      if (!_notificationsInitialized) {
-        debugPrint(
-          'SOS notification skipped: notification permission is not granted',
-        );
-        return;
-      }
-
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          'sos_alerts',
-          'SOS alerts',
-          channelDescription: 'Notifications shown when an SOS is activated',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-          autoCancel: false,
-          color: Colors.purple,
-          actions: [
-            AndroidNotificationAction(
-              'open_app',
-              'Open App',
-              showsUserInterface: true,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              'call_emergency',
-              'Call Emergency',
-              showsUserInterface: true,
-              cancelNotification: true,
-            ),
-          ],
-        ),
-      );
-
-      await _localNotifications.show(
-        id: 1001,
-        title: 'SOS alert received',
-        body: message,
-        notificationDetails: details,
-      );
-    } catch (e) {
-      debugPrint('Unable to show SOS notification: $e');
-    }
   }
 
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
@@ -662,10 +588,6 @@ class _HomeScreenState extends State<HomeScreen>
       barrierDismissible: true,
       builder: (context) => const PostChoiceModal(),
     );
-  }
-
-  (double?, double?) _getCoordinates() {
-    return (_currentPosition?.latitude, _currentPosition?.longitude);
   }
 
   void _handleTripSharing() async {
