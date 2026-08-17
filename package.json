@@ -1,0 +1,26 @@
+{
+  "name": "purple-safety",
+  "version": "1.0.0",
+  "description": "<!-- Purple Safety is a Flutter-based mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services. -->",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EmihleMaxengana/purple-safety.git"
+  },
+  "keywords": [],
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/EmihleMaxengana/purple-safety/issues"
+  },
+  "homepage": "https://github.com/EmihleMaxengana/purple-safety#readme",
+  "dependencies": {
+    "firebase-tools": "^15.27.0"
+  }
+}
