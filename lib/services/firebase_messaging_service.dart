@@ -36,34 +36,35 @@ class FirebaseMessagingService {
   Future<void> _handlePushNotificationsToken() async {
     final token = await FirebaseMessaging.instance.getToken();
 
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(AuthService().getCurrentUser()?.uid)
-        .update({
-          'devices': [
-            {'platform': Platform.operatingSystem, 'token': token},
-          ],
-        });
     if (token != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(AuthService().getCurrentUser()?.uid)
+          .update({
+            'devices': [
+              {'platform': Platform.operatingSystem, 'token': token},
+            ],
+          });
+      debugPrint("[Firebase Messaging Service] FCM token: $token");
       await CloudFunctionsService().sendWelcomeNotification(token: token);
     }
 
     FirebaseMessaging.instance.onTokenRefresh
         .listen((fcmToken) {
-          debugPrint(
-            '[Firebase Messaging Service] FCM token refreshed: $fcmToken',
-          );
-          FirebaseFirestore.instance
-              .collection('users')
-              .doc(AuthService().getCurrentUser()?.uid)
-              .update({
-                'devices': [
-                  {'platform': Platform.operatingSystem, 'token': token},
-                ],
-              });
+          if (fcmToken.isNotEmpty) {
+            debugPrint(
+              '[Firebase Messaging Service] FCM token refreshed: $fcmToken',
+            );
+            FirebaseFirestore.instance
+                .collection('users')
+                .doc(AuthService().getCurrentUser()?.uid)
+                .update({
+                  'devices': [
+                    {'platform': Platform.operatingSystem, 'token': fcmToken},
+                  ],
+                });
 
-          if (token != null) {
-            CloudFunctionsService().sendWelcomeNotification(token: token);
+            CloudFunctionsService().sendWelcomeNotification(token: fcmToken);
           }
         })
         .onError((error) {

@@ -468,14 +468,18 @@ class _HomeScreenState extends State<HomeScreen>
         final List<dynamic>? devices = user.data()['devices'];
         if (devices != null) {
           for (final device in devices) {
-            debugPrint("device token - ${device['token']}");
+            if (device != null && device['token'] != null) {
+              debugPrint("device token - ${device['token']}");
 
-            CloudFunctionsService().sendSOSAlert(
-              token: device['token'],
-              title: "SOS Alert Testing",
-              body:
-                  "Tumelo Testing SOS Alert. An SOS alert - by $userName - has been activated.",
-            );
+              CloudFunctionsService().sendSOSAlert(
+                token: device['token'],
+                title: "SOS Alert Testing",
+                body:
+                    "Tumelo Testing SOS Alert. An SOS alert - by $userName - has been activated.",
+              );
+            } else {
+              debugPrint("device - $device");
+            }
           }
         }
       }
