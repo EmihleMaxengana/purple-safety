@@ -106,6 +106,7 @@ class _HomeScreenState extends State<HomeScreen>
     _getAllDangerZones();
     _syncEmergencyStateFromBackend();
     _listenToContacts();
+    // TODO: consult on the removal of this function
     // _listenToIncomingSOSAlerts();
     _listenToEmergencyStatus(); //(ADDED: listen to EmergencyManager stream)
     TripSharingService.cleanupExpiredTrips();
