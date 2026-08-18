@@ -106,7 +106,7 @@ class _HomeScreenState extends State<HomeScreen>
     _getAllDangerZones();
     _syncEmergencyStateFromBackend();
     _listenToContacts();
-    _listenToIncomingSOSAlerts();
+    // _listenToIncomingSOSAlerts();
     _listenToEmergencyStatus(); //(ADDED: listen to EmergencyManager stream)
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
@@ -211,42 +211,42 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // TODO: compare and test functionality with 'FirebaseMessaging.onMessage.listen(_onForegroundMessage)'
-  void _listenToIncomingSOSAlerts() {
-    final user = AuthService().getCurrentUser();
-    if (user == null) return;
+  // void _listenToIncomingSOSAlerts() {
+  //   final user = AuthService().getCurrentUser();
+  //   if (user == null) return;
 
-    _alertsSubscription = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .collection('alerts')
-        .snapshots()
-        .listen((snapshot) {
-          if (!_hasLoadedAlerts) {
-            _hasLoadedAlerts = true;
-            return;
-          }
+  //   _alertsSubscription = FirebaseFirestore.instance
+  //       .collection('users')
+  //       .doc(user.uid)
+  //       .collection('alerts')
+  //       .snapshots()
+  //       .listen((snapshot) {
+  //         if (!_hasLoadedAlerts) {
+  //           _hasLoadedAlerts = true;
+  //           return;
+  //         }
 
-          for (final change in snapshot.docChanges) {
-            if (change.type != DocumentChangeType.added) continue;
+  //         for (final change in snapshot.docChanges) {
+  //           if (change.type != DocumentChangeType.added) continue;
 
-            final data = change.doc.data();
-            if (data?['type'] != 'sos') continue;
-          }
+  //           final data = change.doc.data();
+  //           if (data?['type'] != 'sos') continue;
+  //         }
 
-          for (final item in snapshot.docs) {
-            final data = item.data();
-            if (data['type'] == 'sos') {
-              if (user.displayName != data['userName']) {
-                _localNotificationsService.showNotification(
-                  "SOS Alert",
-                  data['message'],
-                  null,
-                );
-              }
-            }
-          }
-        });
-  }
+  //         for (final item in snapshot.docs) {
+  //           final data = item.data();
+  //           if (data['type'] == 'sos') {
+  //             if (user.displayName != data['userName']) {
+  //               _localNotificationsService.showNotification(
+  //                 "SOS Alert",
+  //                 data['message'],
+  //                 null,
+  //               );
+  //             }
+  //           }
+  //         }
+  //       });
+  // }
 
   Future<void> _initLocation() async {
     setState(() => _isLocationLoading = true);
@@ -451,6 +451,22 @@ class _HomeScreenState extends State<HomeScreen>
         );
       }
 
+      final users = await FirebaseFirestore.instance.collection('users').get();
+      for (final user in users.docs) {
+        final List<dynamic>? devices = user.data()['devices'];
+        if (devices != null) {
+          for (final device in devices) {
+            if (device != null && device['token'] != null) {
+              await CloudFunctionsService().sendSOSAlert(
+                token: device['token'],
+                title: "SOS Alert Testing",
+                body: "SOS alert - by $userName - has been activated.",
+              );
+            }
+          }
+        }
+      }
+
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
@@ -462,27 +478,6 @@ class _HomeScreenState extends State<HomeScreen>
           });
         }
       });
-
-      final users = await FirebaseFirestore.instance.collection('users').get();
-      for (final user in users.docs) {
-        final List<dynamic>? devices = user.data()['devices'];
-        if (devices != null) {
-          for (final device in devices) {
-            if (device != null && device['token'] != null) {
-              debugPrint("device token - ${device['token']}");
-
-              CloudFunctionsService().sendSOSAlert(
-                token: device['token'],
-                title: "SOS Alert Testing",
-                body:
-                    "Tumelo Testing SOS Alert. An SOS alert - by $userName - has been activated.",
-              );
-            } else {
-              debugPrint("device - $device");
-            }
-          }
-        }
-      }
     } catch (e) {
       debugPrint("[Home Screen] Error - $e");
       // store pending SOS with or without location

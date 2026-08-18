@@ -16,7 +16,9 @@ class CloudFunctionsService {
         'body': 'Thank you for joining our community!',
       });
 
-      debugPrint("[Cloud Functions Service] result.data: ${result.data}");
+      debugPrint(
+        "[Cloud Functions Service] result.data: ${result.data} for token: $token",
+      );
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
         '[Cloud Functions Service] Firebase Functions error\n'
@@ -44,7 +46,9 @@ class CloudFunctionsService {
         'body': 'Hello from Dart Cloud Functions!',
       });
 
-      debugPrint("[Cloud Functions Service] result.data: ${result.data}");
+      debugPrint(
+        "[Cloud Functions Service] result.data: ${result.data} for token: $token",
+      );
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
         '[Cloud Functions Service] Firebase Functions error\n'
@@ -76,7 +80,9 @@ class CloudFunctionsService {
         'body': body,
       });
 
-      debugPrint("[Cloud Functions Service] result.data: ${result.data}");
+      debugPrint(
+        "[Cloud Functions Service] result.data: ${result.data} for token: $token",
+      );
     } on FirebaseFunctionsException catch (e) {
       debugPrint(
         '[Cloud Functions Service] Firebase Functions error\n'

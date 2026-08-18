@@ -46,7 +46,6 @@ class FirebaseMessagingService {
             ],
           });
       debugPrint("[Firebase Messaging Service] FCM token: $token");
-      await CloudFunctionsService().sendWelcomeNotification(token: token);
     }
 
     FirebaseMessaging.instance.onTokenRefresh
@@ -63,8 +62,6 @@ class FirebaseMessagingService {
                     {'platform': Platform.operatingSystem, 'token': fcmToken},
                   ],
                 });
-
-            CloudFunctionsService().sendWelcomeNotification(token: fcmToken);
           }
         })
         .onError((error) {
