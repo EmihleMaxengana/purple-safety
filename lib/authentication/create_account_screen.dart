@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 import 'package:purple_safety/authentication/otp_verification_screen.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
+import 'package:purple_safety/authentication/otp_service.dart';
 import 'package:purple_safety/utils/pref_keys.dart';
 
 class CreateAccountScreen extends StatefulWidget {
@@ -1290,33 +1291,25 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                     _errorMessage = '';
                                   });
 
-                                  final auth = AuthService();
+                                  final email = _emailController.text.trim();
                                   final fullName = '${_nameController.text.trim()} ${_surnameController.text.trim()}';
                                   final nextOfKinFullName = '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
+                                  final password = _passwordController.text.trim();
+                                  final phone = _phoneController.text.trim();
 
-                                  final user = await auth.registerWithEmail(
-                                    fullName,
-                                    _emailController.text.trim(),
-                                    _passwordController.text.trim(),
-                                    _phoneController.text.trim(),
-                                    nextOfKinName: nextOfKinFullName,
-                                    nextOfKinPhone: _nextOfKinPhoneController.text.trim(),
-                                    nextOfKinRelation: _nextOfKinRelationController.text.trim(),
-                                    nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isNotEmpty
-                                        ? _nextOfKinAltPhoneController.text.trim()
-                                        : null,
-                                    gender: _selectedGender,
-                                  );
+                                  // Send OTP to email
+                                  final otpResult = await OTPService.sendOTPForRegistration(email);
 
                                   setState(() {
                                     _isLoading = false;
                                   });
 
-                                  if (user != null) {
-                                    // save pin to secure storage
+                                  if (otpResult?['success'] == true) {
+                                    // Save PIN before navigating
+                                    final auth = AuthService();
                                     await auth.savePin(_pinController.text.trim());
 
-                                    // save biometrics preference
+                                    // Save biometrics preference
                                     final prefs = await SharedPreferences.getInstance();
                                     await prefs.setBool(
                                       PrefKeys.useBiometrics,
@@ -1328,14 +1321,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                         context,
                                         MaterialPageRoute(
                                           builder: (context) => OTPVerificationScreen(
-                                            email: _emailController.text.trim(),
+                                            email: email,
+                                            fullName: fullName,
+                                            password: password,
+                                            phone: phone,
+                                            nextOfKinName: nextOfKinFullName.trim().isEmpty ? null : nextOfKinFullName,
+                                            nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty 
+                                                ? null 
+                                                : _nextOfKinPhoneController.text.trim(),
+                                            nextOfKinRelation: _nextOfKinRelationController.text.trim().isEmpty
+                                                ? null
+                                                : _nextOfKinRelationController.text.trim(),
+                                            nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isEmpty
+                                                ? null
+                                                : _nextOfKinAltPhoneController.text.trim(),
+                                            gender: _selectedGender,
                                           ),
                                         ),
                                       );
                                     }
                                   } else {
                                     setState(() {
-                                      _errorMessage = 'Registration failed. Please try again.';
+                                      _errorMessage = otpResult?['message'] ?? 'Failed to send OTP. Please try again.';
                                     });
                                   }
                                 }
