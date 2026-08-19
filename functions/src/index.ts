@@ -2,8 +2,9 @@ import * as functions from 'firebase-functions';
 import * as nodemailer from 'nodemailer';
 
 // CONFIGURE EMAIL (GMAIL EXAMPLE)
+
 const EMAIL_USER = 'emihlemaxengana05@gmail.com';
-const EMAIL_PASS = 'czkb rvcb vped skcv'; // Your app password
+const EMAIL_PASS = 'czkb rvcb vped skcv'; //  app password
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -15,9 +16,9 @@ const transporter = nodemailer.createTransport({
 
 const SENDER_EMAIL = EMAIL_USER;
 
-// ============================================================
-// CLOUD FUNCTION: Send OTP Email
-// ============================================================
+
+// cloud functions: Send OTP Email
+
 export const sendOTPEmail = functions.https.onCall(async (request) => {
   const { email, otp } = request.data;
 
@@ -30,6 +31,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
   }
 
   // Validate email format
+
   const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
   if (!emailRegex.test(email)) {
     throw new functions.https.HttpsError(
@@ -39,6 +41,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
   }
 
   // Validate OTP format (6 digits)
+  
   if (!/^[0-9]{6}$/.test(otp)) {
     throw new functions.https.HttpsError(
       'invalid-argument',
