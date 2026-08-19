@@ -54,7 +54,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
     await transporter.sendMail({
       from: SENDER_EMAIL,
       to: email,
-      subject: '🔐 Purple Safety - OTP Verification Code',
+      subject: 'Purple Safety - OTP Verification Code',
       html: `
         <!DOCTYPE html>
         <html>
@@ -76,7 +76,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
         <body>
           <div class="container">
             <div class="logo">
-              <h1>🛡️ Purple Safety</h1>
+              <h1> Purple Safety</h1>
             </div>
             
             <p class="message">Hello,</p>
@@ -87,7 +87,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
             <p class="message">This code will expire in <strong>10 minutes</strong>.</p>
             <p class="message">If you did not request this, please ignore this email.</p>
             
-            <div class="warning">⚠️ Never share this code with anyone.</div>
+            <div class="warning"> Never share this code with anyone.</div>
             
             <div class="footer">
               <p>Purple Safety - Your Personal Safety Companion</p>
@@ -110,11 +110,11 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
       `,
     });
 
-    console.log(`✅ OTP email sent to ${email}`);
+    console.log(` OTP email sent to ${email}`);
     return { success: true };
 
   } catch (error) {
-    console.error('❌ Error sending OTP email:', error);
+    console.error(' Error sending OTP email:', error);
     throw new functions.https.HttpsError(
       'internal',
       'Failed to send OTP email'

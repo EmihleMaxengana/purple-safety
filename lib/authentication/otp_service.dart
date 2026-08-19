@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-// import 'package:firebase_functions/firebase_functions.dart';
 
 class OTPService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -13,14 +12,15 @@ class OTPService {
   static const int OTP_LENGTH = 6;
   static const String OTP_COLLECTION = 'otps';
 
-  /// Generate a random 6-digit OTP code
+  static const String _sendOTPUrl = 
+      'https://sendotpemail-6qju6ualcq-uc.a.run.app';
+
   static String _generateOTP() {
     Random random = Random();
-    int otp = random.nextInt(900000) + 100000; // Generates 100000-999999
+    int otp = random.nextInt(900000) + 100000;
     return otp.toString();
   }
 
-  /// Send OTP to email for registration
   static Future<Map<String, dynamic>?> sendOTPForRegistration(String email) async {
     try {
       final otp = _generateOTP();
@@ -28,7 +28,6 @@ class OTPService {
         Duration(minutes: OTP_VALIDITY_MINUTES),
       );
 
-      // Store OTP in Firestore
       await _firestore.collection(OTP_COLLECTION).doc(email).set({
         'otp': otp,
         'email': email,
@@ -38,17 +37,17 @@ class OTPService {
         'verified': false,
       });
 
-      // Send OTP via email using Cloud Function
       try {
-        final callable = _functions.httpsCallable('sendOTPEmail');
+        final callable = _functions.httpsCallableFromUrl(_sendOTPUrl);
         await callable.call({
           'email': email,
           'otp': otp,
         });
-        print('✅ OTP sent to $email');
       } catch (e) {
-        print('⚠️ Cloud Function error (email may not be sent): $e');
-        // Continue anyway - OTP is stored and can be used
+        return {
+          'success': false,
+          'message': 'Failed to send OTP email: $e',
+        };
       }
 
       return {
@@ -57,7 +56,6 @@ class OTPService {
         'message': 'OTP sent successfully',
       };
     } catch (e) {
-      print('❌ Error sending OTP: $e');
       return {
         'success': false,
         'message': 'Failed to send OTP: $e',
@@ -65,7 +63,6 @@ class OTPService {
     }
   }
 
-  /// Verify OTP code entered by user
   static Future<Map<String, dynamic>> verifyOTP(String email, String enteredOTP) async {
     try {
       final docSnapshot = await _firestore
@@ -85,7 +82,6 @@ class OTPService {
       final expiresAt = (data?['expiresAt'] as Timestamp?)?.toDate();
       final verified = data?['verified'] ?? false;
 
-      // Check if already verified
       if (verified) {
         return {
           'success': false,
@@ -93,7 +89,6 @@ class OTPService {
         };
       }
 
-      // Check if OTP has expired
       if (expiresAt != null && DateTime.now().isAfter(expiresAt)) {
         return {
           'success': false,
@@ -102,7 +97,6 @@ class OTPService {
         };
       }
 
-      // Increment attempts
       int currentAttempts = data?['attempts'] ?? 0;
       if (currentAttempts >= 5) {
         return {
@@ -112,9 +106,7 @@ class OTPService {
         };
       }
 
-      // Verify OTP
       if (storedOTP == enteredOTP.trim()) {
-        // Mark OTP as verified
         await _firestore.collection(OTP_COLLECTION).doc(email).update({
           'verified': true,
           'verifiedAt': FieldValue.serverTimestamp(),
@@ -125,7 +117,6 @@ class OTPService {
           'message': 'OTP verified successfully!',
         };
       } else {
-        // Increment failed attempts
         await _firestore.collection(OTP_COLLECTION).doc(email).update({
           'attempts': currentAttempts + 1,
         });
@@ -137,7 +128,6 @@ class OTPService {
         };
       }
     } catch (e) {
-      print('❌ Error verifying OTP: $e');
       return {
         'success': false,
         'message': 'Error verifying OTP: $e',
@@ -145,7 +135,6 @@ class OTPService {
     }
   }
 
-  /// Check if OTP has been verified for an email
   static Future<bool> isOTPVerified(String email) async {
     try {
       final docSnapshot = await _firestore
@@ -159,12 +148,10 @@ class OTPService {
 
       return docSnapshot.data()?['verified'] ?? false;
     } catch (e) {
-      print('❌ Error checking OTP verification status: $e');
       return false;
     }
   }
 
-  /// Get remaining time for OTP expiration
   static Future<int?> getOTPRemainingSeconds(String email) async {
     try {
       final docSnapshot = await _firestore
@@ -184,21 +171,15 @@ class OTPService {
       final remaining = expiresAt.difference(DateTime.now()).inSeconds;
       return remaining > 0 ? remaining : 0;
     } catch (e) {
-      print('❌ Error getting OTP remaining time: $e');
       return null;
     }
   }
 
-  /// Resend OTP
   static Future<Map<String, dynamic>?> resendOTP(String email) async {
     try {
-      // Delete old OTP
       await _firestore.collection(OTP_COLLECTION).doc(email).delete();
-      
-      // Send new OTP
       return await sendOTPForRegistration(email);
     } catch (e) {
-      print('❌ Error resending OTP: $e');
       return {
         'success': false,
         'message': 'Failed to resend OTP: $e',
@@ -206,13 +187,11 @@ class OTPService {
     }
   }
 
-  /// Clean up OTP after successful registration
   static Future<void> cleanupOTP(String email) async {
     try {
       await _firestore.collection(OTP_COLLECTION).doc(email).delete();
-      print('✅ OTP cleaned up for $email');
     } catch (e) {
-      print('❌ Error cleaning up OTP: $e');
+      //(silent cleanup)
     }
   }
 }
