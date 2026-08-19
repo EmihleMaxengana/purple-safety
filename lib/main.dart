@@ -3,7 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:purple_safety/services/firebase_messaging_service.dart';
+import 'package:purple_safety/services/local_notifications_service.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:location/location.dart' as location;
 import 'package:purple_safety/authentication/login_screen.dart';
@@ -16,6 +17,14 @@ import 'package:purple_safety/emergency/sos_alert_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  final LocalNotificationsService localNotificationsService =
+      LocalNotificationsService.instance();
+  localNotificationsService.init();
+  final FirebaseMessagingService firebaseMessagingService =
+      FirebaseMessagingService.instance();
+  firebaseMessagingService.init(
+    localNotificationsService: localNotificationsService,
+  );
 
   // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);

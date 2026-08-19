@@ -47,8 +47,12 @@ dependencies:
   uuid: ^4.5.1
   video_player: ^2.8.6
   flutter_local_notifications: ^22.2.0
+<<<<<<< HEAD
   cloud_functions: ^6.3.4
   # firebase_functions: ^0.7.0
+=======
+  cloud_functions: ^6.3.6
+>>>>>>> 7697ebfe53bb727074e55b1d6301a2fad7668ae4
   # sqflite: ^2.3.0
   # latlong2: ^0.9.1
 

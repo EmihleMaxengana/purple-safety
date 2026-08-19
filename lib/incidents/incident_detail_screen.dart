@@ -11,8 +11,9 @@ import 'incident_service.dart';
 
 class IncidentDetailScreen extends StatefulWidget {
   final Incident incident;
-  
-  const IncidentDetailScreen({Key? key, required this.incident}) : super(key: key);
+
+  const IncidentDetailScreen({Key? key, required this.incident})
+    : super(key: key);
 
   @override
   State<IncidentDetailScreen> createState() => _IncidentDetailScreenState();
@@ -48,20 +49,20 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
 
   Future<void> _addComment() async {
     if (_commentController.text.trim().isEmpty) return;
-    
+
     setState(() => _isLoading = true);
-    
+
     try {
       await _incidentService.addComment(
         incidentId: widget.incident.id,
         comment: _commentController.text.trim(),
         isAnonymous: _isCommentingAnonymous,
       );
-      
+
       _commentController.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Comment added')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Comment added')));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
@@ -74,9 +75,10 @@ class _IncidentDetailScreenState extends State<IncidentDetailScreen> {
   // SHARE (now uses the story URLs if available)
   Future<void> _shareIncident() async {
     String shareMessage;
-    
+
     if (widget.incident.type == IncidentType.missingPerson) {
-      shareMessage = '''
+      shareMessage =
+          '''
 🚨🚨 URGENT: MISSING PERSON 🚨🚨
 
 🔍 NAME: ${widget.incident.missingPersonName ?? 'Unknown'}
@@ -94,7 +96,8 @@ Please share this post to help find them.
 Download Purple Safety app to help your community.
 ''';
     } else {
-      shareMessage = '''
+      shareMessage =
+          '''
 ⚠️ INCIDENT REPORT ⚠️
 
 📌 TYPE: ${_getTypeLabel().toUpperCase()}
@@ -108,18 +111,21 @@ ${widget.incident.description}
 Please stay safe. Report incidents via Purple Safety app.
 ''';
     }
-    
+
     // If there is a missing person image URL (now a cloud URL), share it
-    if (widget.incident.type == IncidentType.missingPerson && 
-        widget.incident.missingPersonImageUrl != null && 
+    if (widget.incident.type == IncidentType.missingPerson &&
+        widget.incident.missingPersonImageUrl != null &&
         widget.incident.missingPersonImageUrl!.isNotEmpty) {
       // Since it's a network URL, we can't share a local file, so we just share the text with the URL
       shareMessage += '\n\nPhoto: ${widget.incident.missingPersonImageUrl}';
-      await Share.share(shareMessage, subject: 'Missing Person Alert - Purple Safety');
+      await Share.share(
+        shareMessage,
+        subject: 'Missing Person Alert - Purple Safety',
+      );
     } else {
       await Share.share(shareMessage, subject: 'Purple Safety Alert');
     }
-    
+
     await _incidentService.shareIncident(widget.incident.id);
   }
 
@@ -150,9 +156,7 @@ Please stay safe. Report incidents via Purple Safety app.
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             child: const Text('Yes, Mark as Found'),
           ),
         ],
@@ -161,14 +165,16 @@ Please stay safe. Report incidents via Purple Safety app.
 
     if (confirmed == true) {
       setState(() => _isMarkingFound = true);
-      
+
       try {
         await _incidentService.markAsFound(widget.incident.id);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Person marked as found! Everyone has been notified.'),
+              content: Text(
+                '✅ Person marked as found! Everyone has been notified.',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -208,8 +214,13 @@ Please stay safe. Report incidents via Purple Safety app.
             child: InteractiveViewer(
               child: CachedNetworkImage(
                 imageUrl: imageUrl,
-                placeholder: (context, url) => const CircularProgressIndicator(),
-                errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white54, size: 60),
+                placeholder: (context, url) =>
+                    const CircularProgressIndicator(),
+                errorWidget: (context, url, error) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white54,
+                  size: 60,
+                ),
                 fit: BoxFit.contain,
               ),
             ),
@@ -223,9 +234,10 @@ Please stay safe. Report incidents via Purple Safety app.
   Widget build(BuildContext context) {
     final currentUser = FirebaseAuth.instance.currentUser;
     final isPoster = currentUser?.uid == widget.incident.userId;
-    final showFoundButton = widget.incident.type == IncidentType.missingPerson && 
-                            !widget.incident.isFound && 
-                            isPoster;
+    final showFoundButton =
+        widget.incident.type == IncidentType.missingPerson &&
+        !widget.incident.isFound &&
+        isPoster;
 
     return Scaffold(
       appBar: AppBar(
@@ -272,11 +284,16 @@ Please stay safe. Report incidents via Purple Safety app.
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: _getTypeColor().withOpacity(0.2),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _getTypeColor().withOpacity(0.5)),
+                        border: Border.all(
+                          color: _getTypeColor().withOpacity(0.5),
+                        ),
                       ),
                       child: Text(
                         _getTypeLabel(),
@@ -284,7 +301,7 @@ Please stay safe. Report incidents via Purple Safety app.
                       ),
                     ),
                     const SizedBox(height: 12),
-                    
+
                     Text(
                       widget.incident.title,
                       style: const TextStyle(
@@ -294,26 +311,33 @@ Please stay safe. Report incidents via Purple Safety app.
                       ),
                     ),
                     const SizedBox(height: 8),
-                    
+
                     Text(
                       'Reported ${_formatTime(widget.incident.timestamp)}',
-                      style: const TextStyle(color: Colors.white38, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 12,
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // Missing person image - now using CachedNetworkImage for network URLs
-                    if (widget.incident.type == IncidentType.missingPerson && 
+                    if (widget.incident.type == IncidentType.missingPerson &&
                         widget.incident.missingPersonImageUrl != null &&
                         widget.incident.missingPersonImageUrl!.isNotEmpty)
                       GestureDetector(
-                        onTap: () => _openImageFullScreen(widget.incident.missingPersonImageUrl!),
+                        onTap: () => _openImageFullScreen(
+                          widget.incident.missingPersonImageUrl!,
+                        ),
                         child: Container(
                           height: 180,
                           width: double.infinity,
                           margin: const EdgeInsets.only(bottom: 16),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.3),
+                            ),
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(12),
@@ -324,7 +348,9 @@ Please stay safe. Report incidents via Purple Safety app.
                               placeholder: (context, url) => Container(
                                 color: Colors.grey[800],
                                 child: const Center(
-                                  child: CircularProgressIndicator(color: Colors.orange),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.orange,
+                                  ),
                                 ),
                               ),
                               errorWidget: (context, url, error) => Container(
@@ -333,11 +359,18 @@ Please stay safe. Report incidents via Purple Safety app.
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.person_outline, color: Colors.white54, size: 40),
+                                      Icon(
+                                        Icons.person_outline,
+                                        color: Colors.white54,
+                                        size: 40,
+                                      ),
                                       SizedBox(height: 8),
                                       Text(
                                         'No photo available',
-                                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -347,7 +380,7 @@ Please stay safe. Report incidents via Purple Safety app.
                           ),
                         ),
                       ),
-                    
+
                     // Missing person details
                     if (widget.incident.type == IncidentType.missingPerson)
                       Container(
@@ -355,7 +388,9 @@ Please stay safe. Report incidents via Purple Safety app.
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                          border: Border.all(
+                            color: Colors.orange.withOpacity(0.3),
+                          ),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,22 +401,34 @@ Please stay safe. Report incidents via Purple Safety app.
                                 SizedBox(width: 8),
                                 Text(
                                   'MISSING PERSON',
-                                  style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 12),
                             if (widget.incident.missingPersonName != null)
-                              _buildInfoRow('Name:', widget.incident.missingPersonName!),
+                              _buildInfoRow(
+                                'Name:',
+                                widget.incident.missingPersonName!,
+                              ),
                             if (widget.incident.missingPersonAge != null)
-                              _buildInfoRow('Age:', widget.incident.missingPersonAge.toString()),
+                              _buildInfoRow(
+                                'Age:',
+                                widget.incident.missingPersonAge.toString(),
+                              ),
                             if (widget.incident.lastSeenLocation != null)
-                              _buildInfoRow('Last seen:', widget.incident.lastSeenLocation!),
+                              _buildInfoRow(
+                                'Last seen:',
+                                widget.incident.lastSeenLocation!,
+                              ),
                           ],
                         ),
                       ),
                     const SizedBox(height: 16),
-                    
+
                     // Evidence images - now network URLs
                     if (widget.incident.imageUrls.isNotEmpty)
                       Container(
@@ -391,7 +438,10 @@ Please stay safe. Report incidents via Purple Safety app.
                           children: [
                             const Text(
                               'Evidence Images',
-                              style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Color(0xFFa078c0),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             SizedBox(
@@ -408,7 +458,9 @@ Please stay safe. Report incidents via Purple Safety app.
                                       margin: const EdgeInsets.only(right: 8),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.white24),
+                                        border: Border.all(
+                                          color: Colors.white24,
+                                        ),
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
@@ -417,20 +469,28 @@ Please stay safe. Report incidents via Purple Safety app.
                                           fit: BoxFit.cover,
                                           width: 100,
                                           height: 100,
-                                          placeholder: (context, url) => Container(
-                                            color: Colors.grey[800],
-                                            child: const Center(
-                                              child: SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(strokeWidth: 2),
+                                          placeholder: (context, url) =>
+                                              Container(
+                                                color: Colors.grey[800],
+                                                child: const Center(
+                                                  child: SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                          strokeWidth: 2,
+                                                        ),
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                          errorWidget: (context, url, error) => Container(
-                                            color: Colors.grey[800],
-                                            child: const Icon(Icons.broken_image, color: Colors.white54),
-                                          ),
+                                          errorWidget: (context, url, error) =>
+                                              Container(
+                                                color: Colors.grey[800],
+                                                child: const Icon(
+                                                  Icons.broken_image,
+                                                  color: Colors.white54,
+                                                ),
+                                              ),
                                         ),
                                       ),
                                     ),
@@ -441,7 +501,7 @@ Please stay safe. Report incidents via Purple Safety app.
                           ],
                         ),
                       ),
-                    
+
                     // Evidence videos - if any (simple placeholder)
                     if (widget.incident.videoUrls.isNotEmpty)
                       Container(
@@ -451,7 +511,10 @@ Please stay safe. Report incidents via Purple Safety app.
                           children: [
                             const Text(
                               'Evidence Videos',
-                              style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                color: Color(0xFFa078c0),
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             SizedBox(
@@ -464,8 +527,14 @@ Please stay safe. Report incidents via Purple Safety app.
                                   return GestureDetector(
                                     onTap: () {
                                       // Open video in external player or custom player
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Video player coming soon')),
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'Video player coming soon',
+                                          ),
+                                        ),
                                       );
                                     },
                                     child: Container(
@@ -473,7 +542,9 @@ Please stay safe. Report incidents via Purple Safety app.
                                       margin: const EdgeInsets.only(right: 8),
                                       decoration: BoxDecoration(
                                         borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(color: Colors.white24),
+                                        border: Border.all(
+                                          color: Colors.white24,
+                                        ),
                                       ),
                                       child: ClipRRect(
                                         borderRadius: BorderRadius.circular(8),
@@ -482,7 +553,11 @@ Please stay safe. Report incidents via Purple Safety app.
                                           children: [
                                             Container(
                                               color: Colors.grey[800],
-                                              child: const Icon(Icons.videocam, color: Colors.white54, size: 40),
+                                              child: const Icon(
+                                                Icons.videocam,
+                                                color: Colors.white54,
+                                                size: 40,
+                                              ),
                                             ),
                                             const Icon(
                                               Icons.play_circle_fill,
@@ -500,26 +575,39 @@ Please stay safe. Report incidents via Purple Safety app.
                           ],
                         ),
                       ),
-                    
+
                     const Text(
                       'Description',
-                      style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFFa078c0),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       widget.incident.description,
-                      style: const TextStyle(color: Colors.white70, height: 1.5),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        height: 1.5,
+                      ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     const Text(
                       'Location',
-                      style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFFa078c0),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.location_on, color: Colors.white54, size: 16),
+                        const Icon(
+                          Icons.location_on,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -530,29 +618,43 @@ Please stay safe. Report incidents via Purple Safety app.
                       ],
                     ),
                     const SizedBox(height: 16),
-                    
+
                     const Text(
                       'Reported by',
-                      style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Color(0xFFa078c0),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        const Icon(Icons.person, color: Colors.white54, size: 16),
+                        const Icon(
+                          Icons.person,
+                          color: Colors.white54,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          widget.incident.isAnonymous ? 'Anonymous' : (widget.incident.userName ?? 'User'),
+                          widget.incident.isAnonymous
+                              ? 'Anonymous'
+                              : (widget.incident.userName ?? 'User'),
                           style: const TextStyle(color: Colors.white70),
                         ),
                       ],
                     ),
-                    if (widget.incident.userPhone != null && !widget.incident.isAnonymous) ...[
+                    if (widget.incident.userPhone != null &&
+                        !widget.incident.isAnonymous) ...[
                       const SizedBox(height: 8),
                       GestureDetector(
                         onTap: _callReporter,
                         child: Row(
                           children: [
-                            const Icon(Icons.phone, color: Colors.green, size: 16),
+                            const Icon(
+                              Icons.phone,
+                              color: Colors.green,
+                              size: 16,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               widget.incident.userPhone!,
@@ -563,18 +665,26 @@ Please stay safe. Report incidents via Purple Safety app.
                       ),
                     ],
                     const SizedBox(height: 16),
-                    
+
                     // Dynamic comment count
                     Row(
                       children: [
-                        Icon(Icons.comment, color: const Color(0xFFBF7DCB), size: 16),
+                        Icon(
+                          Icons.comment,
+                          color: const Color(0xFFBF7DCB),
+                          size: 16,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '$_commentCount comments',
                           style: const TextStyle(color: Colors.white70),
                         ),
                         const SizedBox(width: 16),
-                        Icon(Icons.share, color: const Color(0xFFBF7DCB), size: 16),
+                        Icon(
+                          Icons.share,
+                          color: const Color(0xFFBF7DCB),
+                          size: 16,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '${widget.incident.shareCount} shares',
@@ -583,20 +693,27 @@ Please stay safe. Report incidents via Purple Safety app.
                       ],
                     ),
                     const SizedBox(height: 24),
-                    
+
                     const Text(
                       'Comments',
-                      style: TextStyle(color: Color(0xFFa078c0), fontWeight: FontWeight.bold, fontSize: 18),
+                      style: TextStyle(
+                        color: Color(0xFFa078c0),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    
+
                     StreamBuilder<List<IncidentComment>>(
                       stream: _incidentService.getComments(widget.incident.id),
                       builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
-                        
+
                         if (!snapshot.hasData || snapshot.data!.isEmpty) {
                           return const Center(
                             child: Padding(
@@ -608,7 +725,7 @@ Please stay safe. Report incidents via Purple Safety app.
                             ),
                           );
                         }
-                        
+
                         final comments = snapshot.data!;
                         return ListView.builder(
                           shrinkWrap: true,
@@ -629,7 +746,9 @@ Please stay safe. Report incidents via Purple Safety app.
                                   Row(
                                     children: [
                                       Text(
-                                        comment.isAnonymous ? 'Anonymous' : (comment.userName ?? 'User'),
+                                        comment.isAnonymous
+                                            ? 'Anonymous'
+                                            : (comment.userName ?? 'User'),
                                         style: const TextStyle(
                                           color: Color(0xFFBF7DCB),
                                           fontWeight: FontWeight.bold,
@@ -639,14 +758,20 @@ Please stay safe. Report incidents via Purple Safety app.
                                       const Spacer(),
                                       Text(
                                         _formatTime(comment.timestamp),
-                                        style: const TextStyle(color: Colors.white38, fontSize: 10),
+                                        style: const TextStyle(
+                                          color: Colors.white38,
+                                          fontSize: 10,
+                                        ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
                                     comment.comment,
-                                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -659,12 +784,14 @@ Please stay safe. Report incidents via Purple Safety app.
                 ),
               ),
             ),
-            
+
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: const Color(0xFF1a0f2e),
-                border: Border(top: BorderSide(color: Colors.purple.withOpacity(0.3))),
+                border: Border(
+                  top: BorderSide(color: Colors.purple.withOpacity(0.3)),
+                ),
               ),
               child: Column(
                 children: [
@@ -683,7 +810,10 @@ Please stay safe. Report incidents via Purple Safety app.
                             ),
                             filled: true,
                             fillColor: Colors.white.withOpacity(0.1),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
                           ),
                         ),
                       ),
@@ -735,7 +865,10 @@ Please stay safe. Report incidents via Purple Safety app.
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],

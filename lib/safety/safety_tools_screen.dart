@@ -108,7 +108,9 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(
+      user.uid,
+    );
     EmergencyManager().setEmergencyActive(hasActiveSOS);
 
     if (mounted) {
@@ -175,6 +177,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   }
 
   //(I'm Safe - deactivate SOS)
+  // TODO: look at this function for refactoring...
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -481,9 +484,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         'isSOS': _isEmergencyActive,
       };
 
-      await FirebaseFirestore.instance
-          .collection('user_media')
-          .add(data);
+      await FirebaseFirestore.instance.collection('user_media').add(data);
 
       debugPrint('Saved to Firestore: $type');
     } catch (e) {
