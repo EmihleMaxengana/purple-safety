@@ -117,7 +117,8 @@ class AuthService {
       String message;
       switch (e.code) {
         case 'user-not-found':
-          message = 'No account found with this email address. Please create an account first.';
+          message =
+              'No account found with this email address. Please create an account first.';
           break;
         case 'wrong-password':
           message = 'Incorrect password. Please try again.';

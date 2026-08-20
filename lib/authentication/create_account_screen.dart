@@ -198,7 +198,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: Text(
                                 _errorMessage,
-                                style: const TextStyle(color: Colors.red, fontSize: 13),
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
 
@@ -214,7 +217,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _nameController,
                             style: const TextStyle(color: Colors.white),
-                            onChanged: (value) => _capitalizeWhileTyping(_nameController),
+                            onChanged: (value) =>
+                                _capitalizeWhileTyping(_nameController),
                             decoration: InputDecoration(
                               hintText: 'Enter your first name',
                               hintStyle: const TextStyle(
@@ -267,7 +271,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _surnameController,
                             style: const TextStyle(color: Colors.white),
-                            onChanged: (value) => _capitalizeWhileTyping(_surnameController),
+                            onChanged: (value) =>
+                                _capitalizeWhileTyping(_surnameController),
                             decoration: InputDecoration(
                               hintText: 'Enter your surname',
                               hintStyle: const TextStyle(
@@ -442,15 +447,23 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             Row(
                               children: [
                                 Icon(
-                                  _emailsMatch ? Icons.check_circle : Icons.error,
-                                  color: _emailsMatch ? Colors.green : Colors.red,
+                                  _emailsMatch
+                                      ? Icons.check_circle
+                                      : Icons.error,
+                                  color: _emailsMatch
+                                      ? Colors.green
+                                      : Colors.red,
                                   size: 16,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  _emailsMatch ? 'Emails match' : 'Emails do not match',
+                                  _emailsMatch
+                                      ? 'Emails match'
+                                      : 'Emails do not match',
                                   style: TextStyle(
-                                    color: _emailsMatch ? Colors.green : Colors.red,
+                                    color: _emailsMatch
+                                        ? Colors.green
+                                        : Colors.red,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -547,10 +560,18 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               style: const TextStyle(color: Colors.white),
                               decoration: InputDecoration(
                                 hintText: 'Select your gender',
-                                hintStyle: const TextStyle(color: Color(0xFFBF7DCB)),
-                                prefixIcon: const Icon(Icons.person_outline, color: Color(0xFFBF7DCB)),
+                                hintStyle: const TextStyle(
+                                  color: Color(0xFFBF7DCB),
+                                ),
+                                prefixIcon: const Icon(
+                                  Icons.person_outline,
+                                  color: Color(0xFFBF7DCB),
+                                ),
                                 border: InputBorder.none,
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 16,
+                                ),
                               ),
                               items: _genderOptions.map((option) {
                                 return DropdownMenuItem(
@@ -589,7 +610,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _nextOfKinNameController,
                             style: const TextStyle(color: Colors.white),
-                            onChanged: (value) => _capitalizeWhileTyping(_nextOfKinNameController),
+                            onChanged: (value) => _capitalizeWhileTyping(
+                              _nextOfKinNameController,
+                            ),
                             decoration: InputDecoration(
                               hintText: 'Next of kin first name *',
                               hintStyle: const TextStyle(
@@ -633,7 +656,9 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           TextFormField(
                             controller: _nextOfKinSurnameController,
                             style: const TextStyle(color: Colors.white),
-                            onChanged: (value) => _capitalizeWhileTyping(_nextOfKinSurnameController),
+                            onChanged: (value) => _capitalizeWhileTyping(
+                              _nextOfKinSurnameController,
+                            ),
                             decoration: InputDecoration(
                               hintText: 'Next of kin surname *',
                               hintStyle: const TextStyle(
@@ -736,7 +761,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
                             decoration: InputDecoration(
-                              hintText: 'Relationship (e.g., Spouse, Parent, Sibling) *',
+                              hintText:
+                                  'Relationship (e.g., Spouse, Parent, Sibling) *',
                               hintStyle: const TextStyle(
                                 color: Color(0xFFBF7DCB),
                               ),
@@ -1095,9 +1121,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       : Icons.visibility,
                                   color: const Color(0xFFBF7DCB),
                                 ),
-                                onPressed: () => setState(
-                                  () => _obscurePin = !_obscurePin,
-                                ),
+                                onPressed: () =>
+                                    setState(() => _obscurePin = !_obscurePin),
                               ),
                             ),
                             validator: (value) {
@@ -1169,8 +1194,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                   color: const Color(0xFFBF7DCB),
                                 ),
                                 onPressed: () => setState(
-                                  () => _obscureConfirmPin =
-                                      !_obscureConfirmPin,
+                                  () =>
+                                      _obscureConfirmPin = !_obscureConfirmPin,
                                 ),
                               ),
                             ),
@@ -1195,9 +1220,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  _pinsMatch ? 'PINs match' : 'PINs do not match',
+                                  _pinsMatch
+                                      ? 'PINs match'
+                                      : 'PINs do not match',
                                   style: TextStyle(
-                                    color: _pinsMatch ? Colors.green : Colors.red,
+                                    color: _pinsMatch
+                                        ? Colors.green
+                                        : Colors.red,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -1255,7 +1284,8 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                                       strokeWidth: 2,
                                     )
                                   : const Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           'Continue to Verification',
@@ -1343,8 +1373,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       }
 
       final email = _emailController.text.trim();
-      final fullName = '${_nameController.text.trim()} ${_surnameController.text.trim()}';
-      final nextOfKinFullName = '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
+      final fullName =
+          '${_nameController.text.trim()} ${_surnameController.text.trim()}';
+      final nextOfKinFullName =
+          '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
       final password = _passwordController.text.trim();
       final phone = _phoneController.text.trim();
 
@@ -1355,38 +1387,40 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         await auth.savePin(_pinController.text.trim());
 
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(
-          PrefKeys.useBiometrics,
-          _useBiometrics,
-        );
+        await prefs.setBool(PrefKeys.useBiometrics, _useBiometrics);
 
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => OTPVerificationScreen(
-                email: email,
-                fullName: fullName,
-                password: password,
-                phone: phone,
-                nextOfKinName: nextOfKinFullName.trim().isEmpty ? null : nextOfKinFullName,
-                nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty 
-                    ? null 
-                    : _nextOfKinPhoneController.text.trim(),
-                nextOfKinRelation: _nextOfKinRelationController.text.trim().isEmpty
-                    ? null
-                    : _nextOfKinRelationController.text.trim(),
-                nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isEmpty
-                    ? null
-                    : _nextOfKinAltPhoneController.text.trim(),
-                gender: _selectedGender,
-              ),
+        // if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => OTPVerificationScreen(
+              email: email,
+              fullName: fullName,
+              password: password,
+              phone: phone,
+              nextOfKinName: nextOfKinFullName.trim().isEmpty
+                  ? null
+                  : nextOfKinFullName,
+              nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty
+                  ? null
+                  : _nextOfKinPhoneController.text.trim(),
+              nextOfKinRelation:
+                  _nextOfKinRelationController.text.trim().isEmpty
+                  ? null
+                  : _nextOfKinRelationController.text.trim(),
+              nextOfKinAltPhone:
+                  _nextOfKinAltPhoneController.text.trim().isEmpty
+                  ? null
+                  : _nextOfKinAltPhoneController.text.trim(),
+              gender: _selectedGender,
             ),
-          );
-        }
+          ),
+        );
+        // }
       } else {
         setState(() {
-          _errorMessage = otpResult?['message'] ?? 'Failed to send OTP. Please try again.';
+          _errorMessage =
+              otpResult?['message'] ?? 'Failed to send OTP. Please try again.';
           _isLoading = false;
         });
       }
