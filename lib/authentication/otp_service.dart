@@ -12,7 +12,7 @@ class OTPService {
   static const int OTP_LENGTH = 6;
   static const String OTP_COLLECTION = 'otps';
 
-  static const String _sendOTPUrl = 
+  static const String _sendOTPUrl =
       'https://sendotpemail-6qju6ualcq-uc.a.run.app';
 
   static String _generateOTP() {
@@ -21,7 +21,10 @@ class OTPService {
     return otp.toString();
   }
 
-  static Future<Map<String, dynamic>?> sendOTPForRegistration(String email) async {
+  /// Send OTP to email for registration
+  static Future<Map<String, dynamic>?> sendOTPForRegistration(
+    String email,
+  ) async {
     try {
       final otp = _generateOTP();
       final expirationTime = DateTime.now().add(
@@ -38,16 +41,11 @@ class OTPService {
       });
 
       try {
-        final callable = _functions.httpsCallableFromUrl(_sendOTPUrl);
-        await callable.call({
-          'email': email,
-          'otp': otp,
-        });
+        final callable = _functions.httpsCallable('sendOTPEmail');
+        await callable.call({'email': email, 'otp': otp});
+        print('✅ OTP sent to $email');
       } catch (e) {
-        return {
-          'success': false,
-          'message': 'Failed to send OTP email: $e',
-        };
+        return {'success': false, 'message': 'Failed to send OTP email: $e'};
       }
 
       return {
@@ -56,14 +54,16 @@ class OTPService {
         'message': 'OTP sent successfully',
       };
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to send OTP: $e',
-      };
+      print('❌ Error sending OTP: $e');
+      return {'success': false, 'message': 'Failed to send OTP: $e'};
     }
   }
 
-  static Future<Map<String, dynamic>> verifyOTP(String email, String enteredOTP) async {
+  /// Verify OTP code entered by user
+  static Future<Map<String, dynamic>> verifyOTP(
+    String email,
+    String enteredOTP,
+  ) async {
     try {
       final docSnapshot = await _firestore
           .collection(OTP_COLLECTION)
@@ -112,10 +112,7 @@ class OTPService {
           'verifiedAt': FieldValue.serverTimestamp(),
         });
 
-        return {
-          'success': true,
-          'message': 'OTP verified successfully!',
-        };
+        return {'success': true, 'message': 'OTP verified successfully!'};
       } else {
         await _firestore.collection(OTP_COLLECTION).doc(email).update({
           'attempts': currentAttempts + 1,
@@ -128,10 +125,8 @@ class OTPService {
         };
       }
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Error verifying OTP: $e',
-      };
+      print('❌ Error verifying OTP: $e');
+      return {'success': false, 'message': 'Error verifying OTP: $e'};
     }
   }
 
@@ -163,7 +158,8 @@ class OTPService {
         return null;
       }
 
-      final expiresAt = (docSnapshot.data()?['expiresAt'] as Timestamp?)?.toDate();
+      final expiresAt = (docSnapshot.data()?['expiresAt'] as Timestamp?)
+          ?.toDate();
       if (expiresAt == null) {
         return null;
       }
@@ -178,12 +174,12 @@ class OTPService {
   static Future<Map<String, dynamic>?> resendOTP(String email) async {
     try {
       await _firestore.collection(OTP_COLLECTION).doc(email).delete();
+
+      // Send new OTP
       return await sendOTPForRegistration(email);
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'Failed to resend OTP: $e',
-      };
+      print('❌ Error resending OTP: $e');
+      return {'success': false, 'message': 'Failed to resend OTP: $e'};
     }
   }
 
