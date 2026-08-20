@@ -21,35 +21,28 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
   bool _obscureConfirmPin = true;
   final _formKey = GlobalKey<FormState>();
 
-  // name and surname
   final _nameController = TextEditingController();
   final _surnameController = TextEditingController();
 
-  // email
   final _emailController = TextEditingController();
   final _confirmEmailController = TextEditingController();
   bool _emailsMatch = false;
   bool _emailChecked = false;
 
-  // phone
   final _phoneController = TextEditingController();
 
-  // gender
   String? _selectedGender;
   final List<String> _genderOptions = ['Male', 'Female'];
 
-  // next of kin
   final _nextOfKinNameController = TextEditingController();
   final _nextOfKinSurnameController = TextEditingController();
   final _nextOfKinPhoneController = TextEditingController();
   final _nextOfKinRelationController = TextEditingController();
   final _nextOfKinAltPhoneController = TextEditingController();
 
-  // password
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  // pin
   final _pinController = TextEditingController();
   final _confirmPinController = TextEditingController();
   bool _pinsMatch = false;
@@ -81,7 +74,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     super.dispose();
   }
 
-  // auto-capitalize first letter while typing
   void _capitalizeWhileTyping(TextEditingController controller) {
     final text = controller.text;
     if (text.isNotEmpty) {
@@ -96,7 +88,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     }
   }
 
-  // check if emails match
   void _checkEmailsMatch() {
     final email = _emailController.text.trim();
     final confirmEmail = _confirmEmailController.text.trim();
@@ -109,7 +100,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
     });
   }
 
-  // check if pins match
   void _checkPinsMatch() {
     final pin = _pinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
@@ -157,7 +147,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // Security Header
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -213,7 +202,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               ),
                             ),
 
-                          // NAME
                           const Text(
                             'Name *',
                             style: TextStyle(
@@ -267,7 +255,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // SURNAME
                           const Text(
                             'Surname *',
                             style: TextStyle(
@@ -321,7 +308,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // EMAIL
                           const Text(
                             'Email *',
                             style: TextStyle(
@@ -399,7 +385,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // CONFIRM EMAIL
                           const Text(
                             'Confirm Email *',
                             style: TextStyle(
@@ -452,7 +437,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               return null;
                             },
                           ),
-                          // email match validation message
                           if (_emailChecked) ...[
                             const SizedBox(height: 8),
                             Row(
@@ -476,7 +460,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ],
                           const SizedBox(height: 20),
 
-                          // PHONE NUMBER
                           const Text(
                             'Phone Number *',
                             style: TextStyle(
@@ -544,7 +527,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // GENDER
                           const Text(
                             'Gender *',
                             style: TextStyle(
@@ -591,7 +573,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // NEXT OF KIN
                           Container(
                             margin: const EdgeInsets.only(top: 8),
                             child: const Text(
@@ -605,7 +586,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // next of kin name
                           TextFormField(
                             controller: _nextOfKinNameController,
                             style: const TextStyle(color: Colors.white),
@@ -650,7 +630,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // next of kin surname
                           TextFormField(
                             controller: _nextOfKinSurnameController,
                             style: const TextStyle(color: Colors.white),
@@ -695,7 +674,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // next of kin phone
                           TextFormField(
                             controller: _nextOfKinPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -754,7 +732,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // next of kin relationship
                           TextFormField(
                             controller: _nextOfKinRelationController,
                             style: const TextStyle(color: Colors.white),
@@ -798,7 +775,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // next of kin alternative phone (optional)
                           TextFormField(
                             controller: _nextOfKinAltPhoneController,
                             style: const TextStyle(color: Colors.white),
@@ -844,7 +820,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // PASSWORD
                           const Text(
                             'Password *',
                             style: TextStyle(
@@ -934,7 +909,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Password Strength Indicator
                           if (_password.isNotEmpty) ...[
                             Row(
                               children: [
@@ -971,7 +945,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             const SizedBox(height: 12),
                           ],
 
-                          // Password Requirements
                           if (_password.isNotEmpty) ...[
                             _buildPasswordRequirement(
                               'At least 8 characters',
@@ -998,7 +971,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                             const SizedBox(height: 20),
                           ],
 
-                          // CONFIRM PASSWORD
                           const Text(
                             'Confirm Password *',
                             style: TextStyle(
@@ -1067,7 +1039,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // PIN
                           const Text(
                             'PIN (6 digits) *',
                             style: TextStyle(
@@ -1141,7 +1112,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // CONFIRM PIN
                           const Text(
                             'Confirm PIN *',
                             style: TextStyle(
@@ -1214,7 +1184,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                               return null;
                             },
                           ),
-                          // pin match validation message
                           if (_pinChecked) ...[
                             const SizedBox(height: 8),
                             Row(
@@ -1238,7 +1207,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ],
                           const SizedBox(height: 20),
 
-                          // USE BIOMETRICS TOGGLE
                           SwitchListTile(
                             title: Text(
                               "Use Biometrics",
@@ -1266,87 +1234,10 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 30),
 
-                          // CONTINUE BUTTON
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                              onPressed: () async {
-                                if (_formKey.currentState!.validate()) {
-                                  // check email match
-                                  if (!_emailsMatch) {
-                                    setState(() {
-                                      _errorMessage = 'Emails do not match';
-                                    });
-                                    return;
-                                  }
-                                  // check pin match
-                                  if (!_pinsMatch) {
-                                    setState(() {
-                                      _errorMessage = 'PINs do not match';
-                                    });
-                                    return;
-                                  }
-                                  setState(() {
-                                    _isLoading = true;
-                                    _errorMessage = '';
-                                  });
-
-                                  final email = _emailController.text.trim();
-                                  final fullName = '${_nameController.text.trim()} ${_surnameController.text.trim()}';
-                                  final nextOfKinFullName = '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
-                                  final password = _passwordController.text.trim();
-                                  final phone = _phoneController.text.trim();
-
-                                  // Send OTP to email
-                                  final otpResult = await OTPService.sendOTPForRegistration(email);
-
-                                  setState(() {
-                                    _isLoading = false;
-                                  });
-
-                                  if (otpResult?['success'] == true) {
-                                    // Save PIN before navigating
-                                    final auth = AuthService();
-                                    await auth.savePin(_pinController.text.trim());
-
-                                    // Save biometrics preference
-                                    final prefs = await SharedPreferences.getInstance();
-                                    await prefs.setBool(
-                                      PrefKeys.useBiometrics,
-                                      _useBiometrics,
-                                    );
-
-                                    if (mounted) {
-                                      Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => OTPVerificationScreen(
-                                            email: email,
-                                            fullName: fullName,
-                                            password: password,
-                                            phone: phone,
-                                            nextOfKinName: nextOfKinFullName.trim().isEmpty ? null : nextOfKinFullName,
-                                            nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty 
-                                                ? null 
-                                                : _nextOfKinPhoneController.text.trim(),
-                                            nextOfKinRelation: _nextOfKinRelationController.text.trim().isEmpty
-                                                ? null
-                                                : _nextOfKinRelationController.text.trim(),
-                                            nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isEmpty
-                                                ? null
-                                                : _nextOfKinAltPhoneController.text.trim(),
-                                            gender: _selectedGender,
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  } else {
-                                    setState(() {
-                                      _errorMessage = otpResult?['message'] ?? 'Failed to send OTP. Please try again.';
-                                    });
-                                  }
-                                }
-                              },
+                              onPressed: _isLoading ? null : _handleContinue,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFD105FF),
                                 foregroundColor: Colors.white,
@@ -1381,7 +1272,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                           ),
                           const SizedBox(height: 20),
 
-                          // SECURITY INFORMATION
                           Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -1430,6 +1320,79 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         ),
       ),
     );
+  }
+
+  void _handleContinue() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+
+    if (_formKey.currentState!.validate()) {
+      if (!_emailsMatch) {
+        setState(() {
+          _errorMessage = 'Emails do not match';
+          _isLoading = false;
+        });
+        return;
+      }
+      if (!_pinsMatch) {
+        setState(() {
+          _errorMessage = 'PINs do not match';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      final email = _emailController.text.trim();
+      final fullName = '${_nameController.text.trim()} ${_surnameController.text.trim()}';
+      final nextOfKinFullName = '${_nextOfKinNameController.text.trim()} ${_nextOfKinSurnameController.text.trim()}';
+      final password = _passwordController.text.trim();
+      final phone = _phoneController.text.trim();
+
+      final otpResult = await OTPService.sendOTPForRegistration(email);
+
+      if (otpResult?['success'] == true) {
+        final auth = AuthService();
+        await auth.savePin(_pinController.text.trim());
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(
+          PrefKeys.useBiometrics,
+          _useBiometrics,
+        );
+
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPVerificationScreen(
+                email: email,
+                fullName: fullName,
+                password: password,
+                phone: phone,
+                nextOfKinName: nextOfKinFullName.trim().isEmpty ? null : nextOfKinFullName,
+                nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty 
+                    ? null 
+                    : _nextOfKinPhoneController.text.trim(),
+                nextOfKinRelation: _nextOfKinRelationController.text.trim().isEmpty
+                    ? null
+                    : _nextOfKinRelationController.text.trim(),
+                nextOfKinAltPhone: _nextOfKinAltPhoneController.text.trim().isEmpty
+                    ? null
+                    : _nextOfKinAltPhoneController.text.trim(),
+                gender: _selectedGender,
+              ),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _errorMessage = otpResult?['message'] ?? 'Failed to send OTP. Please try again.';
+          _isLoading = false;
+        });
+      }
+    } else {
+      setState(() => _isLoading = false);
+    }
   }
 
   Widget _buildSecurityTip(String text) {

@@ -41,7 +41,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   bool _isVerified = false;
   String _errorMessage = '';
   Timer? _countdownTimer;
-  int _remainingSeconds = 600; // 10 minutes
+  int _remainingSeconds = 600;
   int _attemptsRemaining = 5;
 
   @override
@@ -60,6 +60,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   Future<void> _sendOTP() async {
+    if (_isLoading) return;
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -99,6 +100,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   Future<void> _verifyOTP() async {
+    if (_isLoading) return;
+    
     final otp = _otpController.text.trim();
 
     if (otp.isEmpty) {
@@ -120,28 +123,30 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       _errorMessage = '';
     });
 
-    try {
-      // Verify OTP
-      final verifyResult = await OTPService.verifyOTP(widget.email, otp);
+    final verifyResult = await OTPService.verifyOTP(widget.email, otp);
 
-      if (verifyResult['success'] != true) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = verifyResult['message'] ?? 'Invalid OTP.';
-          if (verifyResult.containsKey('attemptsRemaining')) {
-            _attemptsRemaining = verifyResult['attemptsRemaining'] ?? 0;
-          }
-        });
-        return;
-      }
-
-      // OTP verified! Now register the user
+    if (verifyResult['success'] != true) {
       setState(() {
-        _isVerified = true;
+        _isLoading = false;
+        _errorMessage = verifyResult['message'] ?? 'Invalid OTP.';
+        if (verifyResult.containsKey('attemptsRemaining')) {
+          _attemptsRemaining = verifyResult['attemptsRemaining'] ?? 0;
+        }
       });
-      _countdownTimer?.cancel();
+      return;
+    }
 
-      final authService = AuthService();
+    setState(() {
+      _isVerified = true;
+    });
+    _countdownTimer?.cancel();
+
+    await _completeRegistration();
+  }
+
+  Future<void> _completeRegistration() async {
+    final authService = AuthService();
+    try {
       final user = await authService.registerWithEmail(
         widget.fullName,
         widget.email,
@@ -155,9 +160,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       );
 
       if (user != null) {
-        // Clean up OTP after successful registration
         await OTPService.cleanupOTP(widget.email);
-
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -170,6 +173,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
           _errorMessage = 'Registration failed. Please try again.';
         });
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = _getAuthErrorMessage(e);
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -178,7 +186,22 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     }
   }
 
+  String _getAuthErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'email-already-in-use':
+        return 'This email is already registered. Please sign in instead.';
+      case 'invalid-email':
+        return 'Invalid email address.';
+      case 'weak-password':
+        return 'Password is too weak. Please use a stronger password.';
+      default:
+        return 'Registration failed: ${e.message}';
+    }
+  }
+
   Future<void> _resendOTP() async {
+    if (_isLoading) return;
+    
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -189,8 +212,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     setState(() {
       _isLoading = false;
-      _remainingSeconds = 600; // Reset timer
-      _attemptsRemaining = 5; // Reset attempts
+      _remainingSeconds = 600;
+      _attemptsRemaining = 5;
     });
 
     _countdownTimer?.cancel();
@@ -202,7 +225,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -238,7 +260,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Header Icon
                       const Icon(
                         Icons.security,
                         size: 60,
@@ -246,7 +267,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Title
                       const Text(
                         'Verify Your Email',
                         style: TextStyle(
@@ -257,7 +277,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       const SizedBox(height: 10),
 
-                      // Email Display
                       Text(
                         'We sent a 6-digit code to:\n${widget.email}',
                         textAlign: TextAlign.center,
@@ -268,7 +287,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       const SizedBox(height: 24),
 
-                      // OTP Input Field
                       TextField(
                         controller: _otpController,
                         enabled: !_isLoading && !_isVerified,
@@ -324,7 +342,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Timer and Error Messages
                       if (!_isVerified)
                         Column(
                           children: [
@@ -359,7 +376,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ],
                         ),
 
-                      // Error Message
                       if (_errorMessage.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 16),
@@ -394,7 +410,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ),
                         ),
 
-                      // Verify Button
                       if (!_isVerified)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
@@ -440,7 +455,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ),
                         ),
 
-                      // Success Message
                       if (_isVerified)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
@@ -472,7 +486,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                           ),
                         ),
 
-                      // Resend Button
                       if (!_isVerified && _remainingSeconds <= 0)
                         Padding(
                           padding: const EdgeInsets.only(top: 16),

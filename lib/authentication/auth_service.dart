@@ -11,7 +11,6 @@ class AuthService {
   static const String _sessionKeyPrefix = 'session_verified_';
   static const String _requireReauthKey = 'require_reauth';
 
-  // save pin to secure storage
   Future<void> savePin(String pin) async {
     try {
       await _storage.write(key: 'user_pin', value: pin);
@@ -20,7 +19,6 @@ class AuthService {
     }
   }
 
-  // get pin from secure storage
   Future<String?> getPin() async {
     try {
       return await _storage.read(key: 'user_pin');
@@ -30,7 +28,6 @@ class AuthService {
     }
   }
 
-  // Register with email and password, with optional next of kin and gender
   Future<User?> registerWithEmail(
     String fullName,
     String email,
@@ -50,33 +47,65 @@ class AuthService {
       User? user = result.user;
 
       if (user != null) {
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        final currentUser = _auth.currentUser;
+        if (currentUser == null || currentUser.uid != user.uid) {
+          throw Exception('Authentication state not ready. Please try again.');
+        }
+
         Map<String, dynamic> userData = {
           'name': fullName,
           'email': email,
           'phone': phone,
           'createdAt': FieldValue.serverTimestamp(),
         };
-        if (nextOfKinName != null && nextOfKinName.isNotEmpty)
+        if (nextOfKinName != null && nextOfKinName.isNotEmpty) {
           userData['nextOfKinName'] = nextOfKinName;
-        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty)
+        }
+        if (nextOfKinPhone != null && nextOfKinPhone.isNotEmpty) {
           userData['nextOfKinPhone'] = nextOfKinPhone;
-        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty)
+        }
+        if (nextOfKinRelation != null && nextOfKinRelation.isNotEmpty) {
           userData['nextOfKinRelation'] = nextOfKinRelation;
-        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty)
+        }
+        if (nextOfKinAltPhone != null && nextOfKinAltPhone.isNotEmpty) {
           userData['nextOfKinAltPhone'] = nextOfKinAltPhone;
-        if (gender != null && gender.isNotEmpty)
+        }
+        if (gender != null && gender.isNotEmpty) {
           userData['gender'] = gender;
+        }
 
-        await _firestore.collection('users').doc(user.uid).set(userData);
+        int retryCount = 0;
+        bool saved = false;
+        while (retryCount < 3 && !saved) {
+          try {
+            await _firestore.collection('users').doc(user.uid).set(userData);
+            saved = true;
+          } catch (e) {
+            retryCount++;
+            if (retryCount < 3) {
+              await Future.delayed(const Duration(milliseconds: 500));
+            } else {
+              rethrow;
+            }
+          }
+        }
       }
       return user;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        final existingUser = _auth.currentUser;
+        if (existingUser != null && existingUser.email == email) {
+          return existingUser;
+        }
+      }
+      rethrow;
     } catch (e) {
-      print('Registration error: $e');
-      return null;
+      rethrow;
     }
   }
 
-  // Login with email and password - with proper error handling
   Future<User?> loginWithEmail(String email, String password) async {
     try {
       UserCredential result = await _auth.signInWithEmailAndPassword(
@@ -114,7 +143,6 @@ class AuthService {
     }
   }
 
-  // Send password reset email
   Future<bool> sendPasswordResetEmail(String email) async {
     try {
       await _auth.sendPasswordResetEmail(email: email);
@@ -125,28 +153,23 @@ class AuthService {
     }
   }
 
-  // Logout
   Future<void> logout() async {
     await _auth.signOut();
   }
 
-  // Get current user
   User? getCurrentUser() {
     return _auth.currentUser;
   }
 
-  // Get user data from Firestore
   Future<Map<String, dynamic>?> getUserData(String uid) async {
     DocumentSnapshot doc = await _firestore.collection('users').doc(uid).get();
     return doc.data() as Map<String, dynamic>?;
   }
 
-  // Update user data (generic)
   Future<void> updateUserData(String uid, Map<String, dynamic> data) async {
     await _firestore.collection('users').doc(uid).update(data);
   }
 
-  // Update next of kin specifically
   Future<void> updateNextOfKin(
     String userId, {
     String? name,
@@ -164,9 +187,6 @@ class AuthService {
     }
   }
 
-  // --- Session / re-auth helpers ---
-
-  /// Mark the session as verified (store timestamp for current user)
   Future<void> markSessionVerified() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -183,7 +203,6 @@ class AuthService {
     }
   }
 
-  /// Mark that reauth is required (called when app is backgrounded/exited)
   Future<void> markRequireReauth() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -193,7 +212,6 @@ class AuthService {
     }
   }
 
-  /// Clear the require reauth flag
   Future<void> clearRequireReauth() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -203,7 +221,6 @@ class AuthService {
     }
   }
 
-  /// Returns true if the app currently requires re-authentication
   Future<bool> isRequireReauth() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -214,7 +231,6 @@ class AuthService {
     }
   }
 
-  /// Re-authenticate the current user using their password
   Future<bool> reauthenticateWithPassword(String password) async {
     try {
       final user = _auth.currentUser;
@@ -234,14 +250,17 @@ class AuthService {
   }
 
   Future<bool> reauthenticateWithPIN(String pin) async {
-    String? storedPin = await _storage.read(key: 'user_pin');
-    if (storedPin == null) {
-      throw Exception("There is no pin available for this user.");
+    try {
+      String? storedPin = await _storage.read(key: 'user_pin');
+      if (storedPin == null) {
+        return false;
+      }
+      return pin == storedPin;
+    } catch (e) {
+      return false;
     }
-    return pin == storedPin;
   }
 
-  /// Clear stored session info for current user
   Future<void> clearSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
