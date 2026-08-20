@@ -48,7 +48,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   void initState() {
     super.initState();
     _otpController = TextEditingController();
-    _sendOTP();
     _startCountdown();
   }
 
@@ -57,26 +56,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     _otpController.dispose();
     _countdownTimer?.cancel();
     super.dispose();
-  }
-
-  Future<void> _sendOTP() async {
-    if (_isLoading) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-
-    final result = await OTPService.sendOTPForRegistration(widget.email);
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result?['success'] != true) {
-      setState(() {
-        _errorMessage = result?['message'] ?? 'Failed to send OTP. Please try again.';
-      });
-    }
   }
 
   void _startCountdown() {
@@ -101,7 +80,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   Future<void> _verifyOTP() async {
     if (_isLoading) return;
-    
+
     final otp = _otpController.text.trim();
 
     if (otp.isEmpty) {
@@ -201,7 +180,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
   Future<void> _resendOTP() async {
     if (_isLoading) return;
-    
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -417,14 +396,16 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed:
-                                  (_isLoading || _otpController.text.length != 6)
-                                      ? null
-                                      : _verifyOTP,
+                                  (_isLoading ||
+                                      _otpController.text.length != 6)
+                                  ? null
+                                  : _verifyOTP,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFFD105FF),
                                 foregroundColor: Colors.white,
-                                disabledBackgroundColor:
-                                    const Color(0xFFD105FF).withOpacity(0.5),
+                                disabledBackgroundColor: const Color(
+                                  0xFFD105FF,
+                                ).withOpacity(0.5),
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 14,
                                 ),
@@ -440,8 +421,8 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                                         strokeWidth: 2,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                          Colors.white,
-                                        ),
+                                              Colors.white,
+                                            ),
                                       ),
                                     )
                                   : const Text(
