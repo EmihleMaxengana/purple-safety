@@ -1,13 +1,18 @@
-import * as functions from 'firebase-functions';
-import * as nodemailer from 'nodemailer';
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { initializeApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
+import * as functions from "firebase-functions";
+import * as nodemailer from "nodemailer";
+
+initializeApp();
 
 // CONFIGURE EMAIL (GMAIL EXAMPLE)
 
-const EMAIL_USER = 'emihlemaxengana05@gmail.com';
-const EMAIL_PASS = 'czkb rvcb vped skcv'; //  app password
+const EMAIL_USER = "emihlemaxengana05@gmail.com";
+const EMAIL_PASS = "czkb rvcb vped skcv"; //  app password
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  service: "gmail",
   auth: {
     user: EMAIL_USER,
     pass: EMAIL_PASS,
@@ -15,7 +20,6 @@ const transporter = nodemailer.createTransport({
 });
 
 const SENDER_EMAIL = EMAIL_USER;
-
 
 // cloud functions: Send OTP Email
 
@@ -25,8 +29,8 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
   // Validate inputs
   if (!email || !otp) {
     throw new functions.https.HttpsError(
-      'invalid-argument',
-      'Email and OTP are required'
+      "invalid-argument",
+      "Email and OTP are required",
     );
   }
 
@@ -35,17 +39,17 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
   const emailRegex = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/;
   if (!emailRegex.test(email)) {
     throw new functions.https.HttpsError(
-      'invalid-argument',
-      'Invalid email address'
+      "invalid-argument",
+      "Invalid email address",
     );
   }
 
   // Validate OTP format (6 digits)
-  
+
   if (!/^[0-9]{6}$/.test(otp)) {
     throw new functions.https.HttpsError(
-      'invalid-argument',
-      'OTP must be 6 digits'
+      "invalid-argument",
+      "OTP must be 6 digits",
     );
   }
 
@@ -54,7 +58,7 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
     await transporter.sendMail({
       from: SENDER_EMAIL,
       to: email,
-      subject: 'Purple Safety - OTP Verification Code',
+      subject: "Purple Safety - OTP Verification Code",
       html: `
         <!DOCTYPE html>
         <html>
@@ -112,12 +116,57 @@ export const sendOTPEmail = functions.https.onCall(async (request) => {
 
     console.log(` OTP email sent to ${email}`);
     return { success: true };
-
   } catch (error) {
-    console.error(' Error sending OTP email:', error);
+    console.error(" Error sending OTP email:", error);
     throw new functions.https.HttpsError(
-      'internal',
-      'Failed to send OTP email'
+      "internal",
+      "Failed to send OTP email",
     );
+  }
+});
+
+export const sendNotification = onCall(async (request) => {
+  const { token, title, body } = request.data;
+
+  // Ensure request.auth context exists
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated.",
+    );
+  }
+
+  if (!token) {
+    throw new HttpsError("invalid-argument", "FCM token is required.");
+  }
+
+  if (!title || !body) {
+    throw new HttpsError("invalid-argument", "Title and body are required.");
+  }
+
+  const message = {
+    token: token,
+
+    notification: {
+      title: title,
+      body: body,
+    },
+
+    data: {
+      type: "general",
+    },
+  };
+
+  try {
+    const response = await getMessaging().send(message);
+
+    return {
+      success: true,
+      messageId: response,
+    };
+  } catch (error) {
+    console.error("FCM error:", error);
+
+    throw new HttpsError("internal", "Failed to send notification.");
   }
 });
