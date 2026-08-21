@@ -1,12 +1,8 @@
-import 'dart:io';
-
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:purple_safety/authentication/auth_service.dart';
-import 'package:purple_safety/services/cloud_functions_service.dart';
 import 'package:purple_safety/services/local_notifications_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FirebaseMessagingService {
   FirebaseMessagingService._internal();
@@ -35,18 +31,8 @@ class FirebaseMessagingService {
 
   Future<void> _handlePushNotificationsToken() async {
     final token = await FirebaseMessaging.instance.getToken();
-
-    if (token != null) {
-      FirebaseFirestore.instance
-          .collection('users')
-          .doc(AuthService().getCurrentUser()?.uid)
-          .update({
-            'devices': [
-              {'platform': Platform.operatingSystem, 'token': token},
-            ],
-          });
-      debugPrint("[Firebase Messaging Service] FCM token: $token");
-    }
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setString('fcmToken', token ?? '');
 
     FirebaseMessaging.instance.onTokenRefresh
         .listen((fcmToken) {
@@ -54,14 +40,7 @@ class FirebaseMessagingService {
             debugPrint(
               '[Firebase Messaging Service] FCM token refreshed: $fcmToken',
             );
-            FirebaseFirestore.instance
-                .collection('users')
-                .doc(AuthService().getCurrentUser()?.uid)
-                .update({
-                  'devices': [
-                    {'platform': Platform.operatingSystem, 'token': fcmToken},
-                  ],
-                });
+            prefs.setString('fcmToken', fcmToken);
           }
         })
         .onError((error) {

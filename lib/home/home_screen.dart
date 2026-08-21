@@ -5,7 +5,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:purple_safety/services/cloud_functions_service.dart';
-import 'package:purple_safety/services/local_notifications_service.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
@@ -80,9 +79,6 @@ class _HomeScreenState extends State<HomeScreen>
   // privacy toggles
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
-
-  final LocalNotificationsService _localNotificationsService =
-      LocalNotificationsService.instance();
 
   void _getAllDangerZones() async {
     try {

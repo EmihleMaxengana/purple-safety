@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:purple_safety/services/cloud_functions_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
@@ -45,6 +48,7 @@ class AuthService {
         password: password,
       );
       User? user = result.user;
+      SharedPreferences prefs = await SharedPreferences.getInstance();
 
       if (user != null) {
         await Future.delayed(const Duration(milliseconds: 500));
@@ -75,6 +79,16 @@ class AuthService {
         if (gender != null && gender.isNotEmpty) {
           userData['gender'] = gender;
         }
+        userData['devices'] = [
+          {
+            'platform': Platform.operatingSystem,
+            'token': prefs.getString('fcmToken') ?? '',
+          },
+        ];
+        await CloudFunctionsService().sendWelcomeNotification(
+          token: prefs.getString('fcmToken') as String,
+        );
+        prefs.remove('fcmToken');
 
         int retryCount = 0;
         bool saved = false;
