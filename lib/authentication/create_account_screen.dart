@@ -1389,34 +1389,34 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(PrefKeys.useBiometrics, _useBiometrics);
 
-        // if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => OTPVerificationScreen(
-              email: email,
-              fullName: fullName,
-              password: password,
-              phone: phone,
-              nextOfKinName: nextOfKinFullName.trim().isEmpty
-                  ? null
-                  : nextOfKinFullName,
-              nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty
-                  ? null
-                  : _nextOfKinPhoneController.text.trim(),
-              nextOfKinRelation:
-                  _nextOfKinRelationController.text.trim().isEmpty
-                  ? null
-                  : _nextOfKinRelationController.text.trim(),
-              nextOfKinAltPhone:
-                  _nextOfKinAltPhoneController.text.trim().isEmpty
-                  ? null
-                  : _nextOfKinAltPhoneController.text.trim(),
-              gender: _selectedGender,
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPVerificationScreen(
+                email: email,
+                fullName: fullName,
+                password: password,
+                phone: phone,
+                nextOfKinName: nextOfKinFullName.trim().isEmpty
+                    ? null
+                    : nextOfKinFullName,
+                nextOfKinPhone: _nextOfKinPhoneController.text.trim().isEmpty
+                    ? null
+                    : _nextOfKinPhoneController.text.trim(),
+                nextOfKinRelation:
+                    _nextOfKinRelationController.text.trim().isEmpty
+                    ? null
+                    : _nextOfKinRelationController.text.trim(),
+                nextOfKinAltPhone:
+                    _nextOfKinAltPhoneController.text.trim().isEmpty
+                    ? null
+                    : _nextOfKinAltPhoneController.text.trim(),
+                gender: _selectedGender,
+              ),
             ),
-          ),
-        );
-        // }
+          );
+        }
       } else {
         setState(() {
           _errorMessage =
