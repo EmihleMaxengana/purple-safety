@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/services/cloud_functions_service.dart';
+import 'package:purple_safety/models/danger_zone_model.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/manage_contacts_modal.dart';
@@ -76,14 +80,19 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _hasCenteredMap = false;
 
-  // privacy toggles
+  // ============================================================
+  // PRIVACY TOGGLES
+  // ============================================================
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
+
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
+  bool _notificationsInitialized = false;
 
   void _getAllDangerZones() async {
     try {
       final dangerZones = await DangerZoneService().loadDangerZonesCircle();
-
       setState(() {
         _dangerZones = dangerZones;
       });
@@ -102,22 +111,20 @@ class _HomeScreenState extends State<HomeScreen>
     _getAllDangerZones();
     _syncEmergencyStateFromBackend();
     _listenToContacts();
-    // TODO: consult on the removal of this function
-    // _listenToIncomingSOSAlerts();
-    _listenToEmergencyStatus(); //(ADDED: listen to EmergencyManager stream)
+    _listenToIncomingSOSAlerts();
+    _listenToEmergencyStatus();
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
     _loadPrivacyToggles();
+    _initializeLocalNotifications();
   }
 
-  //(ADDED: listen to EmergencyManager stream for state changes)
   void _listenToEmergencyStatus() {
     EmergencyManager().emergencyStatusStream.listen((isEmergency) {
       if (mounted) {
         setState(() {
           _isEmergencyActive = isEmergency;
         });
-        //(if deactivated, reset SOS button state)
         if (!isEmergency) {
           _isSosActive = false;
           _showSOSStatus = false;
@@ -143,6 +150,50 @@ class _HomeScreenState extends State<HomeScreen>
           _showSOSStatus = false;
         }
       });
+    }
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    const initializationSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    );
+
+    try {
+      final initialized = await _localNotifications.initialize(
+        settings: initializationSettings,
+      );
+      if (initialized != true) {
+        debugPrint('Local notifications failed to initialize');
+        return;
+      }
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'sos_alerts',
+          'SOS alerts',
+          description: 'Notifications shown when an SOS is activated',
+          importance: Importance.max,
+          playSound: true,
+        ),
+      );
+
+      final permissionGranted =
+          await androidPlugin?.requestNotificationsPermission() ?? true;
+      final notificationsEnabled =
+          await androidPlugin?.areNotificationsEnabled() ?? true;
+      _notificationsInitialized = permissionGranted && notificationsEnabled;
+
+      debugPrint(
+        'Local notifications initialized; permission granted: '
+        '$permissionGranted, enabled: $notificationsEnabled',
+      );
+    } catch (e) {
+      debugPrint('Unable to initialize local notifications: $e');
     }
   }
 
@@ -207,43 +258,35 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
-  // TODO: compare and test functionality with 'FirebaseMessaging.onMessage.listen(_onForegroundMessage)'
-  // void _listenToIncomingSOSAlerts() {
-  //   final user = AuthService().getCurrentUser();
-  //   if (user == null) return;
+  void _listenToIncomingSOSAlerts() {
+    final user = AuthService().getCurrentUser();
+    if (user == null) return;
 
-  //   _alertsSubscription = FirebaseFirestore.instance
-  //       .collection('users')
-  //       .doc(user.uid)
-  //       .collection('alerts')
-  //       .snapshots()
-  //       .listen((snapshot) {
-  //         if (!_hasLoadedAlerts) {
-  //           _hasLoadedAlerts = true;
-  //           return;
-  //         }
+    _alertsSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('alerts')
+        .snapshots()
+        .listen((snapshot) {
+          if (!_hasLoadedAlerts) {
+            _hasLoadedAlerts = true;
+            return;
+          }
 
-  //         for (final change in snapshot.docChanges) {
-  //           if (change.type != DocumentChangeType.added) continue;
+          for (final change in snapshot.docChanges) {
+            if (change.type != DocumentChangeType.added) continue;
 
-  //           final data = change.doc.data();
-  //           if (data?['type'] != 'sos') continue;
-  //         }
+            final data = change.doc.data();
+            if (data?['type'] != 'sos') continue;
 
-  //         for (final item in snapshot.docs) {
-  //           final data = item.data();
-  //           if (data['type'] == 'sos') {
-  //             if (user.displayName != data['userName']) {
-  //               _localNotificationsService.showNotification(
-  //                 "SOS Alert",
-  //                 data['message'],
-  //                 null,
-  //               );
-  //             }
-  //           }
-  //         }
-  //       });
-  // }
+            _showSOSNotification(
+              message:
+                  data?['message'] as String? ??
+                  'Someone has triggered an SOS alert.',
+            );
+          }
+        });
+  }
 
   Future<void> _initLocation() async {
     setState(() => _isLocationLoading = true);
@@ -336,9 +379,7 @@ class _HomeScreenState extends State<HomeScreen>
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(
-      user.uid,
-    );
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
     if (!EmergencyManager.canActivateSOS(
       isEmergencyActive: _isEmergencyActive,
       hasActiveSOS: hasActiveSOS,
@@ -406,12 +447,10 @@ class _HomeScreenState extends State<HomeScreen>
       userName = userData?['name'] ?? 'A user';
     }
 
-    // check if we should include location
     bool includeLocation = false;
     double? lat;
     double? lng;
 
-    // if either toggle is on, we include location
     if (_shareLocationWithContacts || _shareLocationWithCommunity) {
       if (_currentPosition != null) {
         includeLocation = true;
@@ -427,7 +466,6 @@ class _HomeScreenState extends State<HomeScreen>
 
     try {
       if (includeLocation && lat != null && lng != null) {
-        // send SOS with location
         await SOSAlertService.sendCommunitySOSAlert(
           userId: userId,
           userName: userName,
@@ -437,7 +475,6 @@ class _HomeScreenState extends State<HomeScreen>
           shareWithCommunity: _shareLocationWithCommunity,
         );
       } else {
-        // send SOS without location
         await SOSAlertService.sendCommunitySOSAlert(
           userId: userId,
           userName: userName,
@@ -448,26 +485,9 @@ class _HomeScreenState extends State<HomeScreen>
         );
       }
 
-      final users = await FirebaseFirestore.instance.collection('users').get();
-      for (final user in users.docs) {
-        final List<dynamic>? devices = user.data()['devices'];
-        if (devices != null) {
-          for (final device in devices) {
-            if (device != null && device['token'] != null) {
-              await CloudFunctionsService().sendSOSAlert(
-                token: device['token'],
-                title: "SOS Alert Testing",
-                body: "SOS alert - by $userName - has been activated.",
-              );
-            }
-          }
-        }
-      }
-
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
-
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           setState(() {
@@ -476,8 +496,6 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
     } catch (e) {
-      debugPrint("[Home Screen] Error - $e");
-      // store pending SOS with or without location
       if (lat != null && lng != null) {
         await SOSAlertService.storeSOSLocally(
           userId: userId,
@@ -505,7 +523,6 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      // only send SMS fallback if location is available and contacts toggle is on
       if (lat != null && lng != null && _shareLocationWithContacts) {
         await _sendSMSFallback(userName, lat, lng);
       }
@@ -519,6 +536,56 @@ class _HomeScreenState extends State<HomeScreen>
     }
     EmergencyManager().setEmergencyActive(true);
     widget.onNavigateToTools?.call();
+  }
+
+  Future<void> _showSOSNotification({required String message}) async {
+    try {
+      if (!_notificationsInitialized) {
+        await _initializeLocalNotifications();
+      }
+      if (!_notificationsInitialized) {
+        debugPrint(
+          'SOS notification skipped: notification permission is not granted',
+        );
+        return;
+      }
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'sos_alerts',
+          'SOS alerts',
+          channelDescription: 'Notifications shown when an SOS is activated',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          autoCancel: false,
+          color: Colors.purple,
+          actions: [
+            AndroidNotificationAction(
+              'open_app',
+              'Open App',
+              showsUserInterface: true,
+              cancelNotification: true,
+            ),
+            AndroidNotificationAction(
+              'call_emergency',
+              'Call Emergency',
+              showsUserInterface: true,
+              cancelNotification: true,
+            ),
+          ],
+        ),
+      );
+
+      await _localNotifications.show(
+        id: 1001,
+        title: 'SOS alert received',
+        body: message,
+        notificationDetails: details,
+      );
+    } catch (e) {
+      debugPrint('Unable to show SOS notification: $e');
+    }
   }
 
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
@@ -586,6 +653,13 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  (double?, double?) _getCoordinates() {
+    return (_currentPosition?.latitude, _currentPosition?.longitude);
+  }
+
+  // ============================================================
+  // TRIP SHARING - WITH TOGGLE LOGIC
+  // ============================================================
   void _handleTripSharing() async {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -608,24 +682,28 @@ class _HomeScreenState extends State<HomeScreen>
         );
 
         setState(() {});
-
         _startTripUpdateTimer();
 
-        try {
-          final recipients = await dm_service.DmService.getSelectedRecipients();
-          final userId = user.uid;
-          if (userId.isNotEmpty && recipients.isNotEmpty) {
-            for (var recipientId in recipients) {
-              await dm_service.DmService.sendTripIdMessage(
-                recipientUserId: recipientId,
-                senderName: userName,
-                tripId: tripId,
-                senderId: userId,
-              );
+        // ============================================================
+        // If toggle is ON → auto-send to trusted contacts
+        // ============================================================
+        if (_shareLocationWithContacts) {
+          try {
+            final recipients = await dm_service.DmService.getSelectedRecipients();
+            final userId = user.uid;
+            if (userId.isNotEmpty && recipients.isNotEmpty) {
+              for (var recipientId in recipients) {
+                await dm_service.DmService.sendTripIdMessage(
+                  recipientUserId: recipientId,
+                  senderName: userName,
+                  tripId: tripId,
+                  senderId: userId,
+                );
+              }
             }
+          } catch (e) {
+            debugPrint('Auto DM error: $e');
           }
-        } catch (e) {
-          debugPrint('Auto DM error: $e');
         }
 
         _showTripShareDialog(tripId, userName);
@@ -673,6 +751,8 @@ class _HomeScreenState extends State<HomeScreen>
               style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
             const SizedBox(height: 20),
+
+            // Trip ID display
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -709,12 +789,52 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: tripId));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Trip ID copied!'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
                     },
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
+
+            // ============================================================
+            // OPTION 1: Share with trusted contacts (only if toggle is ON)
+            // ============================================================
+            if (_shareLocationWithContacts)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DMScreen(shareTripId: tripId),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.people, color: Color(0xFFBF7DCB)),
+                  label: const Text(
+                    'Share with trusted contacts',
+                    style: TextStyle(color: Color(0xFFBF7DCB)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFBF7DCB)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 12),
+
+            // ============================================================
+            // OPTION 2: Share outside app (always shown)
+            // ============================================================
             Row(
               children: [
                 Expanded(
@@ -726,52 +846,31 @@ class _HomeScreenState extends State<HomeScreen>
                       );
                     },
                     icon: const Icon(Icons.share),
-                    label: const Text('Share Trip ID'),
+                    label: const Text('Share Outside App'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF6A1B9A),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                    label: const Text('Close'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white70,
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
               ],
             ),
+
             const SizedBox(height: 12),
+
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DMScreen(shareTripId: tripId),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.people, color: Color(0xFFBF7DCB)),
-                label: const Text(
-                  'Share with trusted contacts',
-                  style: TextStyle(color: Color(0xFFBF7DCB)),
-                ),
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Color(0xFFBF7DCB)),
+                  foregroundColor: Colors.white70,
+                  side: const BorderSide(color: Colors.white24),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
+                child: const Text('Close'),
               ),
             ),
+
             const SizedBox(height: 8),
             Text(
               'Note: Friend needs Purple Safety app installed',
@@ -1034,7 +1133,6 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     final isMaxContacts = _contacts.length >= 5;
 
-    //(determine button text and color based on state)
     String buttonText;
     Color buttonColor;
     VoidCallback? onButtonTap;

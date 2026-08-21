@@ -76,6 +76,8 @@ class SOSAlertService {
         'audioUrl': audioUrl,
         'videoUrl': videoUrl,
         'responderCount': 0,
+        'shareWithContacts': shareWithContacts,
+        'shareWithCommunity': shareWithCommunity,
       };
 
       if (latitude != null && longitude != null) {
@@ -129,6 +131,9 @@ class SOSAlertService {
         'shareWithCommunity': shareWithCommunity,
       };
 
+      // ============================================================
+      // ONLY include location in global alert if shareWithCommunity is ON
+      // ============================================================
       if (shareWithCommunity && latitude != null && longitude != null) {
         globalAlertData['locationLink'] = locationLink;
         globalAlertData['latitude'] = latitude;
@@ -181,6 +186,9 @@ class SOSAlertService {
           'wasOffline': triggerLat != null,
         };
 
+        // ============================================================
+        // ONLY include location in alert if shareWithContacts is ON
+        // ============================================================
         if (shareWithContacts && latitude != null && longitude != null) {
           alertData['latitude'] = latitude;
           alertData['longitude'] = longitude;
