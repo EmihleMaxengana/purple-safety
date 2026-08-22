@@ -1,138 +1,230 @@
 # Purple Safety
 
-<!-- Purple Safety is a Flutter-based mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services. -->
+Purple Safety is a Flutter personal-safety application for Android and iOS. It combines SOS alerts, live location and trip sharing, trusted contacts, community incident reporting, direct messaging, danger-zone awareness, and emergency evidence capture. Firebase provides authentication, application data, file storage, notifications, and callable backend functions.
 
-<!-- # Purple Safety -->
+## Current features
 
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
-![Flutter](https://img.shields.io/badge/flutter-%3E=_3.0-blue?logo=flutter)
-![License](https://img.shields.io/badge/license-MIT-blue)
-![Firebase](https://img.shields.io/badge/firebase-config-orange)
+- Email/password authentication with email OTP verification
+- Biometric or PIN reauthentication
+- SOS activation, deactivation, and community alerts
+- Offline SOS queuing and delivery when connectivity returns
+- Live location and trip sharing
+- Community map with incident reports and South African danger-zone data
+- Trusted contacts, invitations, and next-of-kin management
+- Direct messages, media messages, and shared trip IDs
+- Photo, video, and audio evidence capture
+- Firebase Cloud Messaging and local notifications
+- Android shake and power-button emergency triggers
 
-Purple Safety is a Flutter mobile application providing personal safety features such as emergency alerts, contact management, location sharing, and safety tools. It supports Android and iOS and includes platform-specific native code and integrations for Firebase and device services.
+The main authenticated interface contains five sections: Home, Emergency, Community, Tools, and Settings.
 
-## Features
- 
-- Emergency alerts and incident reporting
-- Manage emergency contacts and next-of-kin
-- Location sharing and live map view
-- Biometric / fingerprint setup for secure access
-- Integration with Firebase (Auth, Firestore, Messaging)
+## Technology
+
+- Flutter and Dart
+- Firebase Authentication, Cloud Firestore, Realtime Database, Storage, Cloud Messaging, and Cloud Functions
+- Google Maps and device location services
+- Android native foreground services for shake and power-button detection
+- TypeScript Firebase Functions for OTP email and push-notification delivery
+
+## Supported platforms
+
+Android and iOS are the intended mobile targets. Flutter-generated web, macOS, Linux, and Windows scaffolding is present, but those targets are not currently documented or verified and several mobile/device features will not work on them without additional implementation.
 
 ## Prerequisites
 
-- Flutter SDK (recommended >= 3.0)
-- Android SDK / Android Studio for Android builds
-- Xcode for iOS builds (macOS only)
-- A Firebase project for your app (you'll add platform-specific config files)
+- A Flutter SDK that includes Dart `>=3.10.0 <4.0.0`
+- Android Studio/Android SDK with Java 17 for Android development
+- Xcode and CocoaPods on macOS for iOS development
+- A Firebase project and Firebase CLI
+- Node.js 24 and npm when developing or deploying Firebase Cloud Functions
+- A Google Maps API key with the Maps SDK enabled for each target platform
+- A physical device for reliable testing of notifications, biometrics, background location, sensors, camera, microphone, and SOS triggers
 
-## Getting Started
+Confirm the installed toolchain before continuing:
 
-1. Clone the repository:
+```bash
+flutter doctor
+dart --version
+node --version
+firebase --version
+```
 
-   ```bash
-   git clone https://github.com/EmihleMaxengana/purple-safety.git
-   cd purple-safety
-   ```
+Node.js and Firebase CLI are only required for work involving Cloud Functions or Firebase deployment.
 
-2. Install dependencies:
+## Initial setup
+
+1. Install Flutter dependencies:
 
    ```bash
    flutter pub get
    ```
 
-3. Add platform Firebase config files (detailed steps below).
+2. Configure the project for your Firebase environment as described below.
 
-4. Run on an emulator or device:
+3. Start an Android emulator, iOS simulator, or connected device:
 
    ```bash
+   flutter devices
    flutter run
    ```
 
-## Detailed Firebase Setup
+## Firebase configuration
 
-Follow these steps to connect the app to Firebase and enable required services.
+The app calls `Firebase.initializeApp()` using native platform configuration. It therefore requires a valid configuration file for each mobile target:
 
-1. Create a Firebase project
-   - Visit <https://console.firebase.google.com> and create a new project.
+- Android: `android/app/google-services.json`
+- iOS: `ios/Runner/GoogleService-Info.plist`
 
-2. Add Android app in Firebase
-   - Register package name (match `applicationId` in `android/app/build.gradle.kts`).
-   - Add a nickname (optional).
-   - Add debug and release SHA-1 keys (important for authentication and Google Sign-In):
+Configuration files may already exist in a checkout, but they are tied to a specific Firebase project. Replace them when using another Firebase project and ensure their package/bundle identifiers match the application.
 
-   ```bash
-   # Get debug SHA-1
-   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android
-   ```
+The current Android application ID is `com.emihle.purplesafety`. The iOS bundle ID is defined by the Runner target in Xcode.
 
-   - Download `google-services.json` and place it at `android/app/google-services.json` (or `android/app/`).
-   - Update `android/build.gradle.kts` and `android/app/build.gradle.kts` as required by Firebase Android setup (the project already includes Gradle KTS files; follow Firebase console instructions if needed).
+Enable and configure these Firebase products:
 
-3. Android permissions and setup
-   - Ensure required permissions are present in `android/app/src/main/AndroidManifest.xml` (location, internet, contacts, camera, etc.).
-   - If using Google Maps, enable Maps SDK in Google Cloud Console and add your API key to the appropriate manifest or Gradle properties.
+- Authentication (including the sign-in providers used by the app)
+- Cloud Firestore
+- Realtime Database
+- Cloud Storage
+- Cloud Messaging
+- Cloud Functions
 
-4. Add iOS app in Firebase
-   - In the Firebase console, add an iOS app and register the `iOS bundle ID` (found in `ios/Runner/Info.plist`).
-   - Download `GoogleService-Info.plist` and add it to `ios/Runner/` in Xcode (ensure it is included in the Runner target).
-   - For push notifications (FCM) you'll need to configure APNs:
-     - Create an APNs Authentication Key (.p8) in Apple Developer account.
-     - Upload the key to Firebase (Project Settings > Cloud Messaging) and note the Key ID and Team ID.
+Firestore security rules and indexes must permit the app's authenticated workflows. The application uses data for users, contacts, invitations, alerts, incidents, active SOS events, chats/direct messages, trips, media, and global alerts. Production rules should grant only the minimum access required for each workflow.
 
-5. Enable Firebase services
-   - In the Firebase console, enable Authentication (Email, Phone, or other providers you need).
-   - Enable Firestore and create required collections/rules.
-   - Enable Cloud Messaging for push notifications.
+### Cloud Functions
 
-6. iOS entitlements and capabilities
-   - In Xcode, enable Push Notifications and Background Modes (Remote notifications) for the Runner target.
+The `functions/` directory contains the Firebase Cloud Functions source. Function methods are implemented and exported from `functions/src/`; they are then deployed to Firebase. The project currently provides:
 
-7. Optional: Cloud Functions / Server keys
-   - If the app uses server-side Firebase features or needs server keys, store keys securely outside the repo and follow best practices.
+- `sendOTPEmail` for registration OTP delivery
+- `sendNotification` for authenticated FCM notification delivery
 
-8. Verify
-   - Run the app on a real device and verify authentication, Firestore reads/writes, and FCM push notifications work.
+When working on Cloud Functions, install their dependencies once:
 
-## Building
+```bash
+cd functions
+npm ci
+cd ..
+```
 
-- Android (release):
+Implement or update functions in `functions/src/`. The following command can be used to validate that the TypeScript source compiles before deployment:
+
+```bash
+cd functions
+npm run build
+cd ..
+```
+
+To deploy the functions, log into Firebase and select the intended project from the repository root:
+
+```bash
+firebase login
+firebase use <project-id>
+firebase deploy --only functions
+```
+
+To run the functions locally with the Firebase emulator:
+
+```bash
+cd functions
+npm run serve
+```
+
+Do not commit mail passwords, service-account credentials, or unrestricted API keys. Configure email credentials with Firebase Secret Manager/environment configuration and update the Function to read those values at runtime before deploying. Any credential that has previously been committed should be revoked and replaced.
+
+## Google Maps
+
+Enable the appropriate Google Maps SDKs in Google Cloud and restrict each API key to the relevant application identifier and API.
+
+The Android map key is currently read from the `com.google.android.geo.API_KEY` metadata entry in `android/app/src/main/AndroidManifest.xml`. Replace the development value for your environment and avoid committing an unrestricted production key. iOS also requires its Maps SDK/API-key configuration before map features can run there.
+
+## Platform setup
+
+### Android
+
+The manifest includes permissions for location, background location, contacts, biometrics, SMS, camera, microphone, notifications, wake locks, and foreground services. It also declares native foreground services for shake and power-button SOS triggers.
+
+Review permission and foreground-service requirements against the Android SDK version you target. Background location and notification permissions must be granted by the user, and the emergency triggers should be tested on a real device. Configure a proper release signing key before publishing; the current release build uses debug signing for development convenience.
+
+### iOS
+
+Open `ios/Runner.xcworkspace` in Xcode and configure:
+
+- The correct development team and bundle identifier
+- Push Notifications capability
+- Background Modes required by the final app behavior, including remote notifications and location where applicable
+- APNs credentials in Firebase Cloud Messaging
+- Google Maps SDK/API key
+
+Camera, microphone, photo-library, contacts, Face ID, and location usage descriptions are already present in `Info.plist`. Verify all background behavior and notification flows on a physical device.
+
+## Running and building
+
+Run in development:
+
+```bash
+flutter run
+```
+
+Build Android:
 
 ```bash
 flutter build apk --release
+# or
+flutter build appbundle --release
 ```
 
-- iOS (release, macOS):
+Build iOS on macOS:
 
 ```bash
 flutter build ios --release
 ```
 
-## Project Structure
-
-- `lib/` — Dart source files and app UI
-- `android/`, `ios/` — platform-specific native code and configs
-- `assets/` — images and other static assets
-
-## Testing
-
-Run unit/widget tests with:
+## Tests and static analysis
 
 ```bash
+flutter analyze
 flutter test
 ```
 
-## Notes
+The current test suite includes widget coverage and an SOS activation guard test. Device integrations and Firebase-backed workflows still require integration/manual testing against a configured environment.
 
-- Ensure you configure Firebase and enable required APIs (Authentication, Firestore, Cloud Messaging) in the Firebase console.
-- Some plugins require additional platform setup (permissions in `AndroidManifest.xml` and iOS Info.plist entries). Check plugin docs for details.
+## Project structure
+
+```text
+lib/
+  authentication/  Sign-in, registration, OTP, and reauthentication
+  contacts/        Trusted contacts and invitation workflows
+  emergency/       Emergency state and SOS alert handling
+  home/            Home dashboard and location overview
+  incidents/       Community incident creation and display
+  map/             Community map, presence, and location sharing
+  messaging/       Direct messaging and shared trips
+  safety/          Safety tools, biometrics, and evidence capture
+  services/        Firebase, storage, notification, and location services
+  settings/        Profile, next-of-kin, alerts, and preferences
+  trip/            Live trip sharing and full-map tracking
+functions/src/     Firebase Cloud Function implementations
+assets/            Branding and South African danger-zone data
+android/, ios/     Native mobile configuration and integrations
+test/              Flutter unit and widget tests
+```
+
+## Security and production readiness
+
+Before a production release:
+
+- Revoke any credentials or API keys that were committed to source control.
+- Move backend credentials to Firebase Secret Manager.
+- Restrict Google Maps and Firebase keys by application and API.
+- Review Firestore, Realtime Database, and Storage security rules.
+- Replace Android debug signing with a protected release signing configuration.
+- Review cleartext-network and broad transport-security exceptions.
+- Validate SOS behavior, background location, notifications, and offline delivery on supported OS versions.
+- Add automated integration tests for critical emergency workflows.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines, code style, and PR process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow and coding guidelines.
 
 ## License
 
-<!-- Specify your project license in `CONTRIBUTING.md` or add a `LICENSE` file. -->
-
-If no LICENSE file exists, discuss licensing with maintainers before contributing.
+No `LICENSE` file is currently included. Confirm the intended license with the project maintainers before distributing or reusing the code.
