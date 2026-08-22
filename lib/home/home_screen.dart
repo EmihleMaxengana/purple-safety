@@ -446,7 +446,8 @@ class _HomeScreenState extends State<HomeScreen>
               await CloudFunctionsService().sendSOSAlert(
                 token: device['token'],
                 title: "SOS alert by $userName",
-                body: "Please screenshot and send back if received.",
+                body:
+                    "Alert activated. Please check on them or contact emergency services.",
               );
             }
           }
