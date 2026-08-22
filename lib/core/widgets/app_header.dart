@@ -21,9 +21,7 @@ AppBar buildAppHeader({
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             child: Image.asset(
               'assets/logo.png',
               fit: BoxFit.contain,
@@ -44,7 +42,7 @@ AppBar buildAppHeader({
           ),
           const SizedBox(width: 10),
           const Text(
-            'PurpleSafety',
+            'Purple Safety',
             style: TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -60,7 +58,11 @@ AppBar buildAppHeader({
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: IconButton(
-            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 20),
+            icon: const Icon(
+              Icons.chat_bubble_outline,
+              color: Colors.white,
+              size: 20,
+            ),
             onPressed: onDMTap,
             tooltip: 'Direct Messages',
           ),
@@ -72,7 +74,11 @@ AppBar buildAppHeader({
           child: Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications, color: Colors.white, size: 20),
+                icon: const Icon(
+                  Icons.notifications,
+                  color: Colors.white,
+                  size: 20,
+                ),
                 onPressed: onNotificationPressed,
               ),
               if (unreadAlertsCount > 0)
