@@ -6,7 +6,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/services/cloud_functions_service.dart';
 import 'package:purple_safety/models/danger_zone_model.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:geocoding/geocoding.dart';
@@ -117,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen>
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
     _loadPrivacyToggles();
+    _initializeLocalNotifications();
   }
 
   void _listenToEmergencyStatus() {
@@ -150,6 +150,50 @@ class _HomeScreenState extends State<HomeScreen>
           _showSOSStatus = false;
         }
       });
+    }
+  }
+
+  Future<void> _initializeLocalNotifications() async {
+    const initializationSettings = InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    );
+
+    try {
+      final initialized = await _localNotifications.initialize(
+        settings: initializationSettings,
+      );
+      if (initialized != true) {
+        debugPrint('Local notifications failed to initialize');
+        return;
+      }
+
+      final androidPlugin = _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+
+      await androidPlugin?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'sos_alerts',
+          'SOS alerts',
+          description: 'Notifications shown when an SOS is activated',
+          importance: Importance.max,
+          playSound: true,
+        ),
+      );
+
+      final permissionGranted =
+          await androidPlugin?.requestNotificationsPermission() ?? true;
+      final notificationsEnabled =
+          await androidPlugin?.areNotificationsEnabled() ?? true;
+      _notificationsInitialized = permissionGranted && notificationsEnabled;
+
+      debugPrint(
+        'Local notifications initialized; permission granted: '
+        '$permissionGranted, enabled: $notificationsEnabled',
+      );
+    } catch (e) {
+      debugPrint('Unable to initialize local notifications: $e');
     }
   }
 
@@ -234,6 +278,12 @@ class _HomeScreenState extends State<HomeScreen>
 
             final data = change.doc.data();
             if (data?['type'] != 'sos') continue;
+
+            _showSOSNotification(
+              message:
+                  data?['message'] as String? ??
+                  'Someone has triggered an SOS alert.',
+            );
           }
         });
   }
@@ -329,9 +379,7 @@ class _HomeScreenState extends State<HomeScreen>
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(
-      user.uid,
-    );
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
     if (!EmergencyManager.canActivateSOS(
       isEmergencyActive: _isEmergencyActive,
       hasActiveSOS: hasActiveSOS,
@@ -437,23 +485,6 @@ class _HomeScreenState extends State<HomeScreen>
         );
       }
 
-      final users = await FirebaseFirestore.instance.collection('users').get();
-      for (final user in users.docs) {
-        final List<dynamic>? devices = user.data()['devices'];
-        if (devices != null) {
-          for (final device in devices) {
-            if (device != null && device['token'] != null) {
-              await CloudFunctionsService().sendSOSAlert(
-                token: device['token'],
-                title: "SOS alert by $userName",
-                body:
-                    "Alert activated. Please check on them or contact emergency services.",
-              );
-            }
-          }
-        }
-      }
-
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
@@ -505,6 +536,56 @@ class _HomeScreenState extends State<HomeScreen>
     }
     EmergencyManager().setEmergencyActive(true);
     widget.onNavigateToTools?.call();
+  }
+
+  Future<void> _showSOSNotification({required String message}) async {
+    try {
+      if (!_notificationsInitialized) {
+        await _initializeLocalNotifications();
+      }
+      if (!_notificationsInitialized) {
+        debugPrint(
+          'SOS notification skipped: notification permission is not granted',
+        );
+        return;
+      }
+
+      const details = NotificationDetails(
+        android: AndroidNotificationDetails(
+          'sos_alerts',
+          'SOS alerts',
+          channelDescription: 'Notifications shown when an SOS is activated',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          autoCancel: false,
+          color: Colors.purple,
+          actions: [
+            AndroidNotificationAction(
+              'open_app',
+              'Open App',
+              showsUserInterface: true,
+              cancelNotification: true,
+            ),
+            AndroidNotificationAction(
+              'call_emergency',
+              'Call Emergency',
+              showsUserInterface: true,
+              cancelNotification: true,
+            ),
+          ],
+        ),
+      );
+
+      await _localNotifications.show(
+        id: 1001,
+        title: 'SOS alert received',
+        body: message,
+        notificationDetails: details,
+      );
+    } catch (e) {
+      debugPrint('Unable to show SOS notification: $e');
+    }
   }
 
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
@@ -608,8 +689,7 @@ class _HomeScreenState extends State<HomeScreen>
         // ============================================================
         if (_shareLocationWithContacts) {
           try {
-            final recipients =
-                await dm_service.DmService.getSelectedRecipients();
+            final recipients = await dm_service.DmService.getSelectedRecipients();
             final userId = user.uid;
             if (userId.isNotEmpty && recipients.isNotEmpty) {
               for (var recipientId in recipients) {
