@@ -379,7 +379,9 @@ class _HomeScreenState extends State<HomeScreen>
     final user = AuthService().getCurrentUser();
     if (user == null) return;
 
-    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(user.uid);
+    final hasActiveSOS = await SOSAlertService.hasActiveSOSEventForUser(
+      user.uid,
+    );
     if (!EmergencyManager.canActivateSOS(
       isEmergencyActive: _isEmergencyActive,
       hasActiveSOS: hasActiveSOS,
@@ -418,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   // ============================================================
-  // TRIGGER SOS - WITH PRIVACY TOGGLE CHECKS
+  // TRIGGER SOS - ONLY CALLS SOSAlertService
   // ============================================================
   void _triggerSOS() async {
     setState(() {

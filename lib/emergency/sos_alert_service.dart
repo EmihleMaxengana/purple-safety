@@ -8,10 +8,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:purple_safety/services/storage_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class SOSAlertService {
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static final FirebaseFunctions _functions = FirebaseFunctions.instance;
 
   static const String _pendingSOSKey = 'pending_sos';
 
@@ -131,9 +133,6 @@ class SOSAlertService {
         'shareWithCommunity': shareWithCommunity,
       };
 
-      // ============================================================
-      // ONLY include location in global alert if shareWithCommunity is ON
-      // ============================================================
       if (shareWithCommunity && latitude != null && longitude != null) {
         globalAlertData['locationLink'] = locationLink;
         globalAlertData['latitude'] = latitude;
@@ -151,8 +150,30 @@ class SOSAlertService {
       final usersSnapshot = await _firestore.collection('users').get();
       final batch = _firestore.batch();
 
+      List<String> trustedContactIds = [];
+      if (shareWithContacts) {
+        final contactsSnapshot = await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('contacts')
+            .get();
+        trustedContactIds = contactsSnapshot.docs.map((doc) => doc.id).toList();
+      }
+
       for (var userDoc in usersSnapshot.docs) {
         if (userDoc.id == userId) continue;
+
+        bool shouldReceiveAlert = false;
+
+        if (shareWithCommunity) {
+          shouldReceiveAlert = true;
+        } else if (shareWithContacts) {
+          if (trustedContactIds.contains(userDoc.id)) {
+            shouldReceiveAlert = true;
+          }
+        }
+
+        if (!shouldReceiveAlert) continue;
 
         final alertRef = _firestore
             .collection('users')
@@ -186,9 +207,6 @@ class SOSAlertService {
           'wasOffline': triggerLat != null,
         };
 
-        // ============================================================
-        // ONLY include location in alert if shareWithContacts is ON
-        // ============================================================
         if (shareWithContacts && latitude != null && longitude != null) {
           alertData['latitude'] = latitude;
           alertData['longitude'] = longitude;
@@ -200,12 +218,44 @@ class SOSAlertService {
         }
 
         batch.set(alertRef, alertData);
+
+        final List<dynamic>? devices = userDoc.data()['devices'];
+        if (devices != null) {
+          for (final device in devices) {
+            if (device != null && device['token'] != null) {
+              await _sendPushNotification(
+                token: device['token'],
+                title: "SOS Alert from $userName",
+                body: "Emergency alert activated. Please check on them.",
+              );
+            }
+          }
+        }
       }
 
       await batch.commit();
+
       return sosEventId;
     } catch (e) {
+      debugPrint('Error in sendCommunitySOSAlert: $e');
       rethrow;
+    }
+  }
+
+  static Future<void> _sendPushNotification({
+    required String token,
+    required String title,
+    required String body,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('sendNotification');
+      await callable.call({
+        'token': token,
+        'title': title,
+        'body': body,
+      });
+    } catch (e) {
+      debugPrint('Failed to send push notification: $e');
     }
   }
 

@@ -69,5 +69,5 @@ flutter:
   assets:
     - assets/logo.png
     - assets/icon.png
-    - assets/icon(1).png
+    - assets/icon.png
     - assets/SA_Danger_Zones_Enhanced.json
