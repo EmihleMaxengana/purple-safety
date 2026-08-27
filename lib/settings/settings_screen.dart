@@ -97,7 +97,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await BiometricService.setBiometricsEnabled(value);
   }
 
-  //(toggle with fingerprint - only for turning OFF)
   Future<void> _toggleWithFingerprintForOff(
     String settingName,
     bool currentValue,
@@ -561,6 +560,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<String?> _showReauthPasswordDialog() async {
+    final passwordController = TextEditingController();
+    bool obscurePassword = true;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text(
+              'Confirm Password',
+              style: TextStyle(color: Colors.white),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Please enter your current password to confirm account deletion.',
+                  style: TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passwordController,
+                  obscureText: obscurePassword,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: Color(0xFFBF7DCB)),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock, color: Color(0xFFBF7DCB)),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        obscurePassword ? Icons.visibility_off : Icons.visibility,
+                        color: const Color(0xFFBF7DCB),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          obscurePassword = !obscurePassword;
+                        });
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, null),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final password = passwordController.text.trim();
+                  if (password.isEmpty) {
+                    _showPopup(context, 'Please enter your password', isError: true);
+                    return;
+                  }
+                  Navigator.pop(context, password);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+                child: const Text('Confirm Delete'),
+              ),
+            ],
+            backgroundColor: const Color(0xFF1a0f2e),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(color: Colors.red.withOpacity(0.5)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _confirmDeleteAccount() async {
     final authenticated = await BiometricService.authenticateWithUserPreference(
       context: context,
@@ -634,6 +714,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user != null && user.email != null) {
+        //(show password dialog for reauthentication)
+        final password = await _showReauthPasswordDialog();
+        if (password == null || password.isEmpty) {
+          setState(() => _isLoading = false);
+          return;
+        }
+
         if (mounted) {
           showDialog(
             context: context,
@@ -653,6 +740,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           );
         }
+
+        //(re-authenticate with password)
+        final credential = EmailAuthProvider.credential(
+          email: user.email!,
+          password: password,
+        );
+        await user.reauthenticateWithCredential(credential);
 
         await StorageService.deleteUserFiles(user.uid);
 
@@ -983,7 +1077,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _buildSectionTitle('Privacy & Security'),
                 const SizedBox(height: 8),
 
-                //(share location with trusted contacts)
                 SwitchListTile(
                   title: const Text(
                     'Share location with trusted contacts',
@@ -996,7 +1089,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _shareLocationWithContacts,
                   onChanged: (value) {
                     if (value == false) {
-                      //(turning off - require authentication)
                       _toggleWithFingerprintForOff(
                         'Location Sharing with Contacts',
                         _shareLocationWithContacts,
@@ -1007,7 +1099,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       );
                     } else {
-                      //(turning on - no authentication needed)
                       setState(() => _shareLocationWithContacts = true);
                       _saveLocationSharingPreferences();
                       _showPopup(context, 'Location sharing with contacts enabled');
@@ -1016,7 +1107,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: Colors.purple,
                 ),
 
-                //(share location with community)
                 SwitchListTile(
                   title: const Text(
                     'Share location with community',
@@ -1029,7 +1119,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: _shareLocationWithCommunity,
                   onChanged: (value) {
                     if (value == false) {
-                      //(turning off - require authentication)
                       _toggleWithFingerprintForOff(
                         'Location Sharing with Community',
                         _shareLocationWithCommunity,
@@ -1040,7 +1129,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         },
                       );
                     } else {
-                      //(turning on - no authentication needed)
                       setState(() => _shareLocationWithCommunity = true);
                       _saveLocationSharingPreferences();
                       _showPopup(context, 'Location sharing with community enabled');
