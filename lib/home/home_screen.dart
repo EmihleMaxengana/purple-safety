@@ -1,3 +1,5 @@
+// home_screen.dart - Full file with changes
+
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
@@ -80,9 +82,6 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool _hasCenteredMap = false;
 
-  // ============================================================
-  // PRIVACY TOGGLES
-  // ============================================================
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
@@ -419,9 +418,6 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  // ============================================================
-  // TRIGGER SOS - ONLY CALLS SOSAlertService
-  // ============================================================
   void _triggerSOS() async {
     setState(() {
       _isCountdownActive = false;
@@ -525,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      if (lat != null && lng != null && _shareLocationWithContacts) {
+      if (lat != null && lng != null && _shareLocationWithContacts && _contacts.isNotEmpty) {
         await _sendSMSFallback(userName, lat, lng);
       }
     }
@@ -659,9 +655,6 @@ class _HomeScreenState extends State<HomeScreen>
     return (_currentPosition?.latitude, _currentPosition?.longitude);
   }
 
-  // ============================================================
-  // TRIP SHARING - WITH TOGGLE LOGIC
-  // ============================================================
   void _handleTripSharing() async {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -686,9 +679,6 @@ class _HomeScreenState extends State<HomeScreen>
         setState(() {});
         _startTripUpdateTimer();
 
-        // ============================================================
-        // If toggle is ON → auto-send to trusted contacts
-        // ============================================================
         if (_shareLocationWithContacts) {
           try {
             final recipients = await dm_service.DmService.getSelectedRecipients();
@@ -754,7 +744,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(height: 20),
 
-            // Trip ID display
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -791,12 +780,7 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     onPressed: () {
                       Clipboard.setData(ClipboardData(text: tripId));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Trip ID copied!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+                      _showPopup(context, 'Trip ID copied!');
                     },
                   ),
                 ],
@@ -804,9 +788,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             const SizedBox(height: 16),
 
-            // ============================================================
-            // OPTION 1: Share with trusted contacts (only if toggle is ON)
-            // ============================================================
             if (_shareLocationWithContacts)
               SizedBox(
                 width: double.infinity,
@@ -834,9 +815,6 @@ class _HomeScreenState extends State<HomeScreen>
 
             const SizedBox(height: 12),
 
-            // ============================================================
-            // OPTION 2: Share outside app (always shown)
-            // ============================================================
             Row(
               children: [
                 Expanded(
@@ -880,6 +858,22 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showPopup(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Info'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }
@@ -1327,40 +1321,34 @@ class _HomeScreenState extends State<HomeScreen>
 
         if (_showSOSStatus)
           Positioned(
-            top: 50,
-            left: 16,
-            right: 16,
-            child: Material(
-              elevation: 6,
-              borderRadius: BorderRadius.circular(12),
-              color: Colors.orange.withOpacity(0.9),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+            top: 150,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        _sosStatusMessage,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _showSOSStatus = false;
-                        });
-                      },
-                      child: const Icon(
-                        Icons.close,
+                    const SizedBox(width: 12),
+                    Text(
+                      _sosStatusMessage,
+                      style: const TextStyle(
                         color: Colors.white,
-                        size: 18,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
