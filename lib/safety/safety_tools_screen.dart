@@ -1,3 +1,4 @@
+// safety_tools_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -176,8 +177,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  //(I'm Safe - deactivate SOS)
-  // TODO: look at this function for refactoring...
   Future<void> _imSafe() async {
     if (!_isEmergencyActive) return;
 
@@ -366,7 +365,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  //(show popup dialog)
   void _showPopup(BuildContext context, String message) {
     showDialog(
       context: context,
@@ -383,7 +381,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
-  //(TAKE PHOTO)
   Future<void> _takePhoto() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
@@ -402,14 +399,11 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       return;
     }
 
-    //(get user name)
     final userData = await AuthService().getUserData(user.uid);
     final userName = userData?['name'] ?? 'User';
 
-    //(save locally)
     final String localPath = await _saveToLocalStorage(file, 'photo');
 
-    //(upload to Firebase Storage)
     String? storageUrl;
     try {
       storageUrl = await StorageService.uploadRecording(
@@ -421,7 +415,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       debugPrint('Failed to upload photo to storage: $e');
     }
 
-    //(save to Firestore)
     await _saveToFirestore(
       type: 'photo',
       localPath: localPath,
@@ -430,7 +423,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userId: user.uid,
     );
 
-    //(share with trusted contacts if auto-share is enabled)
     if (_autoShareRecordings) {
       await _shareMediaWithContacts(
         type: 'photo',
@@ -443,7 +435,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     _showPopup(context, 'Photo captured and saved');
   }
 
-  //(save to local storage)
   Future<String> _saveToLocalStorage(File file, String type) async {
     try {
       final directory = await getApplicationDocumentsDirectory();
@@ -459,7 +450,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  //(save to Firestore)
   Future<void> _saveToFirestore({
     required String type,
     required String localPath,
@@ -492,7 +482,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  //(share media with trusted contacts)
   Future<void> _shareMediaWithContacts({
     required String type,
     required String localPath,
@@ -506,14 +495,12 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     final message = 'Media shared from $userName';
 
-    //(share via system share)
     await Share.shareXFiles(
       [XFile(localPath)],
       text: message,
       subject: 'Purple Safety - $type',
     );
 
-    //(send notification to trusted contacts)
     final currentUser = AuthService().getCurrentUser();
     if (currentUser == null) return;
 
@@ -543,7 +530,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     debugPrint('Shared $type with ${_contacts.length} contacts');
   }
 
-  //(RECORD AUDIO)
   Future<void> _startAudioRecording() async {
     final micStatus = await Permission.microphone.request();
     if (!micStatus.isGranted) {
@@ -580,10 +566,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           final userData = await AuthService().getUserData(user.uid);
           final userName = userData?['name'] ?? 'User';
 
-          //(save locally - already saved by recorder)
           final localPath = path;
 
-          //(upload to Firebase Storage)
           String? storageUrl;
           try {
             storageUrl = await StorageService.uploadRecording(
@@ -595,7 +579,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             debugPrint('Failed to upload audio to storage: $e');
           }
 
-          //(save to Firestore)
           await _saveToFirestore(
             type: 'audio',
             localPath: localPath,
@@ -604,7 +587,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             userId: user.uid,
           );
 
-          //(share with trusted contacts if auto-share is enabled)
           if (_autoShareRecordings) {
             await _shareMediaWithContacts(
               type: 'audio',
@@ -620,7 +602,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
   }
 
-  //(RECORD VIDEO)
   Future<void> _recordVideo() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
@@ -638,10 +619,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       final userData = await AuthService().getUserData(user.uid);
       final userName = userData?['name'] ?? 'User';
 
-      //(save locally)
       final String localPath = await _saveToLocalStorage(file, 'video');
 
-      //(upload to Firebase Storage)
       String? storageUrl;
       try {
         storageUrl = await StorageService.uploadRecording(
@@ -653,7 +632,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         debugPrint('Failed to upload video to storage: $e');
       }
 
-      //(save to Firestore)
       await _saveToFirestore(
         type: 'video',
         localPath: localPath,
@@ -662,7 +640,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
         userId: user.uid,
       );
 
-      //(share with trusted contacts if auto-share is enabled)
       if (_autoShareRecordings) {
         await _shareMediaWithContacts(
           type: 'video',
@@ -678,6 +655,57 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (!_isEmergencyActive) {
+      return Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
+          ),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.lock,
+                color: Colors.white38,
+                size: 64,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Safety Tools Locked',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Safety Tools are only available during an active SOS emergency.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Please trigger SOS from the Home screen first.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -703,8 +731,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
               Row(
                 children: [
                   Expanded(child: _buildCallEmergencyButton()),
-                  if (_isEmergencyActive) const SizedBox(width: 12),
-                  if (_isEmergencyActive) Expanded(child: _buildImSafeButton()),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildImSafeButton()),
                 ],
               ),
               const SizedBox(height: 40),
@@ -831,6 +859,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           Switch(
             value: _autoShareRecordings,
             onChanged: (value) async {
+              if (value == false) {
+                final authenticated = await BiometricService.authenticateWithUserPreference(
+                  context: context,
+                  reason: 'Authenticate to disable auto-sharing',
+                );
+                if (!authenticated) return;
+              }
               setState(() {
                 _autoShareRecordings = value;
               });

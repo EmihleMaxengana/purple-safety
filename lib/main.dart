@@ -26,7 +26,6 @@ void main() async {
     localNotificationsService: localNotificationsService,
   );
 
-  // SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
   final incidentService = IncidentService();
@@ -75,27 +74,27 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
 
   Future<void> _checkPendingSOS() async {
     final hasPending = await SOSAlertService.hasPendingSOS();
-    print('🔍 Checking pending SOS: hasPending = $hasPending');
+    print('(checking pending SOS: hasPending = $hasPending');
 
     if (!hasPending) {
-      print('ℹ️ No pending SOS found');
+      print('(no pending SOS found');
       return;
     }
 
     final connectivityResult = await Connectivity().checkConnectivity();
-    print('📡 Current connectivity: $connectivityResult');
+    print('(current connectivity: $connectivityResult');
 
     if (connectivityResult != ConnectivityResult.none) {
-      print('✅ Internet available, attempting to send pending SOS...');
+      print('(internet available, attempting to send pending SOS...');
       await _sendPendingSOS();
     } else {
-      print('⏳ No internet, waiting for connection...');
+      print('(no internet, waiting for connection...');
     }
 
     Connectivity().onConnectivityChanged.listen((result) async {
-      print('📡 Connectivity changed: $result');
+      print('(connectivity changed: $result');
       if (result != ConnectivityResult.none) {
-        print('✅ Internet restored, sending pending SOS...');
+        print('(internet restored, sending pending SOS...');
         await _sendPendingSOS();
       }
     });
@@ -103,7 +102,7 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
 
   Future<void> _sendPendingSOS() async {
     if (_isSendingPending) {
-      print('⏳ Already sending pending SOS, skipping...');
+      print('(already sending pending SOS, skipping...');
       return;
     }
 
@@ -111,22 +110,22 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
 
     try {
       final pendingList = await SOSAlertService.getPendingSOS();
-      print('📦 Pending SOS list: $pendingList');
+      print('(pending SOS list: $pendingList');
 
       if (pendingList.isEmpty) {
-        print('ℹ️ No pending SOS to send');
+        print('(no pending SOS to send');
         _isSendingPending = false;
         return;
       }
 
-      print('📍 Getting current location...');
+      print('(getting current location...');
       final locationPlugin = location.Location();
 
       bool serviceEnabled = await locationPlugin.serviceEnabled();
       if (!serviceEnabled) {
         serviceEnabled = await locationPlugin.requestService();
         if (!serviceEnabled) {
-          print('❌ Location service not enabled');
+          print('(location service not enabled');
           _isSendingPending = false;
           return;
         }
@@ -136,7 +135,7 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
       if (permission == location.PermissionStatus.denied) {
         final requested = await locationPlugin.requestPermission();
         if (requested != location.PermissionStatus.granted) {
-          print('❌ Location permission denied');
+          print('(location permission denied');
           _isSendingPending = false;
           return;
         }
@@ -145,19 +144,19 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
       final currentLocation = await locationPlugin.getLocation();
       if (currentLocation.latitude == null ||
           currentLocation.longitude == null) {
-        print('❌ Failed to get current location');
+        print('(failed to get current location');
         _isSendingPending = false;
         return;
       }
 
       print(
-        '📍 Current location: ${currentLocation.latitude}, ${currentLocation.longitude}',
+        '(current location: ${currentLocation.latitude}, ${currentLocation.longitude}',
       );
 
       int sentCount = 0;
       for (var sosData in pendingList) {
         try {
-          print('📤 Sending SOS for user: ${sosData['userId']}');
+          print('(sending SOS for user: ${sosData['userId']}');
           await SOSAlertService.sendCommunitySOSAlert(
             userId: sosData['userId']!,
             userName: sosData['userName']!,
@@ -168,18 +167,18 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
             triggerTimestamp: sosData['triggerTimestamp'],
           );
           sentCount++;
-          print('✅ Pending SOS sent successfully for ${sosData['userId']}');
+          print('(pending SOS sent successfully for ${sosData['userId']}');
         } catch (e) {
-          print('❌ Failed to send pending SOS: $e');
+          print('(failed to send pending SOS: $e');
         }
       }
 
       if (sentCount > 0) {
         await SOSAlertService.clearPendingSOS();
-        print('🧹 Pending SOS cleared from storage');
+        print('(pending SOS cleared from storage');
       }
     } catch (e) {
-      print('❌ Error in _sendPendingSOS: $e');
+      print('(error in _sendPendingSOS: $e');
     } finally {
       _isSendingPending = false;
     }
