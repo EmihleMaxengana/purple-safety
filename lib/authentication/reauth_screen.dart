@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
@@ -22,7 +25,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
   String _error = '';
   bool _isLoading = false;
   bool _useBiometrics = false;
-  bool _isBiometricAvailable = false;
+  // bool _isBiometricAvailable = false;
 
   Color get _primary => const Color(0xFF6A1B9A);
   Color get _accent => const Color(0xFFBF7DCB);
@@ -41,7 +44,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
 
     setState(() {
       _useBiometrics = biometricsEnabled && available;
-      _isBiometricAvailable = available;
+      // _isBiometricAvailable = available;
     });
 
     // If biometrics are enabled and available, try immediately
@@ -59,6 +62,28 @@ class _ReauthScreenState extends State<ReauthScreen> {
     );
     if (authenticated) {
       await _authService.markSessionVerified();
+
+      final prefs = await SharedPreferences.getInstance();
+      final fcmToken = prefs.getString('fcmToken');
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(AuthService().getCurrentUser()!.uid);
+      final userSnap = await userRef.get();
+      if (userSnap.exists) {
+        List<dynamic> devices = userSnap.data()!['devices'];
+        final tokenExists = devices.any(
+          (device) => device['token'] == fcmToken,
+        );
+        if (!tokenExists) {
+          final device = {
+            'platform': Platform.operatingSystem,
+            'token': fcmToken,
+          };
+          devices.add(device);
+          await userRef.update({'devices': devices});
+        }
+      }
+
       widget.onAuthenticated?.call();
     } else {
       setState(() {
@@ -83,6 +108,28 @@ class _ReauthScreenState extends State<ReauthScreen> {
 
     if (isValid) {
       await _authService.markSessionVerified();
+
+      final prefs = await SharedPreferences.getInstance();
+      final fcmToken = prefs.getString('fcmToken');
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(AuthService().getCurrentUser()!.uid);
+      final userSnap = await userRef.get();
+      if (userSnap.exists) {
+        List<dynamic> devices = userSnap.data()!['devices'];
+        final tokenExists = devices.any(
+          (device) => device['token'] == fcmToken,
+        );
+        if (!tokenExists) {
+          final device = {
+            'platform': Platform.operatingSystem,
+            'token': fcmToken,
+          };
+          devices.add(device);
+          await userRef.update({'devices': devices});
+        }
+      }
+
       widget.onAuthenticated?.call();
     } else {
       setState(() {
@@ -191,10 +238,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
 
               const SizedBox(height: 8),
               if (_error.isNotEmpty)
-                Text(
-                  _error,
-                  style: const TextStyle(color: Colors.redAccent),
-                ),
+                Text(_error, style: const TextStyle(color: Colors.redAccent)),
               const SizedBox(height: 20),
 
               // Submit Button
@@ -250,10 +294,7 @@ class _ReauthScreenState extends State<ReauthScreen> {
                           const SizedBox(width: 8),
                           Text(
                             'Use fingerprint',
-                            style: TextStyle(
-                              color: _accent,
-                              fontSize: 14,
-                            ),
+                            style: TextStyle(color: _accent, fontSize: 14),
                           ),
                         ],
                       ),

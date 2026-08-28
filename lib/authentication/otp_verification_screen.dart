@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purple_safety/authentication/otp_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/navigation/main_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
@@ -141,6 +144,27 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
       if (user != null) {
         await OTPService.cleanupOTP(widget.email);
         if (mounted) {
+          final prefs = await SharedPreferences.getInstance();
+          final fcmToken = prefs.getString('fcmToken');
+          final userRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(AuthService().getCurrentUser()!.uid);
+          final userSnap = await userRef.get();
+          if (userSnap.exists) {
+            List<dynamic> devices = userSnap.data()!['devices'];
+            final tokenExists = devices.any(
+              (device) => device['token'] == fcmToken,
+            );
+            if (!tokenExists) {
+              final device = {
+                'platform': Platform.operatingSystem,
+                'token': fcmToken,
+              };
+              devices.add(device);
+              await userRef.update({'devices': devices});
+            }
+          }
+
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const MainScreen()),

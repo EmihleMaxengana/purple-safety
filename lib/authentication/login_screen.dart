@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,6 +94,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (user != null) {
         await _saveEmailPreference();
+        final prefs = await SharedPreferences.getInstance();
+        final fcmToken = prefs.getString('fcmToken');
+        final userRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(AuthService().getCurrentUser()!.uid);
+        final userSnap = await userRef.get();
+        if (userSnap.exists) {
+          List<dynamic> devices = userSnap.data()!['devices'];
+          final tokenExists = devices.any(
+            (device) => device['token'] == fcmToken,
+          );
+          if (!tokenExists) {
+            final device = {
+              'platform': Platform.operatingSystem,
+              'token': fcmToken,
+            };
+            devices.add(device);
+            await userRef.update({'devices': devices});
+          }
+        }
+
         if (mounted) {
           Navigator.pushReplacement(
             context,
