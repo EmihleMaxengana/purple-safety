@@ -29,6 +29,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     with WidgetsBindingObserver {
   final IncidentService _incidentService = IncidentService();
   String _selectedView = 'list';
+  String? _sosEventIdToFocus;
 
   GoogleMapController? _mapController;
   Set<Marker> _sosMarkers = {};
@@ -73,6 +74,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     _loadIncidentsAsMarkers();
     _startMapLoadTimer();
     _getAllDangerZones();
+    _handleNavigationArguments();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handleDeactivationModal();
     });
@@ -98,10 +100,40 @@ class _CommunityScreenState extends State<CommunityScreen>
   void didUpdateWidget(covariant CommunityScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.arguments != oldWidget.arguments) {
+      _handleNavigationArguments();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _handleDeactivationModal();
       });
     }
+  }
+
+  void _handleNavigationArguments() {
+    if (widget.arguments?['showMap'] != true) return;
+    _selectedView = 'map';
+    _sosEventIdToFocus = widget.arguments?['sosEventId'] as String?;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusRequestedSOS());
+  }
+
+  void _focusRequestedSOS() {
+    final controller = _mapController;
+    if (controller == null || _sosEventIdToFocus == null) return;
+
+    final matches = _activeSOSEvents.where(
+      (event) => event['id'] == _sosEventIdToFocus,
+    );
+    if (matches.isEmpty) return;
+
+    final event = matches.first;
+    final latitude = event['latitude'];
+    final longitude = event['longitude'];
+    if (latitude is! num || longitude is! num) return;
+
+    controller.animateCamera(
+      CameraUpdate.newLatLngZoom(
+        LatLng(latitude.toDouble(), longitude.toDouble()),
+        16,
+      ),
+    );
   }
 
   void _startMapLoadTimer() {
@@ -134,7 +166,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           .collection('active_sos_events')
           .doc(sosEventId)
           .get();
-      
+
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
@@ -171,10 +203,10 @@ class _CommunityScreenState extends State<CommunityScreen>
             }).toList();
 
             _updateSOSMarkers();
+            _focusRequestedSOS();
           });
         });
   }
-
 
   void _updateSOSMarkers() {
     setState(() {
@@ -314,7 +346,9 @@ class _CommunityScreenState extends State<CommunityScreen>
           final isTrusted = trustedSnapshot.data ?? false;
 
           return FutureBuilder<Map<String, dynamic>?>(
-            future: isTrusted ? _getNextOfKinData(triggerUserId ?? '') : Future.value(null),
+            future: isTrusted
+                ? _getNextOfKinData(triggerUserId ?? '')
+                : Future.value(null),
             builder: (context, kinSnapshot) {
               final nextOfKinData = kinSnapshot.data;
 
@@ -322,7 +356,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1a0f2e),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
                   border: Border.all(color: Colors.red.withOpacity(0.5)),
                 ),
                 child: SingleChildScrollView(
@@ -350,9 +386,13 @@ class _CommunityScreenState extends State<CommunityScreen>
                                 backgroundColor: Colors.red.withOpacity(0.2),
                                 child: Text(
                                   (sosEvent['userName'] as String).isNotEmpty
-                                      ? (sosEvent['userName'] as String)[0].toUpperCase()
+                                      ? (sosEvent['userName'] as String)[0]
+                                            .toUpperCase()
                                       : '?',
-                                  style: const TextStyle(color: Colors.red, fontSize: 20),
+                                  style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 20,
+                                  ),
                                 ),
                               ),
                             ),
@@ -397,7 +437,8 @@ class _CommunityScreenState extends State<CommunityScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
-                        if (nextOfKinData['name'] != null && nextOfKinData['name']!.isNotEmpty) ...[
+                        if (nextOfKinData['name'] != null &&
+                            nextOfKinData['name']!.isNotEmpty) ...[
                           _buildInfoRow(
                             icon: Icons.person,
                             label: 'Name',
@@ -405,7 +446,8 @@ class _CommunityScreenState extends State<CommunityScreen>
                           ),
                           const SizedBox(height: 6),
                         ],
-                        if (nextOfKinData['relation'] != null && nextOfKinData['relation']!.isNotEmpty) ...[
+                        if (nextOfKinData['relation'] != null &&
+                            nextOfKinData['relation']!.isNotEmpty) ...[
                           _buildInfoRow(
                             icon: Icons.people,
                             label: 'Relationship',
@@ -413,14 +455,16 @@ class _CommunityScreenState extends State<CommunityScreen>
                           ),
                           const SizedBox(height: 6),
                         ],
-                        if (nextOfKinData['phone'] != null && nextOfKinData['phone']!.isNotEmpty) ...[
+                        if (nextOfKinData['phone'] != null &&
+                            nextOfKinData['phone']!.isNotEmpty) ...[
                           _buildClickablePhoneRow(
                             label: 'Phone',
                             value: nextOfKinData['phone']!,
                           ),
                           const SizedBox(height: 6),
                         ],
-                        if (nextOfKinData['altPhone'] != null && nextOfKinData['altPhone']!.isNotEmpty) ...[
+                        if (nextOfKinData['altPhone'] != null &&
+                            nextOfKinData['altPhone']!.isNotEmpty) ...[
                           _buildClickablePhoneRow(
                             label: 'Alternative',
                             value: nextOfKinData['altPhone']!,
@@ -439,11 +483,18 @@ class _CommunityScreenState extends State<CommunityScreen>
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.people, color: Colors.orange, size: 16),
+                            const Icon(
+                              Icons.people,
+                              color: Colors.orange,
+                              size: 16,
+                            ),
                             const SizedBox(width: 8),
                             Text(
                               '${sosEvent['responderCount']} people are on their way to help',
-                              style: const TextStyle(color: Colors.white70, fontSize: 12),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
                         ),
@@ -465,14 +516,17 @@ class _CommunityScreenState extends State<CommunityScreen>
                                 label: const Text('I Can Help!'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
                               ),
                             ),
-                          if (sosEvent['userId'] != _user.uid) const SizedBox(width: 12),
+                          if (sosEvent['userId'] != _user.uid)
+                            const SizedBox(width: 12),
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () => Navigator.pop(context),
@@ -481,7 +535,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: Colors.white70,
                                 side: const BorderSide(color: Colors.white24),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 14,
+                                ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -514,10 +570,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
         ),
         Expanded(
@@ -549,10 +602,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 13,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
           ),
         ),
         Expanded(
@@ -636,32 +686,38 @@ class _CommunityScreenState extends State<CommunityScreen>
     if (!_showDeactivationModal || _deactivationSOSData == null) {
       return const SizedBox();
     }
-    
+
     final data = _deactivationSOSData!;
     final userName = data['userName'] ?? 'Someone';
     final userId = data['userId'] ?? '';
-    final triggerLat = _toDouble(data['triggerLat']) ?? _toDouble(data['latitude']);
-    final triggerLng = _toDouble(data['triggerLng']) ?? _toDouble(data['longitude']);
+    final triggerLat =
+        _toDouble(data['triggerLat']) ?? _toDouble(data['latitude']);
+    final triggerLng =
+        _toDouble(data['triggerLng']) ?? _toDouble(data['longitude']);
     final triggerTimestamp = data['triggerTimestamp'];
-    final finalLat = _toDouble(data['finalLatitude']) ?? _toDouble(data['latitude']);
-    final finalLng = _toDouble(data['finalLongitude']) ?? _toDouble(data['longitude']);
+    final finalLat =
+        _toDouble(data['finalLatitude']) ?? _toDouble(data['latitude']);
+    final finalLng =
+        _toDouble(data['finalLongitude']) ?? _toDouble(data['longitude']);
     final resolvedAt = data['resolvedAt'];
     final deactivationReason = data['deactivationReason'] as String?;
-    
+
     final String startLocation = _coordinateString(triggerLat, triggerLng);
     final String endLocation = _coordinateString(finalLat, finalLng);
-    
-    final String triggerTime = _formatDateTimeFromData(triggerTimestamp) ??
+
+    final String triggerTime =
+        _formatDateTimeFromData(triggerTimestamp) ??
         _formatDateTimeFromData(data['timestamp']) ??
         'Unknown';
-    final String resolvedTime = _formatDateTimeFromData(resolvedAt) ??
+    final String resolvedTime =
+        _formatDateTimeFromData(resolvedAt) ??
         _formatDateTimeFromData(data['timestamp']) ??
         'Unknown';
-    
-    String deactivationType = deactivationReason == 'user_safe' 
-        ? 'User marked themselves safe' 
+
+    String deactivationType = deactivationReason == 'user_safe'
+        ? 'User marked themselves safe'
         : 'System ended (device offline or inactive)';
-    
+
     return Positioned.fill(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
@@ -715,7 +771,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.08),
+                        ),
                       ),
                       child: Column(
                         children: [
@@ -809,10 +867,7 @@ class _CommunityScreenState extends State<CommunityScreen>
           width: 90,
           child: Text(
             label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ),
         Expanded(
@@ -1011,6 +1066,7 @@ class _CommunityScreenState extends State<CommunityScreen>
 
                     _mapController = controller;
                     setState(() => _isMapReady = true);
+                    _focusRequestedSOS();
                   },
                   markers: {..._sosMarkers, ..._incidentMarkers},
                   myLocation: true,

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:purple_safety/authentication/login_screen.dart';
-// Hide FullMapScreen from home_screen.dart to avoid conflict
-import 'package:purple_safety/home/home_screen.dart' hide FullMapScreen;
+import 'package:purple_safety/home/home_screen.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/emergency/emergency_mode_screen.dart';
 import 'package:purple_safety/core/widgets/app_header.dart';
@@ -14,6 +12,7 @@ import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/messaging/dm_screen.dart';
+import 'package:purple_safety/services/notification_navigation_service.dart';
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
@@ -44,12 +43,44 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _checkInitialTripId();
 
     WidgetsBinding.instance.addObserver(this);
+    NotificationNavigationService.request.addListener(
+      _handleNotificationAction,
+    );
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _handleNotificationAction(),
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    NotificationNavigationService.request.removeListener(
+      _handleNotificationAction,
+    );
     super.dispose();
+  }
+
+  void _handleNotificationAction() {
+    final request = NotificationNavigationService.request.value;
+    if (request == null || !mounted) return;
+
+    debugPrint(
+      '[Main Screen] Handling notification navigation: '
+      '${request.destination.name}',
+    );
+
+    setState(() {
+      if (request.destination == NotificationDestination.emergency) {
+        _selectedIndex = 1;
+      } else {
+        _communityScreenArgs = {
+          'showMap': true,
+          if (request.sosEventId != null) 'sosEventId': request.sosEventId,
+        };
+        _selectedIndex = 2;
+      }
+    });
+    NotificationNavigationService.consume(request);
   }
 
   void _listenToAlerts() async {
@@ -78,15 +109,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   List<Widget> get _pages => <Widget>[
-        HomeScreen(
-          onNavigateToTools: _goToToolsTab,
-          onNavigateToEmergency: _goToEmergencyTab,
-        ),
-        const EmergencyModeScreen(),
-        CommunityScreen(arguments: _communityScreenArgs),
-        SafetyToolsScreen(onCallEmergency: _goToEmergencyTab),
-        const SettingsScreen(),
-      ];
+    HomeScreen(
+      onNavigateToTools: _goToToolsTab,
+      onNavigateToEmergency: _goToEmergencyTab,
+    ),
+    const EmergencyModeScreen(),
+    CommunityScreen(arguments: _communityScreenArgs),
+    SafetyToolsScreen(onCallEmergency: _goToEmergencyTab),
+    const SettingsScreen(),
+  ];
 
   void _goToToolsTab() {
     setState(() {
@@ -118,9 +149,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _openSafetyAlerts() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const SafetyAlertsScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const SafetyAlertsScreen()),
     );
 
     if (result is Map<String, dynamic>) {

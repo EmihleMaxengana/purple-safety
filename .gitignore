@@ -11,7 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
-node_modules/
+**/node_modules/
 
 # IntelliJ related
 *.iml
@@ -44,6 +44,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Generated Linux desktop build files
+/linux/flutter/.cmake/
+/linux/flutter/CMakeCache.txt
+/linux/flutter/CMakeFiles/
 
 # Visual Studio Code system config folder
 .vscode/

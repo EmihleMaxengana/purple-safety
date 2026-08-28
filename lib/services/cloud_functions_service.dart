@@ -65,23 +65,29 @@ class CloudFunctionsService {
   }
 
   Future<void> sendSOSAlert({
-    required String token,
+    required String group,
     String? title,
     String? body,
+    String? sosEventId,
   }) async {
+    if (!['trusted contacts', 'community'].contains(group)) {
+      throw Exception('Allowed groups are "trusted contacts" & "community".');
+    }
+
     try {
       final callable = _functions.httpsCallableFromUrl(
         'https://sendnotification-6qju6ualcq-uc.a.run.app',
       );
 
       final result = await callable.call({
-        'token': token,
+        'group': group,
         'title': title,
         'body': body,
+        if (sosEventId != null) 'sosEventId': sosEventId,
       });
 
       debugPrint(
-        "[Cloud Functions Service] result.data: ${result.data} for token: $token",
+        "[Cloud Functions Service] result.data: ${result.data} for token: $group",
       );
     } on FirebaseFunctionsException catch (e) {
       debugPrint(

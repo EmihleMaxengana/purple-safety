@@ -1,18 +1,15 @@
 // home_screen.dart - Full file with changes
 
 import 'dart:async';
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:purple_safety/models/danger_zone_model.dart';
+import 'package:purple_safety/services/cloud_functions_service.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:purple_safety/emergency/emergency_manager.dart';
 import 'package:purple_safety/trip/full_map_screen.dart';
 import 'package:purple_safety/contacts/manage_contacts_modal.dart';
@@ -46,7 +43,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
-  bool _isSosActive = false;
   int _sosCountdown = 0;
   Timer? _countdownTimer;
   bool _isCountdownActive = false;
@@ -125,7 +121,6 @@ class _HomeScreenState extends State<HomeScreen>
           _isEmergencyActive = isEmergency;
         });
         if (!isEmergency) {
-          _isSosActive = false;
           _showSOSStatus = false;
         }
       }
@@ -145,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _isEmergencyActive = hasActiveSOS;
         if (!hasActiveSOS) {
-          _isSosActive = false;
           _showSOSStatus = false;
         }
       });
@@ -168,8 +162,8 @@ class _HomeScreenState extends State<HomeScreen>
 
       final androidPlugin = _localNotifications
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >();
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       await androidPlugin?.createNotificationChannel(
         const AndroidNotificationChannel(
@@ -278,11 +272,11 @@ class _HomeScreenState extends State<HomeScreen>
             final data = change.doc.data();
             if (data?['type'] != 'sos') continue;
 
-            _showSOSNotification(
-              message:
-                  data?['message'] as String? ??
-                  'Someone has triggered an SOS alert.',
-            );
+            // _showSOSNotification(
+            //   message:
+            //       data?['message'] as String? ??
+            //       'Someone has triggered an SOS alert.',
+            // );
           }
         });
   }
@@ -486,6 +480,14 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
+      CloudFunctionsService().sendSOSAlert(
+        group: _shareLocationWithContacts && _contacts.isNotEmpty
+            ? 'trusted_contacts'
+            : 'community',
+        title: 'SOS Alert',
+        body: 'An SOS alert has been triggered by $userName.',
+      );
+
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
           setState(() {
@@ -521,7 +523,10 @@ class _HomeScreenState extends State<HomeScreen>
         }
       });
 
-      if (lat != null && lng != null && _shareLocationWithContacts && _contacts.isNotEmpty) {
+      if (lat != null &&
+          lng != null &&
+          _shareLocationWithContacts &&
+          _contacts.isNotEmpty) {
         await _sendSMSFallback(userName, lat, lng);
       }
     }
@@ -529,62 +534,61 @@ class _HomeScreenState extends State<HomeScreen>
     if (mounted) {
       setState(() {
         _isEmergencyActive = true;
-        _isSosActive = true;
       });
     }
     EmergencyManager().setEmergencyActive(true);
     widget.onNavigateToTools?.call();
   }
 
-  Future<void> _showSOSNotification({required String message}) async {
-    try {
-      if (!_notificationsInitialized) {
-        await _initializeLocalNotifications();
-      }
-      if (!_notificationsInitialized) {
-        debugPrint(
-          'SOS notification skipped: notification permission is not granted',
-        );
-        return;
-      }
+  // Future<void> _showSOSNotification({required String message}) async {
+  //   try {
+  //     if (!_notificationsInitialized) {
+  //       await _initializeLocalNotifications();
+  //     }
+  //     if (!_notificationsInitialized) {
+  //       debugPrint(
+  //         'SOS notification skipped: notification permission is not granted',
+  //       );
+  //       return;
+  //     }
 
-      const details = NotificationDetails(
-        android: AndroidNotificationDetails(
-          'sos_alerts',
-          'SOS alerts',
-          channelDescription: 'Notifications shown when an SOS is activated',
-          importance: Importance.max,
-          priority: Priority.high,
-          playSound: true,
-          autoCancel: false,
-          color: Colors.purple,
-          actions: [
-            AndroidNotificationAction(
-              'open_app',
-              'Open App',
-              showsUserInterface: true,
-              cancelNotification: true,
-            ),
-            AndroidNotificationAction(
-              'call_emergency',
-              'Call Emergency',
-              showsUserInterface: true,
-              cancelNotification: true,
-            ),
-          ],
-        ),
-      );
+  //     const details = NotificationDetails(
+  //       android: AndroidNotificationDetails(
+  //         'sos_alerts',
+  //         'SOS alerts',
+  //         channelDescription: 'Notifications shown when an SOS is activated',
+  //         importance: Importance.max,
+  //         priority: Priority.high,
+  //         playSound: true,
+  //         autoCancel: false,
+  //         color: Colors.purple,
+  //         actions: [
+  //           AndroidNotificationAction(
+  //             'open_app',
+  //             'Open App',
+  //             showsUserInterface: true,
+  //             cancelNotification: true,
+  //           ),
+  //           AndroidNotificationAction(
+  //             'call_emergency',
+  //             'Call Emergency',
+  //             showsUserInterface: true,
+  //             cancelNotification: true,
+  //           ),
+  //         ],
+  //       ),
+  //     );
 
-      await _localNotifications.show(
-        id: 1001,
-        title: 'SOS alert received',
-        body: message,
-        notificationDetails: details,
-      );
-    } catch (e) {
-      debugPrint('Unable to show SOS notification: $e');
-    }
-  }
+  //     await _localNotifications.show(
+  //       id: 1001,
+  //       title: 'SOS alert received',
+  //       body: message,
+  //       notificationDetails: details,
+  //     );
+  //   } catch (e) {
+  //     debugPrint('Unable to show SOS notification: $e');
+  //   }
+  // }
 
   Future<void> _sendSMSFallback(String userName, double lat, double lng) async {
     if (_contacts.isEmpty) return;
@@ -651,10 +655,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  (double?, double?) _getCoordinates() {
-    return (_currentPosition?.latitude, _currentPosition?.longitude);
-  }
-
   void _handleTripSharing() async {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -681,7 +681,8 @@ class _HomeScreenState extends State<HomeScreen>
 
         if (_shareLocationWithContacts) {
           try {
-            final recipients = await dm_service.DmService.getSelectedRecipients();
+            final recipients =
+                await dm_service.DmService.getSelectedRecipients();
             final userId = user.uid;
             if (userId.isNotEmpty && recipients.isNotEmpty) {
               for (var recipientId in recipients) {
@@ -1326,7 +1327,10 @@ class _HomeScreenState extends State<HomeScreen>
             right: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.red,
                   borderRadius: BorderRadius.circular(30),

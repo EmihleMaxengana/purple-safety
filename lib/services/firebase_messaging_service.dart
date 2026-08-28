@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:purple_safety/services/local_notifications_service.dart';
+import 'package:purple_safety/services/notification_navigation_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class FirebaseMessagingService {
@@ -31,16 +33,13 @@ class FirebaseMessagingService {
 
   Future<void> _handlePushNotificationsToken() async {
     final token = await FirebaseMessaging.instance.getToken();
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    prefs.setString('fcmToken', token ?? '');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fcmToken', token as String);
 
     FirebaseMessaging.instance.onTokenRefresh
-        .listen((fcmToken) {
+        .listen((fcmToken) async {
           if (fcmToken.isNotEmpty) {
-            debugPrint(
-              '[Firebase Messaging Service] FCM token refreshed: $fcmToken',
-            );
-            prefs.setString('fcmToken', fcmToken);
+            await prefs.setString('fcmToken', token);
           }
         })
         .onError((error) {
@@ -64,41 +63,36 @@ class FirebaseMessagingService {
 
   void _onForegroundMessage(RemoteMessage message) {
     debugPrint(
-      '[Firebase Messaging Service] Foreground message received: ${message.data.toString()}',
-    );
-    debugPrint(
-      '[Firebase Messaging Service] Notification title: ${message.notification.toString()}',
+      "[Firebase Messaging Service] Message received on app foreground: ${message.notification.toString()}",
     );
 
     _localNotificationsService?.showNotification(
       message.notification?.title,
       message.notification?.body,
-      null,
+      jsonEncode(message.data),
     );
   }
 
   void _onMessageOpenedApp(RemoteMessage message) {
     debugPrint(
-      'Notification caused the app to open: ${message.data.toString()}',
+      '[Firebase Messaging Service] Notification caused the app to open: ${message.data.toString()}',
     );
-    // TODO: Add navigation or specific handling based on message data
+    if (message.data['type'] == 'sos') {
+      NotificationNavigationService.openSOS(
+        sosEventId: message.data['sosEventId'],
+      );
+    }
   }
 }
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+  await LocalNotificationsService.instance().init();
 
   LocalNotificationsService.instance().showNotification(
     message.notification?.title,
-    "A message has been received",
-    null,
-  );
-
-  debugPrint(
-    '[Firebase Messaging Service] Background message received: ${message.data.toString()}',
-  );
-  debugPrint(
-    '[Firebase Messaging Service] Background message notification: ${message.notification?.toString()}',
+    message.notification?.body,
+    jsonEncode(message.data),
   );
 }
