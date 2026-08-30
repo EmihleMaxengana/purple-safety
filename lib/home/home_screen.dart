@@ -1,9 +1,6 @@
-// home_screen.dart - Full file with changes
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart' as location;
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -81,10 +78,6 @@ class _HomeScreenState extends State<HomeScreen>
   bool _shareLocationWithContacts = true;
   bool _shareLocationWithCommunity = false;
 
-  final FlutterLocalNotificationsPlugin _localNotifications =
-      FlutterLocalNotificationsPlugin();
-  bool _notificationsInitialized = false;
-
   void _getAllDangerZones() async {
     try {
       final dangerZones = await DangerZoneService().loadDangerZonesCircle();
@@ -111,7 +104,6 @@ class _HomeScreenState extends State<HomeScreen>
     TripSharingService.cleanupExpiredTrips();
     _restoreTripSharingState();
     _loadPrivacyToggles();
-    _initializeLocalNotifications();
   }
 
   void _listenToEmergencyStatus() {
@@ -143,50 +135,6 @@ class _HomeScreenState extends State<HomeScreen>
           _showSOSStatus = false;
         }
       });
-    }
-  }
-
-  Future<void> _initializeLocalNotifications() async {
-    const initializationSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-
-    try {
-      final initialized = await _localNotifications.initialize(
-        settings: initializationSettings,
-      );
-      if (initialized != true) {
-        debugPrint('Local notifications failed to initialize');
-        return;
-      }
-
-      final androidPlugin = _localNotifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
-
-      await androidPlugin?.createNotificationChannel(
-        const AndroidNotificationChannel(
-          'sos_alerts',
-          'SOS alerts',
-          description: 'Notifications shown when an SOS is activated',
-          importance: Importance.max,
-          playSound: true,
-        ),
-      );
-
-      final permissionGranted =
-          await androidPlugin?.requestNotificationsPermission() ?? true;
-      final notificationsEnabled =
-          await androidPlugin?.areNotificationsEnabled() ?? true;
-      _notificationsInitialized = permissionGranted && notificationsEnabled;
-
-      debugPrint(
-        'Local notifications initialized; permission granted: '
-        '$permissionGranted, enabled: $notificationsEnabled',
-      );
-    } catch (e) {
-      debugPrint('Unable to initialize local notifications: $e');
     }
   }
 
@@ -251,6 +199,7 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  // TODO: deliberate on the purpose of this method
   void _listenToIncomingSOSAlerts() {
     final user = AuthService().getCurrentUser();
     if (user == null) return;
@@ -271,12 +220,6 @@ class _HomeScreenState extends State<HomeScreen>
 
             final data = change.doc.data();
             if (data?['type'] != 'sos') continue;
-
-            // _showSOSNotification(
-            //   message:
-            //       data?['message'] as String? ??
-            //       'Someone has triggered an SOS alert.',
-            // );
           }
         });
   }
@@ -480,12 +423,14 @@ class _HomeScreenState extends State<HomeScreen>
       setState(() {
         _sosStatusMessage = 'SOS sent!';
       });
-      CloudFunctionsService().sendSOSAlert(
+
+      await CloudFunctionsService().sendSOSAlert(
         group: _shareLocationWithContacts && _contacts.isNotEmpty
-            ? 'trusted_contacts'
+            ? 'trusted contacts'
             : 'community',
         title: 'SOS Alert',
         body: 'An SOS alert has been triggered by $userName.',
+        sosEventId: await SOSAlertService.getActiveSOSEventIdForUser(user!.uid),
       );
 
       Future.delayed(const Duration(seconds: 2), () {

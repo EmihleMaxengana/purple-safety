@@ -90,7 +90,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   await LocalNotificationsService.instance().init();
 
-  LocalNotificationsService.instance().showNotification(
+  await LocalNotificationsService.instance().showNotification(
     message.notification?.title,
     message.notification?.body,
     jsonEncode(message.data),

@@ -3,11 +3,32 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:purple_safety/services/notification_navigation_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const _viewSOSAction = 'view_sos';
 const _callEmergencyAction = 'call_emergency';
+const _pendingActionKey = 'pending_notification_action';
+const _pendingPayloadKey = 'pending_notification_payload';
 
-void _handleNotificationResponse(NotificationResponse response) {
+@pragma('vm:entry-point')
+Future<void> notificationTapBackground(NotificationResponse response) async {
+  await _persistNotificationResponse(response);
+}
+
+Future<void> _persistNotificationResponse(NotificationResponse response) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_pendingActionKey, response.actionId ?? '');
+  await prefs.setString(_pendingPayloadKey, response.payload ?? '');
+}
+
+Future<void> _handleNotificationResponse(NotificationResponse response) async {
+  // Keep every action durable until an active MainScreen confirms that it has
+  // displayed the requested destination.
+  await _persistNotificationResponse(response);
+  _routeNotificationResponse(response);
+}
+
+void _routeNotificationResponse(NotificationResponse response) {
   Map<String, dynamic> data = const {};
   if (response.payload != null && response.payload!.isNotEmpty) {
     try {
@@ -91,6 +112,7 @@ class LocalNotificationsService {
     await _flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
       onDidReceiveNotificationResponse: _handleNotificationResponse,
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
     final launchDetails = await _flutterLocalNotificationsPlugin
@@ -98,8 +120,10 @@ class LocalNotificationsService {
     final launchResponse = launchDetails?.notificationResponse;
     if (launchDetails?.didNotificationLaunchApp == true &&
         launchResponse != null) {
-      _handleNotificationResponse(launchResponse);
+      await _handleNotificationResponse(launchResponse);
     }
+
+    await restorePendingNavigation();
 
     await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
@@ -108,6 +132,31 @@ class LocalNotificationsService {
         ?.createNotificationChannel(_androidChannel);
 
     _isFlutterLocalNotificationInitialized = true;
+  }
+
+  Future<void> restorePendingNavigation() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Notification actions may be written by a background isolate. Reload the
+    // cache so this isolate sees values written after it was started.
+    await prefs.reload();
+    final actionId = prefs.getString(_pendingActionKey);
+    final payload = prefs.getString(_pendingPayloadKey);
+    if (actionId == null && payload == null) return;
+
+    _routeNotificationResponse(
+      NotificationResponse(
+        notificationResponseType:
+            NotificationResponseType.selectedNotificationAction,
+        actionId: actionId,
+        payload: payload,
+      ),
+    );
+  }
+
+  Future<void> clearPendingNavigation() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_pendingActionKey);
+    await prefs.remove(_pendingPayloadKey);
   }
 
   Future<void> showNotification(
