@@ -83,7 +83,7 @@ class CloudFunctionsService {
         'group': group,
         'title': title,
         'body': body,
-        if (sosEventId != null) 'sosEventId': sosEventId,
+        'sosEventId': ?sosEventId,
       });
 
       debugPrint(

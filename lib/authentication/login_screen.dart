@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'dart:ui';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../navigation/main_screen.dart';
 import 'create_account_screen.dart';
 import 'forgot_password_modal.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
@@ -110,16 +109,13 @@ class _LoginScreenState extends State<LoginScreen> {
               'platform': Platform.operatingSystem,
               'token': fcmToken,
             };
+
+            if (devices.length >= 2) {
+              devices.removeAt(0);
+            }
             devices.add(device);
             await userRef.update({'devices': devices});
           }
-        }
-
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-          );
         }
       }
     } catch (e) {

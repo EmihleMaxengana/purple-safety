@@ -13,6 +13,7 @@ import 'package:purple_safety/contacts/firestore_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/messaging/dm_screen.dart';
 import 'package:purple_safety/services/notification_navigation_service.dart';
+import 'package:purple_safety/services/local_notifications_service.dart';
 
 class MainScreen extends StatefulWidget {
   final String? initialTripId;
@@ -30,6 +31,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   final FirestoreService _firestoreService = FirestoreService();
   int _unreadAlertsCount = 0;
   Map<String, dynamic>? _communityScreenArgs;
+  bool _isRestoringNotificationNavigation = false;
 
   @override
   void initState() {
@@ -46,9 +48,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     NotificationNavigationService.request.addListener(
       _handleNotificationAction,
     );
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _handleNotificationAction(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _restoreNotificationNavigation();
+      _handleNotificationAction();
+    });
   }
 
   @override
@@ -80,7 +83,44 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         _selectedIndex = 2;
       }
     });
-    NotificationNavigationService.consume(request);
+    // A detail screen or modal can cover MainScreen. Reveal the selected tab
+    // after changing it so notification navigation is visible to the user.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    });
+
+    _confirmNotificationNavigation(request);
+  }
+
+  Future<void> _confirmNotificationNavigation(
+    NotificationNavigationRequest handledRequest,
+  ) async {
+    // Give authentication/lifecycle transitions time to replace an old
+    // MainScreen. If this State is disposed, the new MainScreen will receive
+    // the still-pending request instead.
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
+        !identical(
+          NotificationNavigationService.request.value,
+          handledRequest,
+        )) {
+      return;
+    }
+
+    await LocalNotificationsService.instance().clearPendingNavigation();
+    NotificationNavigationService.consume(handledRequest);
+  }
+
+  Future<void> _restoreNotificationNavigation() async {
+    if (_isRestoringNotificationNavigation) return;
+    _isRestoringNotificationNavigation = true;
+    try {
+      await LocalNotificationsService.instance().restorePendingNavigation();
+    } finally {
+      _isRestoringNotificationNavigation = false;
+    }
   }
 
   void _listenToAlerts() async {
@@ -170,6 +210,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _restoreNotificationNavigation();
+
+      // On some devices the app resumes before the background action isolate
+      // finishes writing the request. Retry once after that write can settle.
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) _restoreNotificationNavigation();
+      });
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) _restoreNotificationNavigation();
+      });
+    }
   }
 
   @override

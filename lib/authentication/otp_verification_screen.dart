@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:purple_safety/authentication/otp_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
-import 'package:purple_safety/navigation/main_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OTPVerificationScreen extends StatefulWidget {
@@ -164,11 +163,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               await userRef.update({'devices': devices});
             }
           }
-
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-          );
         }
       } else {
         setState(() {
