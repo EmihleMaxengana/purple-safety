@@ -64,5 +64,9 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false" />
+
     </application>
 </manifest>
