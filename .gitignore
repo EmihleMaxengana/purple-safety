@@ -3,7 +3,10 @@
 *.log
 *.pyc
 *.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
 .atom/
 .build/
 .buildlog/
@@ -12,6 +15,23 @@
 .swiftpm/
 migrate_working_dir/
 **/node_modules/
+
+# Local environment and secret files
+.env
+.env.*
+!.env.example
+!.env.sample
+*.local
+*.pem
+*.p12
+*.pfx
+*.key
+service-account*.json
+firebase-adminsdk*.json
+
+# Local Codex/agent workspace state
+.agents/
+.codex/
 
 # IntelliJ related
 *.iml

@@ -1,7 +1,10 @@
 # Flutter-related
 **/Flutter/ephemeral/
 **/Pods/
+**/.build/
 
 # Xcode-related
 **/dgph
 **/xcuserdata/
+*.dSYM
+*.dSYM.zip
