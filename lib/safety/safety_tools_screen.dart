@@ -1,4 +1,3 @@
-// safety_tools_screen.dart
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -36,8 +35,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     with WidgetsBindingObserver {
   bool _isEmergencyActive = false;
   bool _isRecordingAudio = false;
-  bool _isRecordingVideo = false;
   bool _autoShareRecordings = false;
+  bool _isCameraActive = false;
 
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
@@ -101,6 +100,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (_isCameraActive) {
+        debugPrint('Preserving tab: returned from native camera picker.');
+        return;
+      }
       _syncEmergencyStateFromBackend();
     }
   }
@@ -381,6 +384,158 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     );
   }
 
+  void _showShareSheet({
+    required File file,
+    required String type,
+    required String localPath,
+    String? storageUrl,
+  }) {
+    final String shareMessage = 'Emergency evidence captured via Purple Safety';
+    
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1a0f2e),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: Colors.purple.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.share, color: Color(0xFFBF7DCB), size: 48),
+            const SizedBox(height: 16),
+            const Text(
+              'Share Evidence',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Share this $type with your trusted contacts or outside the app',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 20),
+            
+            if (_contacts.isNotEmpty)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _shareWithTrustedContacts(
+                      type: type,
+                      localPath: localPath,
+                      storageUrl: storageUrl,
+                    );
+                  },
+                  icon: const Icon(Icons.people, color: Colors.white),
+                  label: const Text(
+                    'Share with Trusted Contacts',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6A1B9A),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            
+            if (_contacts.isNotEmpty) const SizedBox(height: 12),
+            
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _shareOutsideApp(
+                    file: file,
+                    type: type,
+                    message: shareMessage,
+                  );
+                },
+                icon: const Icon(Icons.share, color: Color(0xFFBF7DCB)),
+                label: const Text(
+                  'Share Outside App',
+                  style: TextStyle(color: Color(0xFFBF7DCB)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFFBF7DCB)),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Close',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareWithTrustedContacts({
+    required String type,
+    required String localPath,
+    String? storageUrl,
+  }) async {
+    final user = AuthService().getCurrentUser();
+    if (user == null) {
+      _showPopup(context, 'You must be logged in');
+      return;
+    }
+
+    final userData = await AuthService().getUserData(user.uid);
+    final userName = userData?['name'] ?? 'User';
+
+    await _shareMediaWithContacts(
+      type: type,
+      localPath: localPath,
+      storageUrl: storageUrl,
+      userName: userName,
+    );
+    
+    _showPopup(context, 'Shared with ${_contacts.length} trusted contacts');
+  }
+
+  Future<void> _shareOutsideApp({
+    required File file,
+    required String type,
+    required String message,
+  }) async {
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: message,
+      subject: 'Purple Safety - $type',
+    );
+  }
+
   Future<void> _takePhoto() async {
     final cameraStatus = await Permission.camera.request();
     if (!cameraStatus.isGranted) {
@@ -388,7 +543,16 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       return;
     }
 
+    setState(() {
+      _isCameraActive = true;
+      EmergencyManager().isCameraActive = true;
+    });
     final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+    setState(() {
+      _isCameraActive = false;
+      EmergencyManager().isCameraActive = false;
+    });
+
     if (photo == null) return;
 
     final file = File(photo.path);
@@ -423,16 +587,424 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userId: user.uid,
     );
 
-    if (_autoShareRecordings) {
-      await _shareMediaWithContacts(
-        type: 'photo',
-        localPath: localPath,
-        storageUrl: storageUrl,
-        userName: userName,
-      );
+    _showPhotoSavedDialog(
+      file: file,
+      type: 'photo',
+      localPath: localPath,
+      storageUrl: storageUrl,
+    );
+  }
+
+  Future<void> _recordVideo() async {
+    final cameraStatus = await Permission.camera.request();
+    if (!cameraStatus.isGranted) {
+      _showPopup(context, 'Camera permission is required');
+      return;
     }
 
-    _showPopup(context, 'Photo captured and saved');
+    setState(() {
+      _isCameraActive = true;
+      EmergencyManager().isCameraActive = true;
+    });
+    final XFile? video = await _picker.pickVideo(source: ImageSource.camera);
+    setState(() {
+      _isCameraActive = false;
+      EmergencyManager().isCameraActive = false;
+    });
+
+    if (video == null) return;
+
+    final file = File(video.path);
+    final user = AuthService().getCurrentUser();
+
+    if (user == null) {
+      _showPopup(context, 'You must be logged in');
+      return;
+    }
+
+    final userData = await AuthService().getUserData(user.uid);
+    final userName = userData?['name'] ?? 'User';
+
+    final String localPath = await _saveToLocalStorage(file, 'video');
+
+    String? storageUrl;
+    try {
+      storageUrl = await StorageService.uploadRecording(
+        file: file,
+        userId: user.uid,
+        subFolder: _isEmergencyActive ? 'sos' : 'recordings',
+      );
+    } catch (e) {
+      debugPrint('Failed to upload video to storage: $e');
+    }
+
+    await _saveToFirestore(
+      type: 'video',
+      localPath: localPath,
+      storageUrl: storageUrl,
+      userName: userName,
+      userId: user.uid,
+    );
+
+    _showVideoSavedDialog(
+      file: file,
+      type: 'video',
+      localPath: localPath,
+      storageUrl: storageUrl,
+    );
+  }
+
+  Future<void> _startAudioRecording() async {
+    final micStatus = await Permission.microphone.request();
+    if (!micStatus.isGranted) {
+      _showPopup(context, 'Microphone permission is required');
+      return;
+    }
+
+    if (await _audioRecorder.hasPermission()) {
+      final dir = await getApplicationDocumentsDirectory();
+      final path =
+          '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      await _audioRecorder.start(
+        RecordConfig(encoder: AudioEncoder.aacLc),
+        path: path,
+      );
+      setState(() {
+        _isRecordingAudio = true;
+        _audioPath = path;
+      });
+      debugPrint('Audio recording started at: $path');
+    }
+  }
+
+  Future<void> _stopAudioRecording() async {
+    if (_isRecordingAudio && await _audioRecorder.isRecording()) {
+      final path = await _audioRecorder.stop();
+      setState(() => _isRecordingAudio = false);
+
+      if (path != null) {
+        final file = File(path);
+        final user = AuthService().getCurrentUser();
+
+        if (user != null) {
+          final userData = await AuthService().getUserData(user.uid);
+          final userName = userData?['name'] ?? 'User';
+
+          final localPath = path;
+
+          String? storageUrl;
+          try {
+            storageUrl = await StorageService.uploadRecording(
+              file: file,
+              userId: user.uid,
+              subFolder: _isEmergencyActive ? 'sos' : 'recordings',
+            );
+          } catch (e) {
+            debugPrint('Failed to upload audio to storage: $e');
+          }
+
+          await _saveToFirestore(
+            type: 'audio',
+            localPath: localPath,
+            storageUrl: storageUrl,
+            userName: userName,
+            userId: user.uid,
+          );
+
+          _showAudioSavedDialog(
+            file: file,
+            type: 'audio',
+            localPath: localPath,
+            storageUrl: storageUrl,
+          );
+        }
+      }
+    }
+  }
+
+  void _showPhotoSavedDialog({
+    required File file,
+    required String type,
+    required String localPath,
+    String? storageUrl,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.camera_alt,
+                color: Colors.blue,
+                size: 48,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Photo Saved',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your photo evidence has been saved.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        _takePhoto();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        Future.delayed(Duration.zero, () {
+                          if (!mounted) return;
+                          if (_autoShareRecordings) {
+                            _showPopup(context, 'Photo saved and shared with trusted contacts');
+                          } else {
+                            _showShareSheet(
+                              file: file,
+                              type: type,
+                              localPath: localPath,
+                              storageUrl: storageUrl,
+                            );
+                          }
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showVideoSavedDialog({
+    required File file,
+    required String type,
+    required String localPath,
+    String? storageUrl,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.videocam,
+                color: Colors.blue,
+                size: 48,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Video Saved',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your video evidence has been saved.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        _recordVideo();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        Future.delayed(Duration.zero, () {
+                          if (!mounted) return;
+                          if (_autoShareRecordings) {
+                            _showPopup(context, 'Video saved and shared with trusted contacts');
+                          } else {
+                            _showShareSheet(
+                              file: file,
+                              type: type,
+                              localPath: localPath,
+                              storageUrl: storageUrl,
+                            );
+                          }
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAudioSavedDialog({
+    required File file,
+    required String type,
+    required String localPath,
+    String? storageUrl,
+  }) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1a0f2e),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.purple.withOpacity(0.3)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.mic,
+                color: Colors.green,
+                size: 48,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Audio Recording Saved',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Your audio evidence has been saved.',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        _startAudioRecording();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                        side: const BorderSide(color: Colors.orange),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('Retry'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(dialogContext);
+                        Future.delayed(Duration.zero, () {
+                          if (!mounted) return;
+                          if (_autoShareRecordings) {
+                            _showPopup(context, 'Audio saved and shared with trusted contacts');
+                          } else {
+                            _showShareSheet(
+                              file: file,
+                              type: type,
+                              localPath: localPath,
+                              storageUrl: storageUrl,
+                            );
+                          }
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text('OK'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<String> _saveToLocalStorage(File file, String type) async {
@@ -493,14 +1065,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       return;
     }
 
-    final message = 'Media shared from $userName';
-
-    await Share.shareXFiles(
-      [XFile(localPath)],
-      text: message,
-      subject: 'Purple Safety - $type',
-    );
-
     final currentUser = AuthService().getCurrentUser();
     if (currentUser == null) return;
 
@@ -528,129 +1092,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
     }
 
     debugPrint('Shared $type with ${_contacts.length} contacts');
-  }
-
-  Future<void> _startAudioRecording() async {
-    final micStatus = await Permission.microphone.request();
-    if (!micStatus.isGranted) {
-      _showPopup(context, 'Microphone permission is required');
-      return;
-    }
-
-    if (await _audioRecorder.hasPermission()) {
-      final dir = await getApplicationDocumentsDirectory();
-      final path =
-          '${dir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      await _audioRecorder.start(
-        RecordConfig(encoder: AudioEncoder.aacLc),
-        path: path,
-      );
-      setState(() {
-        _isRecordingAudio = true;
-        _audioPath = path;
-      });
-      debugPrint('Audio recording started at: $path');
-    }
-  }
-
-  Future<void> _stopAudioRecording() async {
-    if (_isRecordingAudio && await _audioRecorder.isRecording()) {
-      final path = await _audioRecorder.stop();
-      setState(() => _isRecordingAudio = false);
-
-      if (path != null) {
-        final file = File(path);
-        final user = AuthService().getCurrentUser();
-
-        if (user != null) {
-          final userData = await AuthService().getUserData(user.uid);
-          final userName = userData?['name'] ?? 'User';
-
-          final localPath = path;
-
-          String? storageUrl;
-          try {
-            storageUrl = await StorageService.uploadRecording(
-              file: file,
-              userId: user.uid,
-              subFolder: _isEmergencyActive ? 'sos' : 'recordings',
-            );
-          } catch (e) {
-            debugPrint('Failed to upload audio to storage: $e');
-          }
-
-          await _saveToFirestore(
-            type: 'audio',
-            localPath: localPath,
-            storageUrl: storageUrl,
-            userName: userName,
-            userId: user.uid,
-          );
-
-          if (_autoShareRecordings) {
-            await _shareMediaWithContacts(
-              type: 'audio',
-              localPath: localPath,
-              storageUrl: storageUrl,
-              userName: userName,
-            );
-          }
-
-          _showPopup(context, 'Audio recording saved');
-        }
-      }
-    }
-  }
-
-  Future<void> _recordVideo() async {
-    final cameraStatus = await Permission.camera.request();
-    if (!cameraStatus.isGranted) {
-      _showPopup(context, 'Camera permission is required');
-      return;
-    }
-
-    final XFile? video = await _picker.pickVideo(source: ImageSource.camera);
-    if (video == null) return;
-
-    final file = File(video.path);
-    final user = AuthService().getCurrentUser();
-
-    if (user != null) {
-      final userData = await AuthService().getUserData(user.uid);
-      final userName = userData?['name'] ?? 'User';
-
-      final String localPath = await _saveToLocalStorage(file, 'video');
-
-      String? storageUrl;
-      try {
-        storageUrl = await StorageService.uploadRecording(
-          file: file,
-          userId: user.uid,
-          subFolder: _isEmergencyActive ? 'sos' : 'recordings',
-        );
-      } catch (e) {
-        debugPrint('Failed to upload video to storage: $e');
-      }
-
-      await _saveToFirestore(
-        type: 'video',
-        localPath: localPath,
-        storageUrl: storageUrl,
-        userName: userName,
-        userId: user.uid,
-      );
-
-      if (_autoShareRecordings) {
-        await _shareMediaWithContacts(
-          type: 'video',
-          localPath: localPath,
-          storageUrl: storageUrl,
-          userName: userName,
-        );
-      }
-
-      _showPopup(context, 'Video recording saved');
-    }
   }
 
   @override
@@ -859,13 +1300,6 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           Switch(
             value: _autoShareRecordings,
             onChanged: (value) async {
-              if (value == false) {
-                final authenticated = await BiometricService.authenticateWithUserPreference(
-                  context: context,
-                  reason: 'Authenticate to disable auto-sharing',
-                );
-                if (!authenticated) return;
-              }
               setState(() {
                 _autoShareRecordings = value;
               });

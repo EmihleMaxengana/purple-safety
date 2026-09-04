@@ -16,6 +16,8 @@ class EmergencyManager {
 
   List<Contact> _currentContacts = [];
 
+  bool isCameraActive = false;
+
   Stream<bool> get emergencyStatusStream => _emergencyStatusController.stream;
   bool get isEmergencyActive => _emergencyActive;
 
@@ -25,7 +27,6 @@ class EmergencyManager {
     _currentContacts = contacts;
   }
 
-  // Use this to activate emergency mode WITHOUT pushing the Emergency screen
   void setEmergencyActive(bool active) {
     if (active != _emergencyActive) {
       _emergencyActive = active;
@@ -33,7 +34,6 @@ class EmergencyManager {
     }
   }
 
-  // Legacy method – pushes EmergencyModeScreen (used by the "Call Emergency" button)
   void activateEmergencyMode(BuildContext context, {List<Contact>? contacts}) {
     if (!_emergencyActive) {
       _emergencyActive = true;

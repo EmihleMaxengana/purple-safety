@@ -13,16 +13,17 @@ import 'package:purple_safety/authentication/reauth_screen.dart';
 import 'package:purple_safety/incidents/incident_service.dart';
 import 'package:purple_safety/authentication/auth_service.dart';
 import 'package:purple_safety/emergency/sos_alert_service.dart';
+import 'package:purple_safety/emergency/emergency_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   final LocalNotificationsService localNotificationsService =
       LocalNotificationsService.instance();
-  await localNotificationsService.init();
+  localNotificationsService.init();
   final FirebaseMessagingService firebaseMessagingService =
       FirebaseMessagingService.instance();
-  await firebaseMessagingService.init(
+  firebaseMessagingService.init(
     localNotificationsService: localNotificationsService,
   );
 
@@ -41,10 +42,10 @@ class PurpleSafetyApp extends StatefulWidget {
   const PurpleSafetyApp({super.key});
 
   @override
-  State<PurpleSafetyApp> createState() => _PurpleSafetyAppState();
+  PurpleSafetyAppState createState() => PurpleSafetyAppState();
 }
 
-class _PurpleSafetyAppState extends State<PurpleSafetyApp>
+class PurpleSafetyAppState extends State<PurpleSafetyApp>
     with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   bool _needsReauth = false;
@@ -188,22 +189,31 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final bool isEmergencyActive = EmergencyManager().isEmergencyActive;
+    final bool isCameraActive = EmergencyManager().isCameraActive;
+
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.hidden) {
-      _authService.markRequireReauth();
+      if (!isEmergencyActive && !isCameraActive) {
+        _authService.markRequireReauth();
+      }
     }
 
-    if (state == AppLifecycleState.hidden) {
+    //(only check re-auth if the native camera is NOT currently active)
+    if (state == AppLifecycleState.hidden && !isCameraActive) {
       _checkReauthRequired();
     }
   }
 
   Future<void> _checkReauthRequired() async {
     final req = await _authService.isRequireReauth();
-    setState(() {
-      _needsReauth = req;
-    });
+    //(only rebuild if the lock status actually changes)
+    if (_needsReauth != req) {
+      setState(() {
+        _needsReauth = req;
+      });
+    }
   }
 
   @override
@@ -225,6 +235,7 @@ class _PurpleSafetyAppState extends State<PurpleSafetyApp>
       ),
       home: StreamBuilder<User?>(
         stream: FirebaseAuth.instance.authStateChanges(),
+        key: const ValueKey('auth_stream'),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.active) {
             final user = snapshot.data;
