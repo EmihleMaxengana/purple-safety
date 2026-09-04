@@ -37,6 +37,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
   bool _isRecordingAudio = false;
   bool _autoShareRecordings = false;
   bool _isCameraActive = false;
+  bool _isUploading = false;
 
   final AudioRecorder _audioRecorder = AudioRecorder();
   String? _audioPath;
@@ -547,7 +548,11 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _isCameraActive = true;
       EmergencyManager().isCameraActive = true;
     });
-    final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
+    final XFile? photo = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 50,
+      maxWidth: 1200,
+    );
     setState(() {
       _isCameraActive = false;
       EmergencyManager().isCameraActive = false;
@@ -555,10 +560,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     if (photo == null) return;
 
+    setState(() => _isUploading = true);
+
     final file = File(photo.path);
     final user = AuthService().getCurrentUser();
 
     if (user == null) {
+      setState(() => _isUploading = false);
       _showPopup(context, 'You must be logged in');
       return;
     }
@@ -587,6 +595,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userId: user.uid,
     );
 
+    setState(() => _isUploading = false);
+
     _showPhotoSavedDialog(
       file: file,
       type: 'photo',
@@ -606,7 +616,10 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       _isCameraActive = true;
       EmergencyManager().isCameraActive = true;
     });
-    final XFile? video = await _picker.pickVideo(source: ImageSource.camera);
+    final XFile? video = await _picker.pickVideo(
+      source: ImageSource.camera,
+      maxDuration: const Duration(seconds: 15),
+    );
     setState(() {
       _isCameraActive = false;
       EmergencyManager().isCameraActive = false;
@@ -614,10 +627,13 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
 
     if (video == null) return;
 
+    setState(() => _isUploading = true);
+
     final file = File(video.path);
     final user = AuthService().getCurrentUser();
 
     if (user == null) {
+      setState(() => _isUploading = false);
       _showPopup(context, 'You must be logged in');
       return;
     }
@@ -645,6 +661,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       userName: userName,
       userId: user.uid,
     );
+
+    setState(() => _isUploading = false);
 
     _showVideoSavedDialog(
       file: file,
@@ -683,6 +701,8 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       setState(() => _isRecordingAudio = false);
 
       if (path != null) {
+        setState(() => _isUploading = true);
+
         final file = File(path);
         final user = AuthService().getCurrentUser();
 
@@ -711,12 +731,17 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
             userId: user.uid,
           );
 
+          setState(() => _isUploading = false);
+
           _showAudioSavedDialog(
             file: file,
             type: 'audio',
             localPath: localPath,
             storageUrl: storageUrl,
           );
+        } else {
+          setState(() => _isUploading = false);
+          _showPopup(context, 'You must be logged in');
         }
       }
     }
@@ -1147,40 +1172,61 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
       );
     }
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
-        ),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildRecordingControls(),
-              const SizedBox(height: 16),
-              _buildAutoShareToggle(),
-              const SizedBox(height: 16),
-              _buildLocationMap(),
-              const SizedBox(height: 24),
-              _buildQuickCallButtons(),
-              const SizedBox(height: 24),
-              Row(
+    return Stack(
+      children: [
+        Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF0e0718), Color(0xFF100c1f)],
+            ),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _buildCallEmergencyButton()),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildImSafeButton()),
+                  _buildRecordingControls(),
+                  const SizedBox(height: 16),
+                  _buildAutoShareToggle(),
+                  const SizedBox(height: 16),
+                  _buildLocationMap(),
+                  const SizedBox(height: 24),
+                  _buildQuickCallButtons(),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(child: _buildCallEmergencyButton()),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildImSafeButton()),
+                    ],
+                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
         ),
-      ),
+        if (_isUploading)
+          Container(
+            color: Colors.black.withOpacity(0.5),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
+                  Text(
+                    'Saving evidence...',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
