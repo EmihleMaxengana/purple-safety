@@ -249,7 +249,7 @@ class _SafetyToolsScreenState extends State<SafetyToolsScreen>
           : 'Location unavailable';
 
       final message =
-          'SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated. Final location: $locationLink';
+          'SAFE UPDATE: $userName has confirmed they are safe. SOS has been deactivated.';
 
       await FirebaseFirestore.instance.collection('global_alerts').add({
         'timestamp': FieldValue.serverTimestamp(),
