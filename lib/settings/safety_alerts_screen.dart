@@ -55,6 +55,37 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
     });
   }
 
+  void _showSOSDeactivatedDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'SOS Deactivated',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: const Text(
+          'This SOS has been deactivated. Please check the SAFE notification for details.',
+          style: TextStyle(color: Colors.white70),
+        ),
+        backgroundColor: const Color(0xFF1a0f2e),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.purple.withOpacity(0.3)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'OK',
+              style: TextStyle(color: Color(0xFFBF7DCB)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _onAlertTap(Alert alert) async {
     final user = _auth.getCurrentUser();
     if (user != null) {
@@ -110,31 +141,8 @@ class _SafetyAlertsScreenState extends State<SafetyAlertsScreen>
         return;
       }
       
-      //(if SOS is no longer active, treat it as deactivated)
-      try {
-        final eventDoc = await FirebaseFirestore.instance
-            .collection('active_sos_events')
-            .doc(alert.sosEventId)
-            .get();
-        
-        if (eventDoc.exists) {
-          final data = eventDoc.data()!;
-          
-          if (currentUserId == data['userId']) {
-            return;
-          }
-          
-          Navigator.pop(context, {
-            'showDeactivationModal': true,
-            'sosEventId': alert.sosEventId,
-          });
-        } else {
-          Navigator.pop(context);
-        }
-      } catch (e) {
-        debugPrint('Error fetching deactivated SOS data: $e');
-        Navigator.pop(context);
-      }
+      //(if SOS is no longer active, show a simple info dialog)
+      _showSOSDeactivatedDialog(context);
       return;
     }
 
